@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analizador de Ajedrez con Motor Fractal</title>
+    
+    <!-- Dependencias externas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js" 
+            integrity="sha512-xR5bJ3JuW2HYLXr5wZHCbW3oVGuCCpD4U7uM5WvFSXERpP4jI7u6bTZawapMtwgq3sS/PbQvP3g7E1kA3E6F0Aw==" 
+            crossorigin="anonymous"></script>
+    <link rel="stylesheet" 
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" 
+          integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" 
+          crossorigin="anonymous">
+    
+    <!-- Estilos locales -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- ===================== ENCABEZADO ===================== -->
+        <div class="header">
+            <h1>
+                <i class="fas fa-chess-queen"></i> 
+                Analizador de Ajedrez con Motor Fractal
+            </h1>
+            <div class="subtitle">Análisis híbrido con geometría fractal D≈1.247</div>
+        </div>
+
+        <!-- ===================== SECCIÓN DE ENTRADA ===================== -->
+        <div class="input-section">
+            <div class="input-row">
+                <div class="input-group">
+                    <label for="fenInput">Posición FEN:</label>
+                    <input type="text" 
+                           id="fenInput" 
+                           value="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" 
+                           placeholder="Ingresa la posición FEN" 
+                           onclick="this.select()">
+                </div>
+                <div class="button-group">
+                    <button onclick="window.chessApp.drawBoard()" class="btn btn-primary">
+                        <i class="fas fa-chess-board"></i>Cargar Posición
+                    </button>
+                    <button onclick="window.chessApp.showLegalMoves()" id="showMovesBtn" class="btn btn-success">
+                        <i class="fas fa-list"></i>Mostrar Movimientos
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================== LAYOUT PRINCIPAL ===================== -->
+        <div class="main-layout">
+            <!-- TABLERO Y ESTADO -->
+            <div class="board-container-wrapper">
+                <div class="board-section">
+                    <div id="chessboard">
+                        <div class="loading">
+                            <i class="fas fa-chess-board"></i>
+                            <p>Cargando tablero...</p>
+                        </div>
+                    </div>
+                </div>
+                <div id="gameStatus" class="game-status-compact">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Cargando...</span>
+                </div>
+            </div>
+
+            <!-- PANEL DERECHO DE ANÁLISIS -->
+            <div class="right-panel">
+                <!-- PANEL DE ANÁLISIS -->
+                <div class="analysis-panel">
+                    <!-- MOTOR DE ANÁLISIS -->
+                    <div class="analysis-section">
+                        <div class="section-title">
+                            <i class="fas fa-microchip"></i>
+                            Motor de Análisis
+                        </div>
+                        <div class="engine-controls">
+                            <button onclick="window.chessApp.toggleEngine()" 
+                                    id="engineToggleBtn" 
+                                    class="btn btn-purple">
+                                <i class="fas fa-plug"></i>Conectar Motor
+                            </button>
+                            <button onclick="window.chessApp.toggleAnalysis()" 
+                                    id="analysisToggleBtn" 
+                                    class="btn btn-success">
+                                <i class="fas fa-play"></i>Analizar
+                            </button>
+                        </div>
+                        <div id="engineStatus" class="engine-status">Motor no conectado</div>
+                    </div>
+
+                    <!-- EVALUACIÓN -->
+                    <div class="analysis-section">
+                        <div class="section-title">
+                            <i class="fas fa-balance-scale"></i>
+                            Evaluación
+                        </div>
+                        <div class="evaluation-display">
+                            <span id="evaluation" class="evaluation">--</span>
+                            <span id="bestMove" class="best-move">--</span>
+                        </div>
+                        <div class="stats-display">
+                            <span id="engineStats">--</span>
+                            <span id="memoryStats">--</span>
+                        </div>
+                    </div>
+
+                    <!-- ANÁLISIS FRACTAL -->
+                    <div class="analysis-section">
+                        <div class="section-title">
+                            <i class="fas fa-infinity"></i>
+                            Análisis Fractal
+                        </div>
+                        <div class="fractal-section">
+                            <div class="fractal-controls">
+                                <label class="fractal-toggle">
+                                    <input type="checkbox" id="enableFractal" checked>
+                                    <span>Activar análisis fractal</span>
+                                </label>
+                                <div class="slider-group">
+                                    <label>Dimensión D: <span id="dimensionValue">1.247</span></label>
+                                    <input type="range" 
+                                           id="dimensionSlider" 
+                                           min="1.0" 
+                                           max="2.0" 
+                                           step="0.001" 
+                                           value="1.247">
+                                </div>
+                                <div class="slider-group">
+                                    <label>Intensidad: <span id="intensityValue">60%</span></label>
+                                    <input type="range" 
+                                           id="intensitySlider" 
+                                           min="20" 
+                                           max="90" 
+                                           step="5" 
+                                           value="60">
+                                </div>
+                            </div>
+                            <div class="fractal-metrics">
+                                <div class="fractal-metric">
+                                    <div class="label">Complejidad</div>
+                                    <div class="value" id="fractalComplexity">--</div>
+                                </div>
+                                <div class="fractal-metric">
+                                    <div class="label">Profundidad óptima</div>
+                                    <div class="value" id="optimalDepth">--</div>
+                                </div>
+                                <div class="fractal-metric">
+                                    <div class="label">Confianza</div>
+                                    <div class="value" id="fractalConfidence">--</div>
+                                </div>
+                                <div class="fractal-metric">
+                                    <div class="label">Eficiencia</div>
+                                    <div class="value" id="searchEfficiency">--</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VARIANTE PRINCIPAL -->
+                    <div class="analysis-section">
+                        <div class="pv-section">
+                            <div class="pv-title">
+                                <i class="fas fa-route"></i>
+                                Mejor línea de juego:
+                            </div>
+                            <div id="pvLine" class="pv-line">
+                                Inicia el análisis para ver la mejor línea
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PANEL DE MOVIMIENTOS LEGALES -->
+                <div id="legalMoves" class="moves-panel" style="display: none;">
+                    <div class="moves-header">
+                        <h3 id="legalMovesHeader">
+                            <i class="fas fa-chess-knight"></i>
+                            Movimientos Legales
+                        </h3>
+                        <button onclick="window.chessApp.hideLegalMoves()" class="close-btn">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div id="legalMovesList" class="moves-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script principal -->
+    <script src="script.js"></script>
+</body>
+</html>
