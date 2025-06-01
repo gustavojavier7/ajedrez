@@ -131,25 +131,27 @@
                            onclick="this.select()"
                            title="Notación Forsyth-Edwards para describir posiciones de ajedrez">
                 </div>
-                <div class="button-group">
-                    <button onclick="window.chessApp.drawBoard()" class="btn btn-primary" title="Cargar y analizar la posición FEN">
-                        <i class="fas fa-chess-board"></i>Cargar Posición
-                    </button>
-                    <button onclick="window.chessApp.showLegalMoves()" id="showMovesBtn" class="btn btn-success" title="Mostrar todos los movimientos legales">
-                        <i class="fas fa-list"></i>Movimientos
-                    </button>
-                    <div class="preset-positions">
-                        <button onclick="loadPresetPosition('opening')" class="btn btn-preset" title="Gambito de Dama">
-                            <i class="fas fa-play"></i>Apertura
-                        </button>
-                        <button onclick="loadPresetPosition('middlegame')" class="btn btn-preset" title="Posición de medio juego compleja">
-                            <i class="fas fa-chess"></i>Medio Juego
-                        </button>
-                        <button onclick="loadPresetPosition('endgame')" class="btn btn-preset" title="Final de torre y peones">
-                            <i class="fas fa-flag-checkered"></i>Final
-                        </button>
-                    </div>
-                </div>
+               <div class="button-group">
+    <div class="primary-buttons" style="display: flex; gap: 10px;">
+        <button onclick="window.chessApp.drawBoard()" class="btn btn-primary" title="Cargar y analizar la posición FEN">
+            <i class="fas fa-chess-board"></i>Cargar Posición
+        </button>
+        <button onclick="window.chessApp.showLegalMoves()" id="showMovesBtn" class="btn btn-success" title="Mostrar todos los movimientos legales">
+            <i class="fas fa-list"></i>Movimientos
+        </button>
+    </div>
+    <div class="preset-positions">
+        <button onclick="loadPresetPosition('opening')" class="btn btn-preset" title="Gambito de Dama">
+            <i class="fas fa-play"></i>Apertura
+        </button>
+        <button onclick="loadPresetPosition('middlegame')" class="btn btn-preset" title="Posición de medio juego compleja">
+            <i class="fas fa-chess"></i>Medio Juego
+        </button>
+        <button onclick="loadPresetPosition('endgame')" class="btn btn-preset" title="Final de torre y peones">
+            <i class="fas fa-flag-checkered"></i>Final
+        </button>
+    </div>
+</div>
             </div>
         </div>
 
