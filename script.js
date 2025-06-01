@@ -550,7 +550,7 @@
      */
     function updateFractalDisplay() {
         const complexityEl = document.getElementById('fractalComplexity');
-        const depthEl = document.getElementById('optimalDepth');
+        const depthEl = document.getElementById('depthValue');
         const confidenceEl = document.getElementById('fractalConfidence');
         const efficiencyEl = document.getElementById('searchEfficiency');
         
