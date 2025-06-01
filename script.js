@@ -1,5 +1,5 @@
 /**
- * Analizador de Ajedrez con Motor Fractal
+ * Motor de Ajedrez con Análisis Fractal - Versión Optimizada
  * Sistema híbrido que combina Stockfish con algoritmos fractales
  * para análisis adaptativos de posiciones de ajedrez
  */
@@ -49,6 +49,8 @@
 
     const STOCKFISH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js';
 
+    /* ===================== VERIFICACIÓN Y CARGA DE CHESS.JS ===================== */
+    
     /**
      * Verifica si Chess.js está disponible y espera si es necesario
      */
@@ -113,33 +115,6 @@
                     </button>
                 </div>
             `;
-        }
-    }
-
-    /**
-     * Función principal que inicializa la aplicación
-     */
-    async function initializeChessApp() {
-        try {
-            // Esperar a que Chess.js esté disponible
-            await checkChessAvailability();
-            
-            console.log('🚀 Iniciando Analizador de Ajedrez Fractal...');
-            
-            // Inicializar la instancia principal de Chess.js - ÚNICA INICIALIZACIÓN
-            chess = new Chess();
-            console.log('✅ Chess.js inicializado correctamente');
-            
-            // Continuar con la inicialización
-            startChessApplication();
-            
-            // Exponer API pública después de la inicialización
-            exposePublicAPI();
-            console.log('🔌 API pública expuesta correctamente');
-            
-        } catch (error) {
-            console.error('💥 Error al inicializar:', error);
-            showChessJsError();
         }
     }
 
@@ -333,12 +308,64 @@
             const to = uciMove.substring(2, 4);
             const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
             
-            const tempChess = new Chess(chess.fen()); // Usar FEN de la instancia global
+            const tempChess = new Chess(chess.fen());
             const move = tempChess.move({ from, to, promotion });
             return move ? move.san : uciMove;
         } catch (e) {
             return uciMove;
         }
+    }
+
+    /**
+     * Convierte la variante principal UCI a notación SAN
+     */
+    function convertPVToSAN(pvMoves) {
+        try {
+            const tempChess = new Chess(chess.fen());
+            const sanMoves = [];
+            
+            for (const uciMove of pvMoves) {
+                if (uciMove.length >= 4) {
+                    const from = uciMove.substring(0, 2);
+                    const to = uciMove.substring(2, 4);
+                    const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
+                    
+                    const move = tempChess.move({ from, to, promotion });
+                    if (move) {
+                        sanMoves.push(move.san);
+                    } else {
+                        break;
+                    }
+                }
+            }
+            
+            if (sanMoves.length > 0) {
+                let pvText = '';
+                let fullMoveNumber = parseInt(chess.fen().split(' ')[5]);
+                let isWhiteTurn = chess.turn() === 'w';
+                
+                for (let i = 0; i < sanMoves.length; i++) {
+                    if (i === 0 && !isWhiteTurn) {
+                        pvText += `${fullMoveNumber}... ${sanMoves[i]} `;
+                    } else if (i === 0 && isWhiteTurn) {
+                        pvText += `${fullMoveNumber}. ${sanMoves[i]} `;
+                    } else if ((i + (isWhiteTurn ? 1 : 0)) % 2 === 0) {
+                        if (!isWhiteTurn || i > 0) {
+                            fullMoveNumber++;
+                        }
+                        pvText += `${fullMoveNumber}. ${sanMoves[i]} `;
+                    } else {
+                        pvText += `${sanMoves[i]} `;
+                    }
+                }
+                
+                return fractalAnalysisActive ? `🌀 ${pvText.trim()}` : pvText.trim();
+            }
+        } catch (error) {
+            console.warn('Error convirtiendo PV a SAN:', error);
+        }
+        
+        return pvMoves.join(' ');
     }
 
     /**
@@ -655,14 +682,18 @@
             stopAnalysis();
         }
         
-        if (stockfish) {
-            stockfish.terminate();
-            stockfish = null;
-        }
-        
-        if (blobURL) {
-            URL.revokeObjectURL(blobURL);
-            blobURL = null;
+        try {
+            if (stockfish) {
+                stockfish.terminate();
+                stockfish = null;
+            }
+            
+            if (blobURL) {
+                URL.revokeObjectURL(blobURL);
+                blobURL = null;
+            }
+        } catch (error) {
+            console.warn('Error desconectando motor:', error);
         }
         
         isEngineConnected = false;
@@ -724,13 +755,17 @@
     function stopAnalysis() {
         if (!isAnalyzing) return;
         
-        if (stockfish) {
-            stockfish.postMessage('stop');
-        }
-        
-        if (analysisInterval) {
-            clearInterval(analysisInterval);
-            analysisInterval = null;
+        try {
+            if (stockfish) {
+                stockfish.postMessage('stop');
+            }
+            
+            if (analysisInterval) {
+                clearInterval(analysisInterval);
+                analysisInterval = null;
+            }
+        } catch (error) {
+            console.warn('Error deteniendo análisis:', error);
         }
         
         isAnalyzing = false;
@@ -752,10 +787,14 @@
     function handleEngineMessage(line) {
         if (typeof line !== 'string') return;
 
-        if (line.startsWith('bestmove')) {
-            processBestMove(line);
-        } else if (line.startsWith('info')) {
-            parseInfoLine(line);
+        try {
+            if (line.startsWith('bestmove')) {
+                processBestMove(line);
+            } else if (line.startsWith('info')) {
+                parseInfoLine(line);
+            }
+        } catch (error) {
+            console.warn('Error procesando mensaje UCI:', error);
         }
     }
 
@@ -893,31 +932,6 @@
         }
     }
 
-    /**
-     * Resetea los displays de análisis
-     */
-    function resetAnalysisDisplay() {
-        const evaluation = document.getElementById('evaluation');
-        const bestMove = document.getElementById('bestMove');
-        const engineStats = document.getElementById('engineStats');
-        const pvLine = document.getElementById('pvLine');
-        
-      
-        // Actualizar variante principal
-        if (lastStats.pv && pvLineEl) {
-            pvLineEl.textContent = lastStats.pv;
-        }
-
-        // Actualizar estadísticas del motor
-        if (engineStatsEl) {
-            const depthText = fractalAnalysisActive && fractalEngine ?
-                `Profundidad: ${lastStats.depth}/${fractalEngine.calculateOptimalDepth(currentComplexity)}` :
-                `Profundidad: ${lastStats.depth}`;
-            
-            const npsText = lastStats.nps > 0 ? ` | ${lastStats.nps.toLocaleString()} nodos/s` : '';
-            engineStatsEl.textContent = depthText + npsText;
-        }
-    }
     /**
      * Resetea los displays de análisis
      */
@@ -1153,37 +1167,8 @@
         }
     }
 
-    /* ===================== LIMPIEZA Y MANTENIMIENTO ===================== */
+    /* ===================== GESTIÓN DE ANIMACIONES ===================== */
     
-    /**
-     * Limpia todos los recursos utilizados
-     */
-    function cleanup() {
-        if (stockfish) {
-            stockfish.terminate();
-            stockfish = null;
-        }
-        
-        if (blobURL) {
-            URL.revokeObjectURL(blobURL);
-            blobURL = null;
-        }
-        
-        if (analysisInterval) {
-            clearInterval(analysisInterval);
-            analysisInterval = null;
-        }
-        
-        if (pvObserver) {
-            pvObserver.disconnect();
-            pvObserver = null;
-        }
-
-        if (fractalEngine) {
-            fractalEngine.clearCache();
-        }
-    }
-
     /**
      * Gestiona las animaciones de la sección fractal
      */
@@ -1200,50 +1185,84 @@
         }, 100);
     }
 
-    /* ===================== INICIALIZACIÓN ===================== */
+    /* ===================== INICIALIZACIÓN PRINCIPAL ===================== */
     
     /**
-     * Inicializa la aplicación
+     * Función principal que inicializa la aplicación
      */
-    function initializeApp() {
-    try {
-        console.log('🔧 Configurando componentes...');
-        
-        setupFractalControls();
-        drawBoard();
-        updateButtonStates();
-        updateMemoryStats();
-        updateFractalDisplay();
-        manageFractalAnimations();
-        
-        console.log('✅ Aplicación inicializada correctamente');
-        console.log('📐 Dimensión fractal por defecto: D =', fractalDimension);
-        console.log('⚡ Intensidad fractal por defecto:', (fractalIntensity * 100) + '%');
-        
-    } catch (error) {
-        console.error('💥 Error en inicialización:', error);
-        const chessboard = document.getElementById('chessboard');
-        if (chessboard) {
-            chessboard.innerHTML = `
-                <div class="loading">
-                    <i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>
-                    <p>Error al inicializar la aplicación</p>
-                    <p style="font-size: 0.8rem; color: #6b7280;">${error.message}</p>
-                </div>
-            `;
+    async function initializeChessApp() {
+        try {
+            // Esperar a que Chess.js esté disponible
+            await checkChessAvailability();
+            
+            console.log('🚀 Iniciando Analizador de Ajedrez Fractal...');
+            
+            // Inicializar la instancia principal de Chess.js - ÚNICA INICIALIZACIÓN
+            chess = new Chess();
+            console.log('✅ Chess.js inicializado correctamente');
+            
+            // Continuar con la inicialización
+            startChessApplication();
+            
+            // Exponer API pública después de la inicialización
+            exposePublicAPI();
+            console.log('🔌 API pública expuesta correctamente');
+            
+        } catch (error) {
+            console.error('💥 Error al inicializar:', error);
+            showChessJsError();
         }
     }
-}
 
-// Inicializar la aplicación
-initializeApp();
-exposePublicAPI();
+    /**
+     * Inicia la aplicación principal de ajedrez
+     */
+    function startChessApplication() {
+        console.log('🎯 Configurando aplicación principal...');
+
+        /**
+         * Inicializa todos los componentes de la aplicación
+         */
+        function initializeApp() {
+            try {
+                console.log('🔧 Configurando componentes...');
+                
+                setupFractalControls();
+                drawBoard();
+                updateButtonStates();
+                updateMemoryStats();
+                updateFractalDisplay();
+                manageFractalAnimations();
+                
+                console.log('✅ Aplicación inicializada correctamente');
+                console.log('📐 Dimensión fractal por defecto: D =', fractalDimension);
+                console.log('⚡ Intensidad fractal por defecto:', (fractalIntensity * 100) + '%');
+                
+            } catch (error) {
+                console.error('💥 Error en inicialización:', error);
+                const chessboard = document.getElementById('chessboard');
+                if (chessboard) {
+                    chessboard.innerHTML = `
+                        <div class="loading">
+                            <i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>
+                            <p>Error al inicializar la aplicación</p>
+                            <p style="font-size: 0.8rem; color: #6b7280;">${error.message}</p>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        // Inicializar la aplicación
+        initializeApp();
         
     } // Fin de startChessApplication
 
     /* ===================== API PÚBLICA ===================== */
     
-    // Exponer funciones públicas - declarar después de que las funciones estén definidas
+    /**
+     * Expone las funciones públicas del motor fractal
+     */
     function exposePublicAPI() {
         window.chessApp = {
             // Funciones principales
@@ -1260,53 +1279,67 @@ exposePublicAPI();
             getStats: () => ({ ...lastStats }),
             getComplexity: () => currentComplexity,
             getFractalEngine: () => fractalEngine,
-            getChessInstance: () => chess, // Para debugging
+            getChessInstance: () => chess,
             
             // Estado de la aplicación
             isEngineConnected: () => isEngineConnected,
             isAnalyzing: () => isAnalyzing,
-            isFractalActive: () => fractalAnalysisActive
+            isFractalActive: () => fractalAnalysisActive,
+            
+            // Funciones adicionales
+            resetStats,
+            resetAnalysisDisplay,
+            updateFractalDisplay,
+            updateMemoryStats
         };
+        
+        console.log('🔌 API pública del motor fractal expuesta correctamente');
     }
 
     /* ===================== EVENT LISTENERS GLOBALES ===================== */
     
     // Cleanup al cerrar ventana
     window.addEventListener('beforeunload', () => {
-        if (stockfish) {
-            stockfish.terminate();
-            stockfish = null;
-        }
+        console.log('🧹 Limpiando recursos del motor fractal...');
         
-        if (blobURL) {
-            URL.revokeObjectURL(blobURL);
-            blobURL = null;
-        }
-        
-        if (analysisInterval) {
-            clearInterval(analysisInterval);
-            analysisInterval = null;
-        }
-        
-        if (pvObserver) {
-            pvObserver.disconnect();
-            pvObserver = null;
-        }
+        try {
+            if (stockfish) {
+                stockfish.terminate();
+                stockfish = null;
+            }
+            
+            if (blobURL) {
+                URL.revokeObjectURL(blobURL);
+                blobURL = null;
+            }
+            
+            if (analysisInterval) {
+                clearInterval(analysisInterval);
+                analysisInterval = null;
+            }
+            
+            if (pvObserver) {
+                pvObserver.disconnect();
+                pvObserver = null;
+            }
 
-        if (fractalEngine) {
-            fractalEngine.clearCache();
+            if (fractalEngine) {
+                fractalEngine.clearCache();
+            }
+        } catch (error) {
+            console.warn('Error durante limpieza del motor fractal:', error);
         }
     });
     
     // Manejo de errores globales
     window.addEventListener('error', (event) => {
-        console.error('💥 Error global capturado:', event.error);
+        console.error('💥 Error global en motor fractal:', event.error);
     });
 
     // Detectar cambios de visibilidad para pausar análisis
     document.addEventListener('visibilitychange', () => {
         if (document.hidden && isAnalyzing) {
-            console.log('👁️ Pestaña oculta, pausando análisis...');
+            console.log('👁️ Pestaña oculta, pausando análisis fractal...');
             // Opcional: pausar análisis cuando la pestaña no es visible
         }
     });
@@ -1322,6 +1355,7 @@ exposePublicAPI();
     }
 
     // Log inicial
-    console.log('🎮 Analizador de Ajedrez Fractal v1.1 - Iniciando...');
+    console.log('🎮 Motor de Ajedrez Fractal v2.0 - Iniciando...');
+    console.log('🌀 Dimensión fractal D ≈ 1.247 | Análisis híbrido Stockfish + Geometría Fractal');
 
 })(); // Fin del closure principal
