@@ -8,7 +8,7 @@
     'use strict';
 
     /* ===================== VARIABLES GLOBALES PRINCIPALES ===================== */
-    let chess; // Instancia principal de Chess.js - ÚNICA DECLARACIÓN
+    let chess;
     let board = [];
     let lastMove = null;
     let stockfish = null;
@@ -51,9 +51,6 @@
 
     /* ===================== VERIFICACIÓN Y CARGA DE CHESS.JS ===================== */
     
-    /**
-     * Verifica si Chess.js está disponible y espera si es necesario
-     */
     function checkChessAvailability() {
         return new Promise((resolve, reject) => {
             let attempts = 0;
@@ -85,9 +82,6 @@
         });
     }
 
-    /**
-     * Muestra error si Chess.js no se puede cargar
-     */
     function showChessJsError() {
         const chessboard = document.getElementById('chessboard');
         if (chessboard) {
@@ -131,9 +125,6 @@
             this.maxCacheSize = 1000;
         }
 
-        /**
-         * Calcula la complejidad fractal de una posición FEN
-         */
         calculateFractalComplexity(fen) {
             if (this.cache.has(fen)) {
                 return this.cache.get(fen);
@@ -142,13 +133,17 @@
             try {
                 const pieces = this.countPieces(fen);
                 const mobility = this.estimateMobility(fen);
-                const centerControl = this.evaluateCenterControl(fen);
+                const centerControl = Math.abs(this.evaluateCenterControl(fen));
                 const kingSafety = this.evaluateKingSafety(fen);
 
-                const complexity = Math.pow(pieces, 1/this.D) *
-                                  Math.pow(Math.max(mobility, 1), 1/this.D) *
-                                  Math.pow(Math.max(Math.abs(centerControl) + 1, 1), 1/this.D) *
-                                  Math.pow(Math.max(kingSafety + 1, 1), 1/this.D);
+                const piecesNorm = Math.pow(Math.max(pieces / 32, 0.1), 1 / this.D);
+                const mobilityNorm = Math.pow(Math.max(mobility / 60, 0.1), 1 / this.D);
+                const centerControlNorm = Math.pow(Math.max(centerControl / 40, 0.1), 1 / this.D);
+                const kingSafetyNorm = Math.pow(Math.max((kingSafety + 50) / 100, 0.1), 1 / this.D);
+
+                const sumNorm = piecesNorm + mobilityNorm + centerControlNorm + kingSafetyNorm;
+                const maxSum = 4;
+                const complexity = 1 + 49 * (sumNorm / maxSum);
 
                 const result = Math.max(1.0, Math.min(50.0, complexity));
                 
@@ -165,17 +160,11 @@
             }
         }
 
-        /**
-         * Cuenta el número total de piezas en el tablero
-         */
         countPieces(fen) {
             const position = fen.split(' ')[0];
             return position.replace(/[0-8\/]/g, '').length;
         }
 
-        /**
-         * Estima la movilidad de la posición actual
-         */
         estimateMobility(fen) {
             try {
                 const tempChess = new Chess(fen);
@@ -185,9 +174,6 @@
             }
         }
 
-        /**
-         * Evalúa el control del centro del tablero
-         */
         evaluateCenterControl(fen) {
             try {
                 const tempChess = new Chess(fen);
@@ -207,27 +193,119 @@
             }
         }
 
-        /**
-         * Evalúa la seguridad del rey
-         */
         evaluateKingSafety(fen) {
             try {
                 const tempChess = new Chess(fen);
-                let safety = 10;
-                
+                let safety = 0;
+
+                const kingSquare = tempChess.turn() === 'w' ? 
+                    tempChess.king('w') : tempChess.king('b');
+                const [file, rank] = [kingSquare.charCodeAt(0) - 97, parseInt(kingSquare[1]) - 1];
+                const isCentral = (file >= 3 && file <= 4 && rank >= 3 && rank <= 4);
+                const isEnroque = (file <= 2 || file >= 5) && (rank <= 1 || rank >= 6);
+                safety += isCentral ? -10 : 0;
+                safety += isEnroque ? 10 : 0;
+
+                const totalPieces = this.countPieces(fen);
+                const pieceFactor = Math.min(1, totalPieces / 32);
+                safety += 10 * (1 - pieceFactor);
+
+                const materialBalance = this.evaluateMaterialBalance(tempChess);
+                safety += materialBalance * 0.5;
+
+                const opponentColor = tempChess.turn() === 'w' ? 'b' : 'w';
+                const attackers = this.getAttackers(tempChess, kingSquare, opponentColor);
+                safety -= attackers * 5;
+
+                const pawnShield = this.evaluatePawnShield(tempChess, kingSquare, tempChess.turn());
+                safety += pawnShield * 5;
+
                 if (tempChess.in_check()) {
-                    safety -= 50;
+                    safety -= 20;
                 }
-                
-                return safety;
+                const threats = this.countThreats(tempChess, kingSquare, opponentColor);
+                safety -= threats * 10;
+
+                return Math.max(-50, Math.min(50, safety));
             } catch (e) {
-                return 10;
+                console.warn('Error calculating king safety:', e);
+                return 0;
             }
         }
 
-        /**
-         * Calcula la profundidad óptima basada en la complejidad
-         */
+        evaluateMaterialBalance(chess) {
+            const pieceValues = this.pieceValues;
+            let balance = 0;
+            
+            for (let rank = 0; rank < 8; rank++) {
+                for (let file = 0; file < 8; file++) {
+                    const square = String.fromCharCode(97 + file) + (rank + 1);
+                    const piece = chess.get(square);
+                    if (piece) {
+                        const value = pieceValues[piece.type.toLowerCase()];
+                        balance += piece.color === 'w' ? value : -value;
+                    }
+                }
+            }
+            
+            return balance / 900;
+        }
+
+        getAttackers(chess, kingSquare, opponentColor) {
+            const [kingFile, kingRank] = [
+                kingSquare.charCodeAt(0) - 97,
+                parseInt(kingSquare[1]) - 1
+            ];
+            let attackers = 0;
+            
+            for (let rank = 0; rank < 8; rank++) {
+                for (let file = 0; file < 8; file++) {
+                    const square = String.fromCharCode(97 + file) + (rank + 1);
+                    const piece = chess.get(square);
+                    if (piece && piece.color === opponentColor && 
+                        ['q', 'r', 'b', 'n'].includes(piece.type.toLowerCase())) {
+                        const distance = Math.max(Math.abs(file - kingFile), Math.abs(rank - kingRank));
+                        if (distance <= 3) {
+                            attackers++;
+                        }
+                    }
+                }
+            }
+            
+            return attackers;
+        }
+
+        evaluatePawnShield(chess, kingSquare, color) {
+            const [kingFile, kingRank] = [
+                kingSquare.charCodeAt(0) - 97,
+                parseInt(kingSquare[1]) - 1
+            ];
+            let shield = 0;
+            
+            const direction = color === 'w' ? 1 : -1;
+            const pawnRanks = [kingRank + direction, kingRank + 2 * direction];
+            const pawnFiles = [Math.max(0, kingFile - 1), kingFile, Math.min(7, kingFile + 1)];
+            
+            for (const rank of pawnRanks) {
+                if (rank < 0 || rank > 7) continue;
+                for (const file of pawnFiles) {
+                    const square = String.fromCharCode(97 + file) + (rank + 1);
+                    const piece = chess.get(square);
+                    if (piece && piece.type.toLowerCase() === 'p' && piece.color === color) {
+                        shield += 1;
+                    }
+                }
+            }
+            
+            return shield;
+        }
+
+        countThreats(chess, kingSquare, opponentColor) {
+            const opponentMoves = chess.moves({ verbose: true, legal: false })
+                .filter(move => move.color === opponentColor && move.to === kingSquare);
+            return opponentMoves.length;
+        }
+
         calculateOptimalDepth(complexity) {
             const baseDepth = 12;
             const complexityFactor = Math.pow(complexity / 10, 1/this.D);
@@ -235,17 +313,11 @@
             return Math.max(optimalDepth, 8);
         }
 
-        /**
-         * Actualiza la dimensión fractal y limpia el cache
-         */
         updateDimension(newDimension) {
             this.D = Math.max(1.0, Math.min(2.0, newDimension));
             this.cache.clear();
         }
 
-        /**
-         * Limpia el cache de complejidad
-         */
         clearCache() {
             this.cache.clear();
         }
@@ -253,9 +325,6 @@
 
     /* ===================== FUNCIONES UTILITARIAS ===================== */
     
-    /**
-     * Parsea una posición FEN y actualiza el estado del tablero
-     */
     function parseFEN(fen) {
         if (!fen || typeof fen !== 'string' || fen.length > 100) {
             throw new Error('FEN inválido: vacío, muy largo o no es string');
@@ -297,9 +366,6 @@
         }
     }
 
-    /**
-     * Convierte un movimiento UCI a notación algebraica estándar
-     */
     function uciToSan(uciMove) {
         if (!uciMove || uciMove.length < 4) return uciMove;
         
@@ -316,9 +382,6 @@
         }
     }
 
-    /**
-     * Convierte la variante principal UCI a notación SAN
-     */
     function convertPVToSAN(pvMoves) {
         try {
             const tempChess = new Chess(chess.fen());
@@ -368,9 +431,6 @@
         return pvMoves.join(' ');
     }
 
-    /**
-     * Formatea la evaluación para mostrar
-     */
     function formatEvaluation(score, isMate) {
         if (isMate) {
             return score > 0 ? `+M${Math.abs(score)}` : `-M${Math.abs(score)}`;
@@ -379,16 +439,12 @@
         return pawns > 0 ? `+${pawns.toFixed(2)}` : pawns.toFixed(2);
     }
 
-    /**
-     * Genera el SVG del tablero de ajedrez
-     */
     function generateChessboardSVG() {
         const { squareSize, boardSize } = BOARD_CONFIG;
         const svgParts = [
             `<svg width="${boardSize + 40}" height="${boardSize + 40}" xmlns="http://www.w3.org/2000/svg" role="grid" aria-label="Tablero de ajedrez">`
         ];
         
-        // Dibujar casillas
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
                 const x = col * squareSize + 20;
@@ -404,7 +460,6 @@
             }
         }
         
-        // Resaltar último movimiento
         if (lastMove && chess.history({ verbose: true }).length > 0) {
             const history = chess.history({ verbose: true });
             const move = history[history.length - 1];
@@ -425,7 +480,6 @@
             );
         }
         
-        // Dibujar flecha del mejor movimiento
         if (lastStats.bestMove && lastStats.bestMove.length >= 4) {
             const from = lastStats.bestMove.substring(0, 2);
             const to = lastStats.bestMove.substring(2, 4);
@@ -453,7 +507,6 @@
             );
         }
         
-        // Dibujar piezas
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
                 const piece = board[7 - row][col];
@@ -470,7 +523,6 @@
             }
         }
         
-        // Dibujar coordenadas
         for (let i = 0; i < 8; i++) {
             svgParts.push(
                 `<text x="10" y="${i * squareSize + squareSize / 1.5 + 20}" ` +
@@ -484,9 +536,6 @@
         return svgParts.join('');
     }
 
-    /**
-     * Muestra el estado actual del juego
-     */
     function showGameStatus() {
         const statusElement = document.getElementById('gameStatus');
         if (!statusElement) return;
@@ -527,11 +576,6 @@
         statusElement.innerHTML = `<i class="${iconClass}"></i><span>${status}</span>`;
     }
 
-    /* ===================== FUNCIONES DE ACTUALIZACIÓN DE UI ===================== */
-    
-    /**
-     * Actualiza las estadísticas de memoria
-     */
     function updateMemoryStats() {
         const memoryStats = document.getElementById('memoryStats');
         if (!memoryStats) return;
@@ -545,9 +589,6 @@
         }
     }
 
-    /**
-     * Actualiza la pantalla de métricas fractales
-     */
     function updateFractalDisplay() {
         const complexityEl = document.getElementById('fractalComplexity');
         const depthEl = document.getElementById('depthValue');
@@ -569,7 +610,10 @@
             currentComplexity = complexity;
             
             if (complexityEl) complexityEl.textContent = complexity.toFixed(2);
-            if (depthEl) depthEl.textContent = optimalDepth.toString();
+            if (depthEl) {
+                depthEl.textContent = optimalDepth.toString();
+                depthEl.className = 'indicator-value' + (optimalDepth > 30 ? ' high-depth-warning' : '');
+            }
             
             const confidenceValue = Math.min(95, 60 + (complexity / 20 * 35));
             if (confidenceEl) confidenceEl.textContent = confidenceValue.toFixed(1) + '%';
@@ -583,9 +627,6 @@
         }
     }
 
-    /**
-     * Actualiza los estados de los botones
-     */
     function updateButtonStates() {
         const engineBtn = document.getElementById('engineToggleBtn');
         const analysisBtn = document.getElementById('analysisToggleBtn');
@@ -618,11 +659,6 @@
         }
     }
 
-    /* ===================== GESTIÓN DEL MOTOR STOCKFISH ===================== */
-    
-    /**
-     * Conecta al motor Stockfish
-     */
     function connectEngine() {
         if (isEngineConnected) return;
 
@@ -649,7 +685,6 @@
                     disconnectEngine();
                 };
                 
-                // Inicializar motor
                 stockfish.postMessage('uci');
                 stockfish.postMessage('setoption name MultiPV value 1');
                 stockfish.postMessage('setoption name Hash value 128');
@@ -659,7 +694,6 @@
                 engineStatus.textContent = 'Motor conectado y listo';
                 updateButtonStates();
                 
-                // Iniciar análisis automáticamente si hay una posición válida
                 if (!chess.game_over()) {
                     setTimeout(startAnalysis, 500);
                 }
@@ -672,9 +706,6 @@
             });
     }
 
-    /**
-     * Desconecta el motor Stockfish
-     */
     function disconnectEngine() {
         if (!isEngineConnected) return;
         
@@ -700,14 +731,10 @@
         const engineStatus = document.getElementById('engineStatus');
         if (engineStatus) engineStatus.textContent = 'Motor desconectado';
         
-        // Limpiar displays
         resetAnalysisDisplay();
         updateButtonStates();
     }
 
-    /**
-     * Inicia el análisis de la posición actual
-     */
     function startAnalysis() {
         if (!isEngineConnected || isAnalyzing || chess.game_over()) return;
 
@@ -717,7 +744,6 @@
         const fen = chess.fen();
         let searchCommand = 'go infinite';
         
-        // Configurar análisis fractal si está activo
         if (fractalAnalysisActive && fractalEngine) {
             try {
                 const complexity = fractalEngine.calculateFractalComplexity(fen);
@@ -732,7 +758,6 @@
             engineStatus.textContent = 'Analizando...';
         }
 
-        // Enviar comandos al motor
         stockfish.postMessage(`position fen ${fen}`);
         stockfish.postMessage(searchCommand);
         
@@ -742,16 +767,12 @@
         const pvLine = document.getElementById('pvLine');
         if (pvLine) pvLine.textContent = 'Analizando...';
         
-        // Intervalo para actualizar estadísticas
         analysisInterval = setInterval(() => {
             updateMemoryStats();
             updateFractalDisplay();
         }, 1000);
     }
 
-    /**
-     * Detiene el análisis actual
-     */
     function stopAnalysis() {
         if (!isAnalyzing) return;
         
@@ -779,11 +800,6 @@
         updateButtonStates();
     }
 
-    /* ===================== PROCESAMIENTO DE MENSAJES UCI ===================== */
-    
-    /**
-     * Maneja los mensajes del motor Stockfish
-     */
     function handleEngineMessage(line) {
         if (typeof line !== 'string') return;
 
@@ -798,9 +814,6 @@
         }
     }
 
-    /**
-     * Procesa el mensaje de mejor movimiento
-     */
     function processBestMove(line) {
         const parts = line.split(' ');
         const bestMove = parts[1];
@@ -816,19 +829,14 @@
             const bestMoveEl = document.getElementById('bestMove');
             if (bestMoveEl) bestMoveEl.textContent = moveText;
             
-            // Redibujar tablero con flecha
             const chessboard = document.getElementById('chessboard');
             if (chessboard) chessboard.innerHTML = generateChessboardSVG();
         }
     }
 
-    /**
-     * Parsea la línea de información del motor
-     */
     function parseInfoLine(line) {
         const parts = line.split(' ');
         
-        // Obtener nodos y tiempo para calcular NPS
         const nodesIndex = parts.indexOf('nodes');
         const timeIndex = parts.indexOf('time');
         if (nodesIndex !== -1 && timeIndex !== -1) {
@@ -839,19 +847,16 @@
             }
         }
         
-        // Obtener profundidad
         const depthIndex = parts.indexOf('depth');
         if (depthIndex !== -1) {
             lastStats.depth = parseInt(parts[depthIndex + 1]);
         }
 
-        // Obtener evaluación
         const scoreIndex = parts.indexOf('score');
         if (scoreIndex !== -1) {
             parseScore(parts, scoreIndex);
         }
 
-        // Obtener variante principal
         const pvIndex = parts.indexOf('pv');
         if (pvIndex !== -1 && parts.length > pvIndex + 1) {
             const pvMoves = parts.slice(pvIndex + 1, pvIndex + 10);
@@ -861,9 +866,6 @@
         updateEvaluationDisplay();
     }
 
-    /**
-     * Parsea la puntuación del motor
-     */
     function parseScore(parts, scoreIndex) {
         const type = parts[scoreIndex + 1];
         const value = parseInt(parts[scoreIndex + 2]);
@@ -871,7 +873,6 @@
         if (type === 'cp') {
             let adjustedEval = chess.turn() === 'w' ? value : -value;
             
-            // Aplicar ajuste fractal
             if (fractalAnalysisActive && currentComplexity > 0) {
                 const fractalAdjustment = Math.min(0.1, 
                     Math.max(0, Math.pow(currentComplexity / 10, 1/fractalDimension) * 0.05)
@@ -886,15 +887,11 @@
         }
     }
 
-    /**
-     * Actualiza la pantalla de evaluación
-     */
     function updateEvaluationDisplay() {
         const evalEl = document.getElementById('evaluation');
         const engineStatsEl = document.getElementById('engineStats');
         const pvLineEl = document.getElementById('pvLine');
 
-        // Actualizar evaluación
         if (lastStats.evaluation !== null && evalEl) {
             const evalData = lastStats.evaluation;
             const isMate = evalData.type === 'mate';
@@ -916,12 +913,10 @@
             }
         }
 
-        // Actualizar variante principal
         if (lastStats.pv && pvLineEl) {
             pvLineEl.textContent = lastStats.pv;
         }
 
-        // Actualizar estadísticas del motor
         if (engineStatsEl) {
             const depthText = fractalAnalysisActive && fractalEngine ?
                 `Profundidad: ${lastStats.depth}/${fractalEngine.calculateOptimalDepth(currentComplexity)}` :
@@ -932,9 +927,6 @@
         }
     }
 
-    /**
-     * Resetea los displays de análisis
-     */
     function resetAnalysisDisplay() {
         const evaluation = document.getElementById('evaluation');
         const bestMove = document.getElementById('bestMove');
@@ -947,11 +939,6 @@
         if (pvLine) pvLine.textContent = 'Motor desconectado';
     }
 
-    /* ===================== GESTIÓN DE MOVIMIENTOS ===================== */
-    
-    /**
-     * Muestra los movimientos legales de la posición actual
-     */
     function showLegalMoves() {
         if (chess.game_over()) return;
         
@@ -979,17 +966,11 @@
         panel.style.display = 'block';
     }
 
-    /**
-     * Oculta el panel de movimientos legales
-     */
     function hideLegalMoves() {
         const panel = document.getElementById('legalMoves');
         if (panel) panel.style.display = 'none';
     }
 
-    /**
-     * Ejecuta un movimiento en el tablero
-     */
     function makeMove(moveStr) {
         try {
             const moveResult = chess.move(moveStr);
@@ -1000,24 +981,19 @@
             
             lastMove = moveResult;
             
-            // Actualizar FEN input
             const fenInput = document.getElementById('fenInput');
             if (fenInput) fenInput.value = chess.fen();
             
-            // Redibujar tablero y actualizar estado
             drawBoard();
             showLegalMoves();
             
-            // Reiniciar análisis si está conectado
             if (isAnalyzing) {
                 stopAnalysis();
             }
             
-            // Reiniciar estadísticas
             resetStats();
             resetAnalysisDisplay();
             
-            // Reanudar análisis automáticamente
             if (isEngineConnected && !chess.game_over()) {
                 setTimeout(startAnalysis, 500);
             }
@@ -1027,9 +1003,6 @@
         }
     }
 
-    /**
-     * Reinicia las estadísticas de análisis
-     */
     function resetStats() {
         lastStats = {
             nps: 0,
@@ -1045,11 +1018,6 @@
         };
     }
 
-    /* ===================== FUNCIONES PRINCIPALES DEL TABLERO ===================== */
-    
-    /**
-     * Dibuja el tablero con la posición actual
-     */
     function drawBoard() {
         const fenInput = document.getElementById('fenInput');
         if (!fenInput) return;
@@ -1074,7 +1042,6 @@
             updateMemoryStats();
             updateFractalDisplay();
             
-            // Reiniciar análisis si ya estaba corriendo
             if (isAnalyzing) {
                 stopAnalysis();
             }
@@ -1087,11 +1054,6 @@
         }
     }
 
-    /* ===================== CONTROLES FRACTALES ===================== */
-    
-    /**
-     * Configura los controles de la sección fractal
-     */
     function setupFractalControls() {
         fractalEngine = new FractalChessEngine(fractalDimension);
 
@@ -1101,7 +1063,6 @@
         const intVal = document.getElementById('intensityValue');
         const enableChk = document.getElementById('enableFractal');
 
-        // Control de dimensión fractal
         if (dimSlider && dimVal) {
             dimSlider.addEventListener('input', e => {
                 fractalDimension = parseFloat(e.target.value);
@@ -1111,7 +1072,6 @@
             });
         }
 
-        // Control de intensidad fractal
         if (intSlider && intVal) {
             intSlider.addEventListener('input', e => {
                 fractalIntensity = parseInt(e.target.value, 10) / 100;
@@ -1120,7 +1080,6 @@
             });
         }
 
-        // Toggle de análisis fractal
         if (enableChk) {
             enableChk.addEventListener('change', e => {
                 fractalAnalysisActive = e.target.checked;
@@ -1134,7 +1093,6 @@
                 }
                 updateFractalDisplay();
                 
-                // Si está analizando, reiniciar con nueva configuración
                 if (isAnalyzing) {
                     stopAnalysis();
                     setTimeout(startAnalysis, 300);
@@ -1143,11 +1101,6 @@
         }
     }
 
-    /* ===================== FUNCIONES DE TOGGLE ===================== */
-    
-    /**
-     * Toggle del motor de ajedrez
-     */
     function toggleEngine() {
         if (isEngineConnected) {
             disconnectEngine();
@@ -1156,9 +1109,6 @@
         }
     }
 
-    /**
-     * Toggle del análisis
-     */
     function toggleAnalysis() {
         if (isAnalyzing) {
             stopAnalysis();
@@ -1167,11 +1117,6 @@
         }
     }
 
-    /* ===================== GESTIÓN DE ANIMACIONES ===================== */
-    
-    /**
-     * Gestiona las animaciones de la sección fractal
-     */
     function manageFractalAnimations() {
         setInterval(() => {
             const fractalSection = document.querySelector('.fractal-section');
@@ -1185,26 +1130,17 @@
         }, 100);
     }
 
-    /* ===================== INICIALIZACIÓN PRINCIPAL ===================== */
-    
-    /**
-     * Función principal que inicializa la aplicación
-     */
     async function initializeChessApp() {
         try {
-            // Esperar a que Chess.js esté disponible
             await checkChessAvailability();
             
             console.log('🚀 Iniciando Analizador de Ajedrez Fractal...');
             
-            // Inicializar la instancia principal de Chess.js - ÚNICA INICIALIZACIÓN
             chess = new Chess();
             console.log('✅ Chess.js inicializado correctamente');
             
-            // Continuar con la inicialización
             startChessApplication();
             
-            // Exponer API pública después de la inicialización
             exposePublicAPI();
             console.log('🔌 API pública expuesta correctamente');
             
@@ -1214,15 +1150,9 @@
         }
     }
 
-    /**
-     * Inicia la aplicación principal de ajedrez
-     */
     function startChessApplication() {
         console.log('🎯 Configurando aplicación principal...');
 
-        /**
-         * Inicializa todos los componentes de la aplicación
-         */
         function initializeApp() {
             try {
                 console.log('🔧 Configurando componentes...');
@@ -1253,40 +1183,24 @@
             }
         }
 
-        // Inicializar la aplicación
         initializeApp();
-        
-    } // Fin de startChessApplication
+    }
 
-    /* ===================== API PÚBLICA ===================== */
-    
-    /**
-     * Expone las funciones públicas del motor fractal
-     */
     function exposePublicAPI() {
         window.chessApp = {
-            // Funciones principales
             drawBoard,
             showLegalMoves,
             hideLegalMoves,
             makeMove,
-            
-            // Controles del motor
             toggleEngine,
             toggleAnalysis,
-            
-            // Funciones de utilidad (para debugging)
             getStats: () => ({ ...lastStats }),
             getComplexity: () => currentComplexity,
             getFractalEngine: () => fractalEngine,
             getChessInstance: () => chess,
-            
-            // Estado de la aplicación
             isEngineConnected: () => isEngineConnected,
             isAnalyzing: () => isAnalyzing,
             isFractalActive: () => fractalAnalysisActive,
-            
-            // Funciones adicionales
             resetStats,
             resetAnalysisDisplay,
             updateFractalDisplay,
@@ -1296,9 +1210,6 @@
         console.log('🔌 API pública del motor fractal expuesta correctamente');
     }
 
-    /* ===================== EVENT LISTENERS GLOBALES ===================== */
-    
-    // Cleanup al cerrar ventana
     window.addEventListener('beforeunload', () => {
         console.log('🧹 Limpiando recursos del motor fractal...');
         
@@ -1331,31 +1242,23 @@
         }
     });
     
-    // Manejo de errores globales
     window.addEventListener('error', (event) => {
         console.error('💥 Error global en motor fractal:', event.error);
     });
 
-    // Detectar cambios de visibilidad para pausar análisis
     document.addEventListener('visibilitychange', () => {
         if (document.hidden && isAnalyzing) {
             console.log('👁️ Pestaña oculta, pausando análisis fractal...');
-            // Opcional: pausar análisis cuando la pestaña no es visible
         }
     });
 
-    /* ===================== PUNTO DE ENTRADA ===================== */
-    
-    // Inicializar cuando el DOM esté listo
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initializeChessApp);
     } else {
-        // DOM ya está listo
         initializeChessApp();
     }
 
-    // Log inicial
     console.log('🎮 Motor de Ajedrez Fractal v2.0 - Iniciando...');
     console.log('🌀 Dimensión fractal D ≈ 1.247 | Análisis híbrido Stockfish + Geometría Fractal');
 
-})(); // Fin del closure principal
+})();
