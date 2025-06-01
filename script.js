@@ -7,55 +7,103 @@
 (function () {
     'use strict';
 
-    // Verificar que Chess.js esté cargado
-    if (typeof Chess === 'undefined') {
-        console.error('Chess.js no está cargado');
-        document.getElementById('chessboard').innerHTML = 
-            '<div class="loading"><p>Error: Chess.js no está disponible</p></div>';
-        return;
+    /**
+     * Espera a que Chess.js esté disponible
+     */
+    function waitForChessJs(callback, maxAttempts = 50) {
+        let attempts = 0;
+        
+        function check() {
+            attempts++;
+            
+            if (typeof Chess !== 'undefined') {
+                console.log('Chess.js cargado correctamente');
+                callback();
+            } else if (attempts < maxAttempts) {
+                console.log(`Esperando Chess.js... intento ${attempts}/${maxAttempts}`);
+                setTimeout(check, 100); // Esperar 100ms antes del siguiente intento
+            } else {
+                console.error('Chess.js no pudo cargarse después de', maxAttempts, 'intentos');
+                showChessJsError();
+            }
+        }
+        
+        check();
     }
 
-    /* ===================== CONSTANTES Y CONFIGURACIÓN ===================== */
-    const PIECE_SYMBOLS = {
-        'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
-        'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
-    };
-    
-    const BOARD_CONFIG = {
-        squareSize: 65,
-        get boardSize() { return this.squareSize * 8; }
-    };
+    /**
+     * Muestra error si Chess.js no se puede cargar
+     */
+    function showChessJsError() {
+        const chessboard = document.getElementById('chessboard');
+        if (chessboard) {
+            chessboard.innerHTML = `
+                <div class="loading">
+                    <i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>
+                    <p>Error: Chess.js no está disponible</p>
+                    <p style="font-size: 0.8rem; color: #6b7280;">
+                        Verifica tu conexión a internet o que el CDN esté funcionando
+                    </p>
+                    <button onclick="location.reload()" class="btn btn-primary" style="margin-top: 10px;">
+                        Reintentar
+                    </button>
+                </div>
+            `;
+        }
+    }
 
-    const STOCKFISH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js';
+    /**
+     * Función principal que se ejecuta cuando Chess.js está disponible
+     */
+    function initChessApp() {
+        // Verificar que Chess.js esté realmente disponible
+        if (typeof Chess === 'undefined') {
+            console.error('Chess.js no está cargado');
+            showChessJsError();
+            return;
+        }
 
-    /* ===================== VARIABLES DE ESTADO ===================== */
-    let board = [];
-    let chess = new Chess();
-    let lastMove = null;
-    let stockfish = null;
-    let blobURL = null;
-    let isEngineConnected = false;
-    let isAnalyzing = false;
-    let analysisInterval = null;
-    let pvObserver = null;
-    let fractalEngine = null;
-    let fractalAnalysisActive = true;
-    let fractalDimension = 1.247;
-    let fractalIntensity = 0.6;
-    let currentComplexity = 0;
-    
-    let lastStats = {
-        nps: 0,
-        pv: '',
-        evaluation: null,
-        depth: 0,
-        bestMove: '',
-        bestMoveSan: '',
-        fractalComplexity: 0,
-        optimalDepth: 0,
-        fractalConfidence: 0,
-        searchEfficiency: 0
-    };
+        /* ===================== CONSTANTES Y CONFIGURACIÓN ===================== */
+        const PIECE_SYMBOLS = {
+            'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
+            'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
+        };
+        
+        const BOARD_CONFIG = {
+            squareSize: 65,
+            get boardSize() { return this.squareSize * 8; }
+        };
+
+        const STOCKFISH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js';
+
+        /* ===================== VARIABLES DE ESTADO ===================== */
+        let board = [];
+        let chess = new Chess();
+        let lastMove = null;
+        let stockfish = null;
+        let blobURL = null;
+        let isEngineConnected = false;
+        let isAnalyzing = false;
+        let analysisInterval = null;
+        let pvObserver = null;
+        let fractalEngine = null;
+        let fractalAnalysisActive = true;
+        let fractalDimension = 1.247;
+        let fractalIntensity = 0.6;
+        let currentComplexity = 0;
+        
+        let lastStats = {
+            nps: 0,
+            pv: '',
+            evaluation: null,
+            depth: 0,
+            bestMove: '',
+            bestMoveSan: '',
+            fractalComplexity: 0,
+            optimalDepth: 0,
+            fractalConfidence: 0,
+            searchEfficiency: 0
+        };
 
     /* ===================== CLASE MOTOR FRACTAL ===================== */
     class FractalChessEngine {
@@ -1163,6 +1211,8 @@
             manageFractalAnimations();
             
             console.log('Aplicación inicializada correctamente');
+            console.log('Dimensión fractal por defecto: D =', fractalDimension);
+            console.log('Intensidad fractal por defecto:', (fractalIntensity * 100) + '%');
             
         } catch (error) {
             console.error('Error en inicialización:', error);
@@ -1222,19 +1272,31 @@
         }
     });
 
+    } // Fin de initChessApp()
+
     /* ===================== INICIALIZACIÓN AUTOMÁTICA ===================== */
     
-    // Inicializar cuando el DOM esté listo
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeApp);
-    } else {
-        // DOM ya está listo
-        initializeApp();
+    /**
+     * Punto de entrada principal
+     */
+    function startApp() {
+        // Esperar a que Chess.js esté disponible
+        waitForChessJs(() => {
+            // Inicializar cuando el DOM esté listo
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initializeApp);
+            } else {
+                // DOM ya está listo
+                initializeApp();
+            }
+        });
     }
+
+    // Iniciar la aplicación
+    startApp();
 
     // Log de versión para debugging
     console.log('Analizador de Ajedrez Fractal v1.0 - Sistema híbrido Stockfish + Geometría Fractal');
-    console.log('Dimensión fractal por defecto: D =', fractalDimension);
-    console.log('Intensidad fractal por defecto:', (fractalIntensity * 100) + '%');
 
-})();
+    // Cerrar el IIFE
+    })(); // Fin del closure principal
