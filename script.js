@@ -8,27 +8,38 @@
     'use strict';
 
     /**
-     * Espera a que Chess.js esté disponible
+     * Verifica si Chess.js está disponible y espera si es necesario
      */
-    function waitForChessJs(callback, maxAttempts = 50) {
-        let attempts = 0;
-        
-        function check() {
-            attempts++;
+    function checkChessAvailability() {
+        return new Promise((resolve, reject) => {
+            let attempts = 0;
+            const maxAttempts = 100; // Aumentar intentos
+            const interval = 100; // ms entre intentos
             
-            if (typeof Chess !== 'undefined') {
-                console.log('Chess.js cargado correctamente');
-                callback();
-            } else if (attempts < maxAttempts) {
-                console.log(`Esperando Chess.js... intento ${attempts}/${maxAttempts}`);
-                setTimeout(check, 100); // Esperar 100ms antes del siguiente intento
-            } else {
-                console.error('Chess.js no pudo cargarse después de', maxAttempts, 'intentos');
-                showChessJsError();
+            function check() {
+                attempts++;
+                console.log(`Verificando Chess.js... intento ${attempts}/${maxAttempts}`);
+                
+                if (typeof Chess !== 'undefined') {
+                    console.log('✅ Chess.js está disponible');
+                    resolve();
+                } else if (attempts >= maxAttempts) {
+                    console.error('❌ Chess.js no disponible después de', attempts, 'intentos');
+                    reject(new Error('Chess.js no se cargó'));
+                } else {
+                    setTimeout(check, interval);
+                }
             }
-        }
-        
-        check();
+            
+            // Verificación inmediata
+            if (typeof Chess !== 'undefined') {
+                console.log('✅ Chess.js ya está disponible');
+                resolve();
+            } else {
+                console.log('⏳ Esperando Chess.js...');
+                setTimeout(check, interval);
+            }
+        });
     }
 
     /**
@@ -40,12 +51,24 @@
             chessboard.innerHTML = `
                 <div class="loading">
                     <i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>
-                    <p>Error: Chess.js no está disponible</p>
-                    <p style="font-size: 0.8rem; color: #6b7280;">
-                        Verifica tu conexión a internet o que el CDN esté funcionando
+                    <p><strong>Error: Chess.js no disponible</strong></p>
+                    <p style="font-size: 0.8rem; color: #6b7280; margin: 10px 0;">
+                        Posibles soluciones:<br>
+                        • Verifica tu conexión a internet<br>
+                        • Desactiva bloqueadores de contenido<br>
+                        • Intenta recargar la página
                     </p>
-                    <button onclick="location.reload()" class="btn btn-primary" style="margin-top: 10px;">
-                        Reintentar
+                    <button onclick="location.reload()" style="
+                        padding: 10px 20px;
+                        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-weight: 600;
+                        transition: transform 0.2s;
+                    " onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                        🔄 Reintentar
                     </button>
                 </div>
             `;
@@ -53,15 +76,32 @@
     }
 
     /**
-     * Función principal que se ejecuta cuando Chess.js está disponible
+     * Función principal que inicializa la aplicación
      */
-    function initChessApp() {
-        // Verificar que Chess.js esté realmente disponible
-        if (typeof Chess === 'undefined') {
-            console.error('Chess.js no está cargado');
+    async function initializeChessApp() {
+        try {
+            // Esperar a que Chess.js esté disponible
+            await checkChessAvailability();
+            
+            console.log('🚀 Iniciando Analizador de Ajedrez Fractal...');
+            
+            // Ahora sí podemos inicializar Chess.js
+            const chess = new Chess();
+            console.log('✅ Chess.js inicializado correctamente');
+            
+            // Continuar con la inicialización
+            startChessApplication(chess);
+            
+        } catch (error) {
+            console.error('💥 Error al inicializar:', error);
             showChessJsError();
-            return;
         }
+    }
+
+    /**
+     * Inicia la aplicación principal de ajedrez
+     */
+    function startChessApplication(chess) {
 
         /* ===================== CONSTANTES Y CONFIGURACIÓN ===================== */
         const PIECE_SYMBOLS = {
@@ -1210,93 +1250,98 @@
             updateFractalDisplay();
             manageFractalAnimations();
             
-            console.log('Aplicación inicializada correctamente');
-            console.log('Dimensión fractal por defecto: D =', fractalDimension);
-            console.log('Intensidad fractal por defecto:', (fractalIntensity * 100) + '%');
-            
-        } catch (error) {
-            console.error('Error en inicialización:', error);
-            const chessboard = document.getElementById('chessboard');
-            if (chessboard) {
-                chessboard.innerHTML = `
-                    <div class="loading">
-                        <i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>
-                        <p>Error al inicializar la aplicación</p>
-                        <p style="font-size: 0.8rem; color: #6b7280;">${error.message}</p>
-                    </div>
-                `;
+        /**
+         * Inicializa todos los componentes de la aplicación
+         */
+        function initializeApp() {
+            try {
+                console.log('🔧 Configurando componentes...');
+                
+                setupFractalControls();
+                drawBoard();
+                updateButtonStates();
+                updateMemoryStats();
+                updateFractalDisplay();
+                manageFractalAnimations();
+                
+                console.log('✅ Aplicación inicializada correctamente');
+                console.log('📐 Dimensión fractal por defecto: D =', fractalDimension);
+                console.log('⚡ Intensidad fractal por defecto:', (fractalIntensity * 100) + '%');
+                
+            } catch (error) {
+                console.error('💥 Error en inicialización:', error);
+                const chessboard = document.getElementById('chessboard');
+                if (chessboard) {
+                    chessboard.innerHTML = `
+                        <div class="loading">
+                            <i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>
+                            <p>Error al inicializar la aplicación</p>
+                            <p style="font-size: 0.8rem; color: #6b7280;">${error.message}</p>
+                        </div>
+                    `;
+                }
             }
         }
-    }
 
-    /* ===================== API PÚBLICA ===================== */
-    
-    // Exponer funciones públicas
-    window.chessApp = {
-        // Funciones principales
-        drawBoard,
-        showLegalMoves,
-        hideLegalMoves,
-        makeMove,
+        /* ===================== API PÚBLICA ===================== */
         
-        // Controles del motor
-        toggleEngine,
-        toggleAnalysis,
+        // Exponer funciones públicas
+        window.chessApp = {
+            // Funciones principales
+            drawBoard,
+            showLegalMoves,
+            hideLegalMoves,
+            makeMove,
+            
+            // Controles del motor
+            toggleEngine,
+            toggleAnalysis,
+            
+            // Funciones de utilidad (para debugging)
+            getStats: () => ({ ...lastStats }),
+            getComplexity: () => currentComplexity,
+            getFractalEngine: () => fractalEngine,
+            
+            // Estado de la aplicación
+            isEngineConnected: () => isEngineConnected,
+            isAnalyzing: () => isAnalyzing,
+            isFractalActive: () => fractalAnalysisActive
+        };
+
+        /* ===================== EVENT LISTENERS ===================== */
         
-        // Funciones de utilidad (para debugging)
-        getStats: () => ({ ...lastStats }),
-        getComplexity: () => currentComplexity,
-        getFractalEngine: () => fractalEngine,
+        // Cleanup al cerrar ventana
+        window.addEventListener('beforeunload', cleanup);
         
-        // Estado de la aplicación
-        isEngineConnected: () => isEngineConnected,
-        isAnalyzing: () => isAnalyzing,
-        isFractalActive: () => fractalAnalysisActive
-    };
+        // Manejo de errores globales
+        window.addEventListener('error', (event) => {
+            console.error('💥 Error global capturado:', event.error);
+        });
 
-    /* ===================== EVENT LISTENERS ===================== */
-    
-    // Cleanup al cerrar ventana
-    window.addEventListener('beforeunload', cleanup);
-    
-    // Manejo de errores globales
-    window.addEventListener('error', (event) => {
-        console.error('Error global capturado:', event.error);
-    });
-
-    // Detectar cambios de visibilidad para pausar análisis
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden && isAnalyzing) {
-            console.log('Pestaña oculta, pausando análisis...');
-            // Opcional: pausar análisis cuando la pestaña no es visible
-        }
-    });
-
-    } // Fin de initChessApp()
-
-    /* ===================== INICIALIZACIÓN AUTOMÁTICA ===================== */
-    
-    /**
-     * Punto de entrada principal
-     */
-    function startApp() {
-        // Esperar a que Chess.js esté disponible
-        waitForChessJs(() => {
-            // Inicializar cuando el DOM esté listo
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', initializeApp);
-            } else {
-                // DOM ya está listo
-                initializeApp();
+        // Detectar cambios de visibilidad para pausar análisis
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && isAnalyzing) {
+                console.log('👁️ Pestaña oculta, pausando análisis...');
+                // Opcional: pausar análisis cuando la pestaña no es visible
             }
         });
+
+        // Inicializar la aplicación
+        initializeApp();
+        
+    } // Fin de startChessApplication
+
+    /* ===================== PUNTO DE ENTRADA ===================== */
+    
+    // Inicializar cuando el DOM esté listo
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeChessApp);
+    } else {
+        // DOM ya está listo
+        initializeChessApp();
     }
 
-    // Iniciar la aplicación
-    startApp();
+    // Log inicial
+    console.log('🎮 Analizador de Ajedrez Fractal v1.1 - Iniciando...');
 
-    // Log de versión para debugging
-    console.log('Analizador de Ajedrez Fractal v1.0 - Sistema híbrido Stockfish + Geometría Fractal');
-
-    // Cerrar el IIFE
-    })(); // Fin del closure principal
+})(); // Fin del closure principal
