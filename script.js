@@ -1253,34 +1253,32 @@
          * Inicializa todos los componentes de la aplicación
          */
         function initializeApp() {
-            try {
-                console.log('🔧 Configurando componentes...');
-                
-                setupFractalControls();
-                drawBoard();
-                updateButtonStates();
-                updateMemoryStats();
-                updateFractalDisplay();
-                manageFractalAnimations();
-                
-                console.log('✅ Aplicación inicializada correctamente');
-                console.log('📐 Dimensión fractal por defecto: D =', fractalDimension);
-                console.log('⚡ Intensidad fractal por defecto:', (fractalIntensity * 100) + '%');
-                
-            } catch (error) {
-                console.error('💥 Error en inicialización:', error);
-                const chessboard = document.getElementById('chessboard');
-                if (chessboard) {
-                    chessboard.innerHTML = `
-                        <div class="loading">
-                            <i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>
-                            <p>Error al inicializar la aplicación</p>
-                            <p style="font-size: 0.8rem; color: #6b7280;">${error.message}</p>
-                        </div>
-                    `;
-                }
-            }
+    try {
+        console.log('Inicializando Analizador de Ajedrez Fractal...');
+        setupFractalControls();
+        drawBoard();
+        updateButtonStates();
+        updateMemoryStats();
+        updateFractalDisplay();
+        manageFractalAnimations();
+
+        console.log('✅ Aplicación inicializada correctamente');
+        console.log('📐 Dimensión fractal por defecto: D =', fractalDimension);
+        console.log('⚡ Intensidad fractal por defecto:', (fractalIntensity * 100) + '%');
+    } catch (error) {
+        console.error('💥 Error en inicialización:', error);
+        const chessboard = document.getElementById('chessboard');
+        if (chessboard) {
+            chessboard.innerHTML = `
+                <div class="loading">
+                    <i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>
+                    <p>Error al inicializar la aplicación</p>
+                    <p style="font-size: 0.8rem; color: #6b7280;">${error.message}</p>
+                </div>
+            `;
         }
+    }
+}
 
         // Inicializar la aplicación
         initializeApp();
