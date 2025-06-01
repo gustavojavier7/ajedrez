@@ -1264,7 +1264,6 @@
 
         /* ===================== VARIABLES DE ESTADO ===================== */
         let board = [];
-        let chess = new Chess();
         let lastMove = null;
         let stockfish = null;
         let blobURL = null;
