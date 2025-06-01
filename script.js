@@ -232,7 +232,7 @@
             const baseDepth = 12;
             const complexityFactor = Math.pow(complexity / 10, 1/this.D);
             const optimalDepth = Math.round(baseDepth + complexityFactor * 6);
-            return Math.min(Math.max(optimalDepth, 8), 22);
+            return Math.max(optimalDepth, 8);
         }
 
         /**
