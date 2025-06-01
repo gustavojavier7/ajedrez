@@ -2722,6 +2722,7 @@
 
         // Inicializar la aplicación
         initializeApp();
+        exposePublicAPI();
         
     } // Fin de startChessApplication
 
