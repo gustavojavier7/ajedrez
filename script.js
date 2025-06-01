@@ -118,6 +118,7 @@
 
         /* ===================== VARIABLES DE ESTADO ===================== */
         let board = [];
+        let chess = new Chess();
         let lastMove = null;
         let stockfish = null;
         let blobURL = null;
@@ -208,7 +209,7 @@
          */
         estimateMobility(fen) {
             try {
-                const tempChess = new Chess(fen);
+                const tempChess = new Chess(fen); // Instancia temporal con nombre específico
                 return tempChess.moves().length;
             } catch (e) {
                 return 20; // Valor por defecto
@@ -220,7 +221,7 @@
          */
         evaluateCenterControl(fen) {
             try {
-                const tempChess = new Chess(fen);
+                const tempChess = new Chess(fen); // Instancia temporal con nombre específico
                 const centerSquares = ['d4', 'd5', 'e4', 'e5'];
                 let control = 0;
                 
@@ -242,14 +243,13 @@
          */
         evaluateKingSafety(fen) {
             try {
-                const tempChess = new Chess(fen);
+                const tempChess = new Chess(fen); // Instancia temporal con nombre específico
                 let safety = 10; // Seguridad base
                 
                 if (tempChess.in_check()) {
                     safety -= 50;
                 }
                 
-                // Otros factores de seguridad podrían agregarse aquí
                 return safety;
             } catch (e) {
                 return 10;
@@ -339,7 +339,7 @@
             const to = uciMove.substring(2, 4);
             const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
             
-            const tempChess = new Chess(chess.fen());
+            const tempChess = new Chess(chess.fen()); // Usar FEN de la instancia global
             const move = tempChess.move({ from, to, promotion });
             return move ? move.san : uciMove;
         } catch (e) {
@@ -858,7 +858,7 @@
      */
     function convertPVToSAN(pvMoves) {
         try {
-            const tempChess = new Chess(chess.fen());
+            const tempChess = new Chess(chess.fen()); // Usar FEN de la instancia global
             const sanMoves = [];
             
             for (const uciMove of pvMoves) {
@@ -1282,9 +1282,15 @@
             }
         }
 
-        /* ===================== API PÚBLICA ===================== */
+        // Inicializar la aplicación
+        initializeApp();
         
-        // Exponer funciones públicas
+    } // Fin de startChessApplication
+
+    /* ===================== API PÚBLICA ===================== */
+    
+    // Exponer funciones públicas - declarar después de que las funciones estén definidas
+    function exposePublicAPI() {
         window.chessApp = {
             // Funciones principales
             drawBoard,
@@ -1300,35 +1306,56 @@
             getStats: () => ({ ...lastStats }),
             getComplexity: () => currentComplexity,
             getFractalEngine: () => fractalEngine,
+            getChessInstance: () => chess, // Para debugging
             
             // Estado de la aplicación
             isEngineConnected: () => isEngineConnected,
             isAnalyzing: () => isAnalyzing,
             isFractalActive: () => fractalAnalysisActive
         };
+    }
 
-        /* ===================== EVENT LISTENERS ===================== */
+    /* ===================== EVENT LISTENERS GLOBALES ===================== */
+    
+    // Cleanup al cerrar ventana
+    window.addEventListener('beforeunload', () => {
+        if (stockfish) {
+            stockfish.terminate();
+            stockfish = null;
+        }
         
-        // Cleanup al cerrar ventana
-        window.addEventListener('beforeunload', cleanup);
+        if (blobURL) {
+            URL.revokeObjectURL(blobURL);
+            blobURL = null;
+        }
         
-        // Manejo de errores globales
-        window.addEventListener('error', (event) => {
-            console.error('💥 Error global capturado:', event.error);
-        });
+        if (analysisInterval) {
+            clearInterval(analysisInterval);
+            analysisInterval = null;
+        }
+        
+        if (pvObserver) {
+            pvObserver.disconnect();
+            pvObserver = null;
+        }
 
-        // Detectar cambios de visibilidad para pausar análisis
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden && isAnalyzing) {
-                console.log('👁️ Pestaña oculta, pausando análisis...');
-                // Opcional: pausar análisis cuando la pestaña no es visible
-            }
-        });
+        if (fractalEngine) {
+            fractalEngine.clearCache();
+        }
+    });
+    
+    // Manejo de errores globales
+    window.addEventListener('error', (event) => {
+        console.error('💥 Error global capturado:', event.error);
+    });
 
-        // Inicializar la aplicación
-        initializeApp();
-        
-    } // Fin de startChessApplication
+    // Detectar cambios de visibilidad para pausar análisis
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && isAnalyzing) {
+            console.log('👁️ Pestaña oculta, pausando análisis...');
+            // Opcional: pausar análisis cuando la pestaña no es visible
+        }
+    });
 
     /* ===================== PUNTO DE ENTRADA ===================== */
     
