@@ -125,6 +125,19 @@
             this.maxCacheSize = 1000;
         }
 
+        findKingSquare(chess, color) {
+            for (let rank = 0; rank < 8; rank++) {
+                for (let file = 0; file < 8; file++) {
+                    const square = String.fromCharCode(97 + file) + (rank + 1);
+                    const piece = chess.get(square);
+                    if (piece && piece.type.toLowerCase() === 'k' && piece.color === color) {
+                        return square;
+                    }
+                }
+            }
+            return null;
+        }
+
         calculateFractalComplexity(fen) {
             if (this.cache.has(fen)) {
                 return this.cache.get(fen);
@@ -199,7 +212,12 @@
                 let safety = 0;
 
                 const kingSquare = tempChess.turn() === 'w' ? 
-                    tempChess.king('w') : tempChess.king('b');
+                    this.findKingSquare(tempChess, 'w') : this.findKingSquare(tempChess, 'b');
+                
+                if (!kingSquare) {
+                    throw new Error('King not found on board');
+                }
+
                 const [file, rank] = [kingSquare.charCodeAt(0) - 97, parseInt(kingSquare[1]) - 1];
                 const isCentral = (file >= 3 && file <= 4 && rank >= 3 && rank <= 4);
                 const isEnroque = (file <= 2 || file >= 5) && (rank <= 1 || rank >= 6);
