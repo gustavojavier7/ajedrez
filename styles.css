@@ -373,15 +373,18 @@ body {
     color: #991b1b;
 }
 
-/* ===================== PANEL DERECHO ===================== */
+/* Ajustes en .right-panel */
 .right-panel {
     width: 420px;
     min-width: 420px;
     display: flex;
     flex-direction: column;
     gap: 16px;
+    overflow: hidden; /* Prevenir desbordamiento */
+    flex: 1; /* Asegurar que ocupe espacio disponible */
 }
 
+/* Asegurar que analysis-panel y legalMoves no se solapen */
 .analysis-panel {
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(10px);
@@ -389,84 +392,95 @@ body {
     padding: 12px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    display: flex;
-    flex-direction: column;
+    flex: 0 1 auto; /* No crecer más de lo necesario */
+    overflow: hidden; /* Manejar desbordamiento */
+}
+
+#legalMoves {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    flex: 1; /* Ocupar espacio restante */
+    min-height: 0; /* Permitir que se encoja */
+    overflow: auto; /* Manejar desbordamiento */
 }
 
 .analysis-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
+    min-height: 0; /* Evitar que crezca más allá del contenedor */
 }
 
-.analysis-section {
-    margin-bottom: 8px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid rgba(243, 244, 246, 0.95);
+.motor-eval-section, .fractal-section-wrapper {
+    min-height: 0;
+    overflow: hidden; /* Prevenir desbordamiento interno */
 }
 
-.analysis-section:last-child {
-    margin-bottom: 0;
-    padding-bottom: 0;
-    border-bottom: none;
-}
-
-.motor-eval-section {
-    grid-column: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.fractal-section-wrapper {
-    grid-column: 2;
-    grid-row: 1;
+.fractal-section {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(124, 58, 237, 0.1));
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    border-radius: 6px;
+    padding: 10px;
+    overflow: hidden; /* Manejar desbordamiento */
 }
 
 .pv-section-wrapper {
     grid-column: 1 / -1;
     grid-row: 2;
+    overflow: auto; /* Permitir scroll si es necesario */
 }
 
-.section-title {
-    font-weight: 600;
-    color: #374151;
-    font-size: 0.875rem;
-    margin-bottom: 8px;
+/* Ajustes en .board-container-wrapper */
+.board-container-wrapper {
     display: flex;
-    align-items: center;
-    gap: 6px;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1; /* Ocupar espacio disponible */
+    min-height: 0; /* Permitir que se encoja */
 }
 
-.section-title i {
-    font-size: 1rem;
+#chessboard {
+    flex: 0 1 auto; /* No crecer más de lo necesario */
 }
 
-.status-indicator {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #ef4444;
-    margin-left: auto;
-    animation: pulse 2s infinite;
+#gameStatus, .performance-indicators {
+    flex: 0 1 auto;
 }
 
-.status-indicator.connected {
-    background: #10b981;
+/* Responsividad */
+@media (max-width: 1200px) {
+    .right-panel {
+        width: 100%;
+        min-width: unset;
+        height: auto; /* Asegurar que se ajuste al contenido */
+    }
+
+    .analysis-panel {
+        max-height: 400px; /* Limitar altura en pantallas pequeñas */
+        overflow-y: auto; /* Permitir scroll */
+    }
+
+    #legalMoves {
+        max-height: 200px; /* Reducir altura */
+    }
+
+    .board-container-wrapper {
+        height: auto; /* Ajustar al contenido */
+    }
 }
 
-.fractal-info-btn {
-    margin-left: auto;
-    cursor: pointer;
-    color: #8b5cf6;
-    padding: 4px;
-    border-radius: 4px;
-    transition: all 0.2s ease;
-}
+@media (max-width: 768px) {
+    .analysis-panel {
+        max-height: 300px;
+    }
 
-.fractal-info-btn:hover {
-    background: rgba(139, 92, 246, 0.1);
-    transform: scale(1.1);
+    #legalMoves {
+        max-height: 150px;
+    }
 }
 
 /* ===================== CONTROLES DEL MOTOR ===================== */
