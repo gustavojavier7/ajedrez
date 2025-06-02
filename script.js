@@ -145,7 +145,7 @@
                 const maxSum = 4;
                 const complexity = 1 + 49 * (sumNorm / maxSum);
 
-                const result = Math.max(1.0, Math.min(50.0, complexity));
+                const result = Math.max(1.0, complexity);
                 
                 if (this.cache.size >= this.maxCacheSize) {
                     const firstKey = this.cache.keys().next().value;
@@ -609,13 +609,16 @@
             const optimalDepth = fractalEngine.calculateOptimalDepth(complexity);
             currentComplexity = complexity;
             
-            if (complexityEl) complexityEl.textContent = complexity.toFixed(2);
+            if (complexityEl) {
+                complexityEl.textContent = complexity.toFixed(2);
+                complexityEl.className = 'value' + (complexity > 50 ? ' high-complexity-warning' : '');
+            }
             if (depthEl) {
                 depthEl.textContent = optimalDepth.toString();
                 depthEl.className = 'indicator-value' + (optimalDepth > 30 ? ' high-depth-warning' : '');
             }
             
-            const confidenceValue = Math.min(95, 60 + (complexity / 20 * 35));
+            const confidenceValue = 60 + (complexity / 20 * 35);
             if (confidenceEl) confidenceEl.textContent = confidenceValue.toFixed(1) + '%';
             
             if (isAnalyzing && lastStats.nps > 0) {
