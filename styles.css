@@ -10,7 +10,7 @@ body {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     min-height: 100vh;
     line-height: 1.5;
-    font-size: 0.875rem; /* Base typography */
+    font-size: 0.875rem;
     color: #374151;
     overflow-x: auto;
 }
@@ -19,7 +19,7 @@ body {
 .container {
     max-width: 1600px;
     margin: 0 auto;
-    padding: 16px; /* Unified spacing */
+    padding: 16px;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -31,7 +31,7 @@ body {
 }
 
 .header h1 {
-    font-size: 1.75rem; /* Consistent heading */
+    font-size: 1.75rem;
     font-weight: 600;
     color: white;
     text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
@@ -68,7 +68,7 @@ body {
 
 .main-layout {
     display: flex;
-    gap: 16px; /* Unified gap */
+    gap: 16px;
     flex: 1;
     min-height: 0;
 }
@@ -79,7 +79,7 @@ body {
     backdrop-filter: blur(10px);
     border-radius: 8px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    padding: 12px; /* Unified */
+    padding: 12px;
     margin-bottom: 16px;
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
@@ -163,21 +163,6 @@ body {
     white-space: nowrap;
     position: relative;
     overflow: hidden;
-}
-
-.btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-    transition: left 0.5s;
-}
-
-.btn:hover::before {
-    left: 100%;
 }
 
 .btn:disabled {
@@ -268,7 +253,6 @@ body {
 .loading i {
     font-size: 2.5rem;
     margin-bottom: 12px;
-    animation: pulse 2s infinite;
     color: #8b5cf6;
 }
 
@@ -285,12 +269,6 @@ body {
     height: 100%;
     background: linear-gradient(90deg, #8b5cf6, #7c3aed);
     width: 0%;
-    animation: fillProgress 3s ease-in-out infinite;
-}
-
-@keyframes fillProgress {
-    0%, 100% { width: 0%; }
-    50% { width: 100%; }
 }
 
 /* ===================== INDICADORES DE RENDIMIENTO ===================== */
@@ -373,18 +351,17 @@ body {
     color: #991b1b;
 }
 
-/* Ajustes en .right-panel */
+/* ===================== PANEL DERECHO OPTIMIZADO ===================== */
 .right-panel {
     width: 420px;
     min-width: 420px;
     display: flex;
     flex-direction: column;
     gap: 16px;
-    overflow: hidden; /* Prevenir desbordamiento */
-    flex: 1; /* Asegurar que ocupe espacio disponible */
+    overflow: hidden;
+    flex: 1;
 }
 
-/* Asegurar que analysis-panel y legalMoves no se solapen */
 .analysis-panel {
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(10px);
@@ -392,8 +369,8 @@ body {
     padding: 12px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    flex: 0 1 auto; /* No crecer más de lo necesario */
-    overflow: hidden; /* Manejar desbordamiento */
+    flex: 0 1 auto;
+    overflow: hidden;
 }
 
 #legalMoves {
@@ -403,21 +380,21 @@ body {
     padding: 12px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    flex: 1; /* Ocupar espacio restante */
-    min-height: 0; /* Permitir que se encoja */
-    overflow: auto; /* Manejar desbordamiento */
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
 }
 
 .analysis-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
-    min-height: 0; /* Evitar que crezca más allá del contenedor */
+    min-height: 0;
 }
 
 .motor-eval-section, .fractal-section-wrapper {
     min-height: 0;
-    overflow: hidden; /* Prevenir desbordamiento interno */
+    overflow: hidden;
 }
 
 .fractal-section {
@@ -425,62 +402,29 @@ body {
     border: 1px solid rgba(139, 92, 246, 0.2);
     border-radius: 6px;
     padding: 10px;
-    overflow: hidden; /* Manejar desbordamiento */
+    overflow: hidden;
 }
 
 .pv-section-wrapper {
     grid-column: 1 / -1;
     grid-row: 2;
-    overflow: auto; /* Permitir scroll si es necesario */
+    overflow: auto;
 }
 
-/* Ajustes en .board-container-wrapper */
 .board-container-wrapper {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    flex: 1; /* Ocupar espacio disponible */
-    min-height: 0; /* Permitir que se encoja */
+    flex: 1;
+    min-height: 0;
 }
 
 #chessboard {
-    flex: 0 1 auto; /* No crecer más de lo necesario */
+    flex: 0 1 auto;
 }
 
 #gameStatus, .performance-indicators {
     flex: 0 1 auto;
-}
-
-/* Responsividad */
-@media (max-width: 1200px) {
-    .right-panel {
-        width: 100%;
-        min-width: unset;
-        height: auto; /* Asegurar que se ajuste al contenido */
-    }
-
-    .analysis-panel {
-        max-height: 400px; /* Limitar altura en pantallas pequeñas */
-        overflow-y: auto; /* Permitir scroll */
-    }
-
-    #legalMoves {
-        max-height: 200px; /* Reducir altura */
-    }
-
-    .board-container-wrapper {
-        height: auto; /* Ajustar al contenido */
-    }
-}
-
-@media (max-width: 768px) {
-    .analysis-panel {
-        max-height: 300px;
-    }
-
-    #legalMoves {
-        max-height: 150px;
-    }
 }
 
 /* ===================== CONTROLES DEL MOTOR ===================== */
@@ -621,7 +565,7 @@ body {
     overflow-y: auto;
 }
 
-/* ===================== SECCIÓN FRACTAL ===================== */
+/* ===================== SECCIÓN FRACTAL OPTIMIZADA ===================== */
 .fractal-section {
     background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(124, 58, 237, 0.1));
     border: 1px solid rgba(139, 92, 246, 0.2);
@@ -629,41 +573,15 @@ body {
     padding: 10px;
 }
 
-.fractal-section::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, #8b5cf6, #7c3aed, #8b5cf6);
-    animation: shimmer 2s ease-in-out infinite;
-}
-
-@keyframes shimmer {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
-}
-
-.fractal-active {
-    animation: fractalGlow 2s ease-in-out infinite;
-    border-color: rgba(139, 92, 246, 0.4);
-}
-
-@keyframes fractalGlow {
-    0%, 100% { box-shadow: 0 0 12px rgba(139, 92, 246, 0.2); }
-    50% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.4); }
-}
-
 .fractal-controls {
-    margin-bottom: 8px;
+    margin-bottom: 12px;
 }
 
 .fractal-toggle {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
     cursor: pointer;
     position: relative;
 }
@@ -689,7 +607,7 @@ body {
 }
 
 .slider-group {
-    margin-bottom: 8px;
+    margin-bottom: 10px;
 }
 
 .slider-group label {
@@ -749,19 +667,26 @@ body {
     box-shadow: 0 2px 6px rgba(139, 92, 246, 0.2);
 }
 
+/* ===================== MÉTRICAS FRACTALES OPTIMIZADAS ===================== */
 .fractal-metrics {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, auto);
     gap: 8px;
+    margin-top: 8px;
 }
 
 .fractal-metric {
     background: rgba(255, 255, 255, 0.95);
-    padding: 8px;
+    padding: 6px 8px;
     border-radius: 6px;
-    text-align: center;
+    text-align: left;
     border: 1px solid rgba(139, 92, 246, 0.1);
     transition: all 0.3s ease;
+    min-height: 48px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .fractal-metric:hover {
@@ -771,20 +696,23 @@ body {
 }
 
 .fractal-metric .label {
-    font-size: 0.75rem;
+    font-size: 0.625rem;
     color: #6b7280;
     margin-bottom: 2px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
+    line-height: 1.2;
 }
 
 .fractal-metric .value {
     font-weight: 700;
     color: #8b5cf6;
-    font-size: 0.875rem;
-    min-width: 60px;
-    text-align: right;
+    font-size: 0.75rem;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* ===================== PANEL DE MOVIMIENTOS ===================== */
@@ -925,12 +853,6 @@ body {
     max-height: 80vh;
     overflow-y: auto;
     box-shadow: 0 16px 32px rgba(0, 0, 0, 0.2);
-    animation: modalAppear 0.3s ease;
-}
-
-@keyframes modalAppear {
-    from { opacity: 0; transform: scale(0.9) translateY(-20px); }
-    to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .modal-header {
@@ -968,21 +890,6 @@ body {
     margin: 6px 0;
 }
 
-/* ===================== ANIMACIONES ===================== */
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
-@keyframes rotate {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-.fa-chess-queen {
-    animation: rotate 20s linear infinite;
-}
-
 /* ===================== RESPONSIVE DESIGN ===================== */
 @media (max-width: 1200px) {
     .main-layout {
@@ -1008,7 +915,7 @@ body {
     }
 
     .fractal-metrics {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(4, 1fr);
     }
 }
 
@@ -1040,7 +947,7 @@ body {
     }
 
     .fractal-metrics {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
     }
 
     .performance-indicators {
@@ -1065,5 +972,17 @@ body {
     .modal-content {
         width: 95%;
         margin: 8px;
+    }
+
+    .fractal-metrics {
+        grid-template-columns: 1fr;
+    }
+
+    .fractal-metric .label {
+        font-size: 0.6rem;
+    }
+
+    .fractal-metric .value {
+        font-size: 0.7rem;
     }
 }
