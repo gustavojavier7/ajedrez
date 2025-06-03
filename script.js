@@ -618,6 +618,10 @@
             if (depthEl) depthEl.textContent = '--';
             if (confidenceEl) confidenceEl.textContent = '--';
             if (efficiencyEl) efficiencyEl.textContent = '--';
+            lastStats.fractalComplexity = 0;
+            lastStats.optimalDepth = 0;
+            lastStats.fractalConfidence = 0;
+            lastStats.searchEfficiency = 0;
             return;
         }
         
@@ -626,6 +630,8 @@
             const complexity = fractalEngine.calculateFractalComplexity(fen);
             const optimalDepth = fractalEngine.calculateOptimalDepth(complexity);
             currentComplexity = complexity;
+            lastStats.fractalComplexity = complexity;
+            lastStats.optimalDepth = optimalDepth;
             
             if (complexityEl) {
                 complexityEl.textContent = complexity.toFixed(2);
@@ -638,10 +644,12 @@
             
             const confidenceValue = 60 + (complexity / 20 * 35);
             if (confidenceEl) confidenceEl.textContent = confidenceValue.toFixed(1) + '%';
-            
+            lastStats.fractalConfidence = confidenceValue;
+
             if (isAnalyzing && lastStats.nps > 0) {
                 const efficiencyValue = Math.min(100, (lastStats.nps / 1000000) * 100);
                 if (efficiencyEl) efficiencyEl.textContent = efficiencyValue.toFixed(1) + '%';
+                lastStats.searchEfficiency = efficiencyValue;
             }
         } catch (error) {
             console.warn('Error updating fractal display:', error);
