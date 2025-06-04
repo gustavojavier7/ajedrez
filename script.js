@@ -33,7 +33,7 @@
         fractalComplexity: 0,
         optimalDepth: 0,
         fractalConfidence: 0,
-        searchEfficiency: 0
+        memoryUsage: 0
     };
 
     /* ===================== CONSTANTES Y CONFIGURACIÓN ===================== */
@@ -596,14 +596,18 @@
 
     function updateMemoryStats() {
         const memoryStats = document.getElementById('memoryStats');
-        if (!memoryStats) return;
+        const memoryEl = document.getElementById('engineMemory');
 
         if (window.performance && window.performance.memory) {
             const memory = window.performance.memory;
             const memoryMB = Math.round(memory.usedJSHeapSize / (1024 * 1024));
-            memoryStats.textContent = `Memoria: ${memoryMB}MB`;
+            if (memoryStats) memoryStats.textContent = `Memoria: ${memoryMB}MB`;
+            if (memoryEl) memoryEl.textContent = `${memoryMB}MB`;
+            lastStats.memoryUsage = memoryMB;
         } else {
-            memoryStats.textContent = 'Memoria: N/A';
+            if (memoryStats) memoryStats.textContent = 'Memoria: N/A';
+            if (memoryEl) memoryEl.textContent = 'N/A';
+            lastStats.memoryUsage = 0;
         }
     }
 
@@ -611,17 +615,16 @@
         const complexityEl = document.getElementById('fractalComplexity');
         const depthEl = document.getElementById('depthValue');
         const confidenceEl = document.getElementById('fractalConfidence');
-        const efficiencyEl = document.getElementById('searchEfficiency');
+        const memoryEl = document.getElementById('engineMemory');
         
         if (!fractalAnalysisActive || !fractalEngine) {
             if (complexityEl) complexityEl.textContent = '--';
             if (depthEl) depthEl.textContent = '--';
             if (confidenceEl) confidenceEl.textContent = '--';
-            if (efficiencyEl) efficiencyEl.textContent = '--';
+            if (memoryEl) memoryEl.textContent = '--';
             lastStats.fractalComplexity = 0;
             lastStats.optimalDepth = 0;
             lastStats.fractalConfidence = 0;
-            lastStats.searchEfficiency = 0;
             return;
         }
         
@@ -646,10 +649,12 @@
             if (confidenceEl) confidenceEl.textContent = confidenceValue.toFixed(1) + '%';
             lastStats.fractalConfidence = confidenceValue;
 
-            if (isAnalyzing && lastStats.nps > 0) {
-                const efficiencyValue = Math.min(100, (lastStats.nps / 1000000) * 100);
-                if (efficiencyEl) efficiencyEl.textContent = efficiencyValue.toFixed(1) + '%';
-                lastStats.searchEfficiency = efficiencyValue;
+            if (memoryEl) {
+                if (lastStats.memoryUsage > 0) {
+                    memoryEl.textContent = `${lastStats.memoryUsage}MB`;
+                } else {
+                    memoryEl.textContent = 'N/A';
+                }
             }
         } catch (error) {
             console.warn('Error updating fractal display:', error);
@@ -1043,7 +1048,7 @@
             fractalComplexity: 0,
             optimalDepth: 0,
             fractalConfidence: 0,
-            searchEfficiency: 0
+            memoryUsage: 0
         };
     }
 
