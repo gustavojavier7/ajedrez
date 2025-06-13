@@ -24,6 +24,14 @@
     let fractalIntensity = 0.6;
     let currentComplexity = 0;
 
+    // Variables de adaptación dinámica
+    let evaluationHistory = [];
+    let predictedDepth = 12;
+    let predictedTimeMs = 2000;
+    let averageNPS = 0;
+    let timerInterval = null;
+    let analysisStartTimestamp = 0;
+
     let lastStats = {
         nps: 0,
         pv: '',
@@ -774,6 +782,69 @@
         }
     }
 
+    function computeAdaptiveParameters() {
+        let baseDepth = 12;
+
+        if (fractalAnalysisActive && fractalEngine) {
+            try {
+                const fen = chess.fen();
+                const complexity = fractalEngine.calculateFractalComplexity(fen);
+                baseDepth = fractalEngine.calculateOptimalDepth(complexity);
+                lastStats.fractalComplexity = complexity;
+                lastStats.optimalDepth = baseDepth;
+            } catch (err) {
+                console.warn('Error calculando complejidad fractal:', err);
+            }
+        } else if (lastStats.optimalDepth > 0) {
+            baseDepth = lastStats.optimalDepth;
+        }
+
+        if (evaluationHistory.length >= 2) {
+            const lastEval = evaluationHistory[evaluationHistory.length - 1].value;
+            const prevEval = evaluationHistory[evaluationHistory.length - 2].value;
+            if (lastEval < prevEval) {
+                predictedDepth = Math.min(baseDepth + 2, 40);
+            } else {
+                predictedDepth = Math.max(baseDepth - 1, 6);
+            }
+        } else {
+            predictedDepth = baseDepth;
+        }
+
+        if (averageNPS > 0) {
+            predictedTimeMs = Math.max(1000, Math.round((predictedDepth * 1000000) / averageNPS));
+        } else {
+            predictedTimeMs = predictedDepth * 1000;
+        }
+
+        const depthEl = document.getElementById('depthValue');
+        if (depthEl) {
+            depthEl.textContent = predictedDepth.toString();
+            depthEl.className = 'indicator-value' + (predictedDepth > 30 ? ' high-depth-warning' : '');
+        }
+
+        const timeEl = document.getElementById('timeValue');
+        if (timeEl) timeEl.textContent = (predictedTimeMs / 1000).toFixed(1) + 's';
+    }
+
+    function updateAnalysisTimer() {
+        const timerEl = document.getElementById('analysisTimer');
+        if (!timerEl) return;
+        const elapsed = Date.now() - analysisStartTimestamp;
+        timerEl.textContent = (elapsed / 1000).toFixed(1) + 's / ' + (predictedTimeMs / 1000).toFixed(1) + 's';
+        if (elapsed >= predictedTimeMs) {
+            forceBestMove();
+        }
+    }
+
+    function forceBestMove() {
+        if (!isAnalyzing) return;
+        stopAnalysis();
+        if (lastStats.bestMoveSan) {
+            makeMove(lastStats.bestMoveSan);
+        }
+    }
+
     function connectEngine() {
         if (isEngineConnected) return;
 
@@ -855,33 +926,26 @@
 
         const engineStatus = document.getElementById('engineStatus');
         if (!engineStatus) return;
-        
+
+        computeAdaptiveParameters();
+
         const fen = chess.fen();
-        let searchCommand = 'go infinite';
-        
-        if (fractalAnalysisActive && fractalEngine) {
-            try {
-                const complexity = fractalEngine.calculateFractalComplexity(fen);
-                const depth = fractalEngine.calculateOptimalDepth(complexity);
-                searchCommand = `go depth ${depth}`;
-                engineStatus.textContent = `Analizando con profundidad fractal (D=${depth})...`;
-            } catch (error) {
-                console.warn('Error en análisis fractal:', error);
-                engineStatus.textContent = 'Analizando...';
-            }
-        } else {
-            engineStatus.textContent = 'Analizando...';
-        }
+        const searchCommand = `go depth ${predictedDepth}`;
+        engineStatus.textContent = `Analizando (d=${predictedDepth})...`;
 
         stockfish.postMessage(`position fen ${fen}`);
         stockfish.postMessage(searchCommand);
-        
+
         isAnalyzing = true;
         updateButtonStates();
         
         const pvLine = document.getElementById('pvLine');
         if (pvLine) pvLine.textContent = 'Analizando...';
         
+        analysisStartTimestamp = Date.now();
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(updateAnalysisTimer, 100);
+
         analysisInterval = setInterval(() => {
             updateMemoryStats();
             updateFractalDisplay();
@@ -895,10 +959,14 @@
             if (stockfish) {
                 stockfish.postMessage('stop');
             }
-            
+
             if (analysisInterval) {
                 clearInterval(analysisInterval);
                 analysisInterval = null;
+            }
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
             }
         } catch (error) {
             console.warn('Error deteniendo análisis:', error);
@@ -907,11 +975,13 @@
         isAnalyzing = false;
         const engineStatus = document.getElementById('engineStatus');
         if (engineStatus) {
-            const statusText = fractalAnalysisActive ? 
-                'Motor conectado - Análisis fractal detenido' : 
+            const statusText = fractalAnalysisActive ?
+                'Motor conectado - Análisis fractal detenido' :
                 'Motor conectado - Análisis detenido';
             engineStatus.textContent = statusText;
         }
+        const timerEl = document.getElementById('analysisTimer');
+        if (timerEl) timerEl.textContent = '--';
         updateButtonStates();
     }
 
@@ -947,6 +1017,17 @@
             const chessboard = document.getElementById('chessboard');
             if (chessboard) chessboard.innerHTML = generateChessboardSVG();
             highlightSelection();
+
+            if (lastStats.evaluation) {
+                evaluationHistory.push(lastStats.evaluation);
+            }
+            if (lastStats.nps > 0) {
+                averageNPS = averageNPS === 0 ? lastStats.nps : Math.round((averageNPS + lastStats.nps) / 2);
+            }
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
         }
     }
 
@@ -1048,11 +1129,13 @@
         const bestMove = document.getElementById('bestMove');
         const engineStats = document.getElementById('engineStats');
         const pvLine = document.getElementById('pvLine');
-        
+        const timerEl = document.getElementById('analysisTimer');
+
         if (evaluation) evaluation.textContent = '--';
         if (bestMove) bestMove.textContent = '--';
         if (engineStats) engineStats.textContent = '--';
         if (pvLine) pvLine.textContent = 'Motor desconectado';
+        if (timerEl) timerEl.textContent = '--';
     }
 
     function showLegalMoves() {
