@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- SEO Meta Tags -->
+    <title>Ajedrez Interactivo - Motor Fractal v2.0 | Juega Online</title>
+    <meta name="description" content="Juega ajedrez online con nuestro motor fractal híbrido. Tres modos de juego: Edición, Humano vs Humano y Versus CPU. Análisis avanzado con Stockfish.">
+    <meta name="keywords" content="ajedrez online, chess, motor ajedrez, stockfish, análisis fractal, juego interactivo">
+    <meta name="author" content="Motor Fractal Team">
+    <meta name="robots" content="index, follow">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="">
+    <meta property="og:title" content="Ajedrez Interactivo - Motor Fractal v2.0">
+    <meta property="og:description" content="Juega ajedrez online con análisis avanzado y múltiples modos de juego">
+    <meta property="og:image" content="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♔</text></svg>">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="">
+    <meta property="twitter:title" content="Ajedrez Interactivo - Motor Fractal v2.0">
+    <meta property="twitter:description" content="Juega ajedrez online con análisis avanzado y múltiples modos de juego">
+    
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♔</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♔</text></svg>">
+    
+    <!-- Preconnect for performance -->
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" crossorigin="anonymous">
+    
+    <!-- Local Styles -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Ajedrez Interactivo",
+        "description": "Motor de ajedrez interactivo con análisis fractal híbrido",
+        "url": "",
+        "applicationCategory": "Game",
+        "operatingSystem": "Web Browser",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        }
+    }
+    </script>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loading-content">
+            <div class="chess-loader">
+                <i class="fas fa-chess-queen"></i>
+            </div>
+            <h2>Motor Fractal v2.0</h2>
+            <p>Cargando sistema híbrido...</p>
+            <div class="loading-bar">
+                <div class="loading-progress"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div class="container" id="mainApp" style="display: none;">
+        <!-- Header -->
+        <header class="header">
+            <h1>
+                <i class="fas fa-chess-queen"></i>
+                Ajedrez Interactivo
+                <span class="version-badge">v2.0</span>
+            </h1>
+            <p class="subtitle">Motor Fractal Híbrido con Modos de Juego Interactivos</p>
+        </header>
+
+        <!-- Game Modes Section -->
+        <section class="game-modes-section" aria-label="Modos de juego">
+            <h2><i class="fas fa-gamepad"></i> Modos de Juego</h2>
+            <div class="game-modes">
+                <button id="editModeBtn" class="mode-btn active" onclick="setGameMode('edit')" aria-label="Modo edición">
+                    <i class="fas fa-edit"></i>
+                    <span>Edición</span>
+                    <small>Análisis y edición de posiciones</small>
+                </button>
+                <button id="humanModeBtn" class="mode-btn" onclick="setGameMode('human')" aria-label="Modo humano vs humano">
+                    <i class="fas fa-users"></i>
+                    <span>Humano vs Humano</span>
+                    <small>Dos jugadores con análisis</small>
+                </button>
+                <button id="cpuModeBtn" class="mode-btn" onclick="setGameMode('cpu')" aria-label="Modo versus CPU">
+                    <i class="fas fa-robot"></i>
+                    <span>Versus CPU</span>
+                    <small>Jugar contra Stockfish</small>
+                </button>
+            </div>
+        </section>
+
+        <!-- Input Section -->
+        <section class="input-section" aria-label="Configuración de posición">
+            <div class="input-row">
+                <div class="input-group">
+                    <label for="fenInput">
+                        <i class="fas fa-code"></i> Posición FEN:
+                    </label>
+                    <input type="text" 
+                           id="fenInput" 
+                           value="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+                           placeholder="Ingresa la posición FEN o usa las posiciones predefinidas"
+                           aria-describedby="fenHelp">
+                    <small id="fenHelp" class="help-text">Notación Forsyth-Edwards para describir posiciones de ajedrez</small>
+                </div>
+                <div class="button-group">
+                    <div class="primary-buttons">
+                        <button onclick="drawBoard()" class="btn btn-primary" aria-label="Cargar posición">
+                            <i class="fas fa-chess-board"></i> Cargar Posición
+                        </button>
+                        <button onclick="showDemo()" class="btn btn-success" aria-label="Iniciar demo">
+                            <i class="fas fa-play"></i> Demo Interactivo
+                        </button>
+                    </div>
+                    <div class="preset-positions">
+                        <button onclick="loadPresetPosition('opening')" class="btn btn-preset" title="Gambito de Dama">
+                            <i class="fas fa-play"></i> Apertura
+                        </button>
+                        <button onclick="loadPresetPosition('middlegame')" class="btn btn-preset" title="Posición de medio juego">
+                            <i class="fas fa-chess"></i> Medio Juego
+                        </button>
+                        <button onclick="loadPresetPosition('endgame')" class="btn btn-preset" title="Final de torres">
+                            <i class="fas fa-flag-checkered"></i> Final
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Game Section -->
+        <main class="game-section" aria-label="Área de juego principal">
+            <!-- Game Status Panel -->
+            <aside class="game-status-panel">
+                <div class="current-turn">
+                    <h3><i class="fas fa-clock"></i> Estado del Juego</h3>
+                    <div id="gameStatus" class="status-display" role="status" aria-live="polite">
+                        <span id="currentPlayer">Blancas</span> por mover
+                    </div>
+                    <div id="gameMode" class="mode-display">
+                        Modo: <span id="currentMode">Edición</span>
+                    </div>
+                </div>
+                
+                <!-- CPU Controls -->
+                <div id="cpuControls" class="cpu-controls" style="display: none;">
+                    <h4><i class="fas fa-robot"></i> Configuración CPU</h4>
+                    <div class="cpu-settings">
+                        <div class="setting-group">
+                            <label for="playerColor">Jugar como:</label>
+                            <select id="playerColor" aria-label="Seleccionar color">
+                                <option value="white">Blancas</option>
+                                <option value="black">Negras</option>
+                            </select>
+                        </div>
+                        <div class="setting-group">
+                            <label for="cpuLevel">Nivel CPU:</label>
+                            <select id="cpuLevel" aria-label="Seleccionar nivel de dificultad">
+                                <option value="1">Principiante (1s)</option>
+                                <option value="2">Intermedio (2s)</option>
+                                <option value="3" selected>Avanzado (3s)</option>
+                                <option value="5">Experto (5s)</option>
+                                <option value="10">Maestro (10s)</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="startNewGame()" aria-label="Iniciar nueva partida">
+                            <i class="fas fa-play"></i> Nueva Partida
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Chess Board -->
+            <div class="chessboard-container" role="application" aria-label="Tablero de ajedrez interactivo">
+                <div id="chessboard" class="chessboard">
+                    <!-- Board will be generated here -->
+                </div>
+            </div>
+
+            <!-- Moves Panel -->
+            <aside class="moves-panel">
+                <h3><i class="fas fa-history"></i> Historial de Movimientos</h3>
+                <div id="movesHistory" class="moves-history" role="log" aria-live="polite" aria-label="Historial de movimientos">
+                    <div class="welcome-message">
+                        <p>¡Bienvenido al Ajedrez Interactivo!</p>
+                        <p>Haz clic en "Demo Interactivo" para comenzar</p>
+                    </div>
+                </div>
+                
+                <div class="move-controls">
+                    <button class="btn btn-secondary" onclick="undoMove()" aria-label="Deshacer último movimiento">
+                        <i class="fas fa-undo"></i> Deshacer
+                    </button>
+                    <button class="btn btn-warning" onclick="resetGame()" aria-label="Reiniciar partida">
+                        <i class="fas fa-refresh"></i> Reiniciar
+                    </button>
+                </div>
+            </aside>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <p>&copy; 2024 Motor Fractal Team. Desarrollado con ❤️ para la comunidad ajedrecística.</p>
+                <div class="footer-links">
+                    <a href="#" onclick="showAbout()" aria-label="Acerca de">Acerca de</a>
+                    <a href="#" onclick="showHelp()" aria-label="Ayuda">Ayuda</a>
+                    <a href="https://github.com" target="_blank" rel="noopener" aria-label="Código fuente en GitHub">
+                        <i class="fab fa-github"></i> GitHub
+                    </a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- About Modal -->
+    <div id="aboutModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('aboutModal')">&times;</span>
+            <h2>Acerca del Ajedrez Interactivo</h2>
+            <p>Motor Fractal v2.0 es un analizador de ajedrez avanzado que combina algoritmos fractales con el motor Stockfish para proporcionar análisis adaptativos de posiciones.</p>
+            <h3>Características:</h3>
+            <ul>
+                <li>Tres modos de juego interactivos</li>
+                <li>Análisis en tiempo real</li>
+                <li>Interfaz intuitiva y responsive</li>
+                <li>Soporte para posiciones FEN</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('helpModal')">&times;</span>
+            <h2>Ayuda - Cómo Usar</h2>
+            <h3>Modos de Juego:</h3>
+            <ul>
+                <li><strong>Edición:</strong> Analiza y edita posiciones de ajedrez</li>
+                <li><strong>Humano vs Humano:</strong> Juega contra otro jugador</li>
+                <li><strong>Versus CPU:</strong> Juega contra el motor Stockfish</li>
+            </ul>
+            <h3>Controles:</h3>
+            <ul>
+                <li>Haz clic en las piezas para seleccionarlas</li>
+                <li>Haz clic en las casillas de destino para mover</li>
+                <li>Usa los botones de control para deshacer o reiniciar</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="app.js"></script>
+    
+    <!-- Loading Animation -->
+    <script>
+        // Show loading screen and hide after content loads
+        window.addEventListener('load', function() {
+            const loadingScreen = document.getElementById('loadingScreen');
+            const mainApp = document.getElementById('mainApp');
+            const progress = document.querySelector('.loading-progress');
+            
+            // Simulate loading progress
+            let width = 0;
+            const interval = setInterval(() => {
+                width += Math.random() * 30;
+                if (width >= 100) {
+                    width = 100;
+                    clearInterval(interval);
+                    
+                    setTimeout(() => {
+                        loadingScreen.style.opacity = '0';
+                        setTimeout(() => {
+                            loadingScreen.style.display = 'none';
+                            mainApp.style.display = 'block';
+                            mainApp.style.opacity = '0';
+                            setTimeout(() => {
+                                mainApp.style.opacity = '1';
+                            }, 50);
+                        }, 500);
+                    }, 500);
+                }
+                progress.style.width = width + '%';
+            }, 100);
+        });
+    </script>
+</body>
+</html>
+
