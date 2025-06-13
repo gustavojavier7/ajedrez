@@ -1,5 +1,5 @@
 # ajedrez
-Una versión que tiene una mirada fractal
+Versión simplificada del analizador de ajedrez basada en Stockfish.
 
 ## Modo adaptativo
 
