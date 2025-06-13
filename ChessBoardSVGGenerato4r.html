@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analizador de Posiciones de Ajedrez</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #f0f0f0;
+            min-height: 100vh;
+            line-height: 1.4;
+            overflow-x: auto;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 16px;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .input-section {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .input-group {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .input-group label {
+            display: block;
+            font-weight: 600;
+            color: #374151;
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 2px 5px;
+            border: 2px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: border-color 0.2s;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.85rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background-color: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: #2563eb;
+        }
+
+        .btn-success {
+            background-color: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background-color: #059669;
+        }
+
+        .btn-purple {
+            background-color: #8b5cf6;
+            color: white;
+        }
+
+        .btn-purple:hover:not(:disabled) {
+            background-color: #7c3aed;
+        }
+
+        .btn-danger {
+            background-color: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background-color: #dc2626;
+        }
+
+        .btn-warning {
+            background-color: #f59e0b;
+            color: white;
+        }
+
+        .btn-warning:hover:not(:disabled) {
+            background-color: #d97706;
+        }
+
+        .status-section {
+            flex: 1;
+            background: white;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .status-info {
+            background-color: #dbeafe;
+            border-left: 4px solid #3b82f6;
+            color: #1e40af;
+        }
+
+        .status-success {
+            background-color: #d1fae5;
+            border-left: 4px solid #10b981;
+            color: #065f46;
+        }
+
+        .status-warning {
+            background-color: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            color: #92400e;
+        }
+
+        .status-danger {
+            background-color: #fee2e2;
+            border-left: 4px solid #ef4444;
+            color: #991b1b;
+        }
+
+        .main-layout {
+            display: flex;
+            gap: 20px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .board-container-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .board-section {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: white;
+            border-radius: 8px;
+            padding: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .game-status-compact {
+            background: white;
+            border-radius: 6px;
+            padding: 8px 12px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .game-status-compact.status-info {
+            background-color: #dbeafe;
+            border-left-color: #3b82f6;
+            color: #1e40af;
+        }
+
+        .game-status-compact.status-success {
+            background-color: #d1fae5;
+            border-left-color: #10b981;
+            color: #065f46;
+        }
+
+        .game-status-compact.status-warning {
+            background-color: #fef3c7;
+            border-left-color: #f59e0b;
+            color: #92400e;
+        }
+
+        .game-status-compact.status-danger {
+            background-color: #fee2e2;
+            border-left-color: #ef4444;
+            color: #991b1b;
+        }
+
+        .right-panel {
+            width: 400px;
+            min-width: 400px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .analysis-panel {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .analysis-section {
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .analysis-section:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .section-title {
+            font-weight: 600;
+            color: #374151;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .engine-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .engine-controls .btn {
+            padding: 8px 12px;
+            font-size: 0.8rem;
+        }
+
+        .engine-status {
+            font-size: 0.85rem;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+
+        .evaluation-display {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 8px;
+        }
+
+        .evaluation {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .eval-positive {
+            color: #059669;
+        }
+
+        .eval-negative {
+            color: #dc2626;
+        }
+
+        .eval-neutral {
+            color: #6b7280;
+        }
+
+        .best-move {
+            font-weight: 600;
+            color: #3b82f6;
+            font-size: 0.9rem;
+        }
+
+        .stats-display {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+
+        .pv-section {
+            background-color: #f9fafb;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border-left: 4px solid #10b981;
+        }
+
+        .pv-title {
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pv-line {
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            color: #374151;
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+
+        .moves-panel {
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            flex: 1;
+            min-height: 0;
+        }
+
+        .moves-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #f3f4f6;
+        }
+
+        .moves-header h3 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1rem;
+            color: #9ca3af;
+            cursor: pointer;
+            padding: 4px;
+        }
+
+        .close-btn:hover {
+            color: #6b7280;
+        }
+
+        .moves-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .move-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 10px;
+            margin: 2px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .move-item:hover {
+            background-color: #f9fafb;
+            border-color: #e5e7eb;
+        }
+
+        .move-notation {
+            font-weight: 600;
+            color: #374151;
+            font-size: 0.9rem;
+        }
+
+        .move-coords {
+            font-size: 0.75rem;
+            color: #9ca3af;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+
+        .loading i {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            animation: pulse 2s infinite;
+        }
+
+        /* Estilos para destacar casillas de la mejor línea con efecto blink */
+        .square-highlight {
+            animation: blink-light 0.2s ease-in-out 10;
+        }
+
+        .square-highlight.dark {
+            animation: blink-dark 0.2s ease-in-out 10;
+        }
+
+        /* Animación de parpadeo para casillas claras */
+        @keyframes blink-light {
+            0%, 50% {
+                fill: #D3D3D3; /* Gris claro destacado */
+            }
+            50.1%, 100% {
+                fill: #F5F5DC; /* Color original de casilla clara */
+            }
+        }
+
+        /* Animación de parpadeo para casillas oscuras */
+        @keyframes blink-dark {
+            0%, 50% {
+                fill: #808080; /* Gris oscuro destacado */
+            }
+            50.1%, 100% {
+                fill: #C19A6B; /* Color original de casilla oscura */
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @media (max-width: 1200px) {
+            .main-layout {
+                flex-direction: column;
+            }
+
+            .board-container-wrapper {
+                align-self: center;
+            }
+
+            .right-panel {
+                width: 100%;
+                min-width: unset;
+            }
+
+            .analysis-panel {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 16px;
+            }
+
+            .analysis-section {
+                border-bottom: none;
+                padding-bottom: 0;
+                margin-bottom: 0;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 12px;
+            }
+
+            .input-row {
+                flex-direction: column;
+            }
+
+            .input-group {
+                min-width: unset;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .analysis-panel {
+                grid-template-columns: 1fr;
+            }
+
+            .right-panel {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Título -->
+        <div class="header">
+            <h1>Analizador de Posiciones de Ajedrez</h1>
+        </div>
+
+        <!-- Input FEN y controles principales -->
+        <div class="input-section">
+            <div class="input-row">
+                <div class="input-group">
+                    <label for="fenInput">Posición FEN:</label>
+                    <input type="text" id="fenInput" placeholder="Ingresa la posición FEN" onclick="this.select()">
+                </div>
+                <div class="button-group">
+                    <button onclick="drawBoard()" class="btn btn-primary">
+                        <i class="fas fa-chess-board"></i>Cargar Posición
+                    </button>
+                    <button onclick="showLegalMoves()" id="showMovesBtn" class="btn btn-success">
+                        <i class="fas fa-list"></i>Mostrar Movimientos
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Layout principal -->
+        <div class="main-layout">
+            <!-- Sección del tablero con estado -->
+            <div class="board-container-wrapper">
+                <div class="board-section">
+                    <div id="chessboard">
+                        <div class="loading">
+                            <i class="fas fa-chess-board"></i>
+                            <p>Cargando tablero...</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Estado del juego compacto -->
+                <div id="gameStatus" class="game-status-compact">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Cargando...</span>
+                </div>
+            </div>
+
+            <!-- Panel derecho -->
+            <div class="right-panel">
+                <!-- Panel de análisis -->
+                <div class="analysis-panel">
+                    <!-- Sección de Motor -->
+                    <div class="analysis-section">
+                        <div class="section-title">
+                            <i class="fas fa-microchip"></i>
+                            Motor de Análisis
+                        </div>
+                        <div class="engine-controls">
+                            <button onclick="toggleEngine()" id="engineToggleBtn" class="btn btn-purple">
+                                <i class="fas fa-plug"></i>Conectar Motor
+                            </button>
+                            <button onclick="toggleAnalysis()" id="analysisToggleBtn" class="btn btn-success">
+                                <i class="fas fa-play"></i>Analizar
+                            </button>
+                        </div>
+                        <div id="engineStatus" class="engine-status">Motor no conectado</div>
+                    </div>
+
+                    <!-- Sección de Evaluación -->
+                    <div class="analysis-section">
+                        <div class="section-title">
+                            <i class="fas fa-balance-scale"></i>
+                            Evaluación
+                        </div>
+                        <div class="evaluation-display">
+                            <span id="evaluation" class="evaluation"></span>
+                            <span id="bestMove" class="best-move"></span>
+                        </div>
+                        <div class="stats-display">
+                            <span id="engineStats"></span>
+                            <span id="memoryStats"></span>
+                        </div>
+                    </div>
+
+                    <!-- Sección de Línea Principal -->
+                    <div class="analysis-section">
+                        <div class="pv-section">
+                            <div class="pv-title">
+                                <i class="fas fa-route"></i>
+                                Mejor línea de juego:
+                            </div>
+                            <div id="pvLine" class="pv-line">Inicia el análisis para ver la mejor línea</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel de movimientos legales -->
+                <div id="legalMoves" class="moves-panel" style="display: none;">
+                    <div class="moves-header">
+                        <h3 id="legalMovesHeader">
+                            <i class="fas fa-chess-knight"></i>
+                            Movimientos Legales
+                        </h3>
+                        <button onclick="hideLegalMoves()" class="close-btn">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div id="legalMovesList" class="moves-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Símbolos de las piezas
+        const pieceSymbols = {
+            'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
+            'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
+        };
+
+        // Variables globales
+        const squareSize = 65;
+        const boardSize = 8 * squareSize;
+        let board = [];
+        let chess = new Chess();
+        let lastMove = null;
+        let stockfish = null;
+        let analysisInterval = null;
+        let blobURL = null;
+        let isEngineConnected = false;
+        let isAnalyzing = false;
+        
+        // Variables para destacar casillas
+        let previousHighlightedSquares = [];
+        let pvObserver = null;
+        
+        // Estadísticas del motor
+        let lastStats = { 
+            nps: 0, 
+            pv: '', 
+            evaluation: null,
+            depth: 0,
+            bestMove: '',
+            bestMoveSan: ''
+        };
+
+        // Función para actualizar estado de botones
+        function updateButtonStates() {
+            const engineToggleBtn = document.getElementById('engineToggleBtn');
+            const analysisToggleBtn = document.getElementById('analysisToggleBtn');
+            const showMovesBtn = document.getElementById('showMovesBtn');
+
+            // Botón de motor (alternar conectar/desconectar)
+            if (isEngineConnected) {
+                engineToggleBtn.innerHTML = '<i class="fas fa-power-off"></i>Desconectar Motor';
+                engineToggleBtn.className = 'btn btn-warning';
+            } else {
+                engineToggleBtn.innerHTML = '<i class="fas fa-plug"></i>Conectar Motor';
+                engineToggleBtn.className = 'btn btn-purple';
+            }
+
+            // Botón de análisis (alternar iniciar/detener)
+            if (isAnalyzing) {
+                analysisToggleBtn.innerHTML = '<i class="fas fa-stop"></i>Detener Análisis';
+                analysisToggleBtn.className = 'btn btn-danger';
+                analysisToggleBtn.disabled = false;
+            } else {
+                analysisToggleBtn.innerHTML = '<i class="fas fa-play"></i>Iniciar Análisis';
+                analysisToggleBtn.className = 'btn btn-success';
+                analysisToggleBtn.disabled = !isEngineConnected || chess.game_over();
+            }
+
+            // Botón de mostrar movimientos
+            showMovesBtn.disabled = chess.game_over();
+        }
+
+        // Función para parsear FEN
+        function parseFEN(fen) {
+            const [position] = fen.split(' ');
+            const rows = position.split('/');
+            board = Array(8).fill().map(() => Array(8).fill(null));
+
+            for (let row = 0; row < 8; row++) {
+                let col = 0;
+                const actualRow = 7 - row;
+                for (let char of rows[row]) {
+                    if (/\d/.test(char)) {
+                        col += parseInt(char);
+                    } else {
+                        board[actualRow][col] = char;
+                        col++;
+                    }
+                }
+            }
+        }
+
+        // Función para convertir UCI a SAN
+        function uciToSan(uciMove) {
+            if (!uciMove || uciMove.length < 4) return uciMove;
+            
+            const from = uciMove.substring(0, 2);
+            const to = uciMove.substring(2, 4);
+            const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
+            
+            const tempChess = new Chess(chess.fen());
+            
+            try {
+                const move = tempChess.move({
+                    from: from,
+                    to: to,
+                    promotion: promotion
+                });
+                return move ? move.san : uciMove;
+            } catch (e) {
+                return uciMove;
+            }
+        }
+
+        // Función para formatear evaluación
+        function formatEvaluation(score, isMate) {
+            if (isMate) {
+                return score > 0 ? `+M${score}` : `-M${Math.abs(score)}`;
+            }
+            
+            const pawns = score / 100;
+            return pawns > 0 ? `+${pawns.toFixed(2)}` : pawns.toFixed(2);
+        }
+
+        // Función para destacar casillas de la mejor línea
+        function highlightBestLine() {
+            // Limpiar destacados anteriores
+            resetHighlights();
+            
+            // Obtener el contenido de la mejor línea
+            const bestLineElement = document.getElementById('pvLine');
+            const bestLine = bestLineElement.textContent.trim();
+
+            // Si no hay línea válida, no hacer nada
+            if (bestLine === "Inicia el análisis para ver la mejor línea" || 
+                bestLine === "Analizando..." || 
+                !bestLine || 
+                bestLine.length < 3) {
+                return;
+            }
+
+            try {
+                // Parsear los movimientos de la línea
+                const moves = bestLine.split(/\s+/).filter(move => 
+                    move.match(/^[a-h1-8KQRBNOX+#=\-]+$/) && 
+                    !move.match(/^\d+\.+$/)
+                );
+
+                if (moves.length === 0) return;
+
+                // Usar Chess.js para obtener las casillas involucradas
+                const tempChess = new Chess(chess.fen());
+                const squares = [];
+
+                // Solo procesar los primeros 2-3 movimientos para no saturar el tablero
+                const movesToProcess = moves.slice(0, 4);
+
+                movesToProcess.forEach(move => {
+                    try {
+                        const moveObj = tempChess.move(move, { sloppy: true });
+                        if (moveObj) {
+                            // Agregar casillas de origen y destino
+                            squares.push(moveObj.from);
+                            squares.push(moveObj.to);
+                        }
+                    } catch (e) {
+                        console.warn(`Movimiento inválido en línea principal: ${move}`);
+                    }
+                });
+
+                // Destacar las casillas en el SVG
+                squares.forEach(square => {
+                    const squareElements = document.querySelectorAll(`[data-square="${square}"]`);
+                    squareElements.forEach(squareElement => {
+                        if (squareElement && squareElement.tagName === 'rect') {
+                            // Determinar si es casilla clara u oscura basado en coordenadas
+                            const file = square.charCodeAt(0) - 97; // a=0, b=1, etc.
+                            const rank = parseInt(square[1]) - 1; // 1=0, 2=1, etc.
+                            const isDark = (file + rank) % 2 === 1;
+                            
+                            squareElement.classList.add('square-highlight');
+                            if (isDark) {
+                                squareElement.classList.add('dark');
+                            }
+                            previousHighlightedSquares.push(squareElement);
+                        }
+                    });
+                });
+            } catch (error) {
+                console.warn('Error al destacar la mejor línea:', error);
+            }
+        }
+
+        // Función para restablecer los destacados anteriores
+        function resetHighlights() {
+            previousHighlightedSquares.forEach(square => {
+                square.classList.remove('square-highlight', 'dark');
+            });
+            previousHighlightedSquares = [];
+        }
+
+        // Función para configurar el observador de cambios en la línea principal
+        function setupPVObserver() {
+            if (pvObserver) {
+                pvObserver.disconnect();
+            }
+            
+            const pvLineElement = document.getElementById('pvLine');
+            if (pvLineElement) {
+                pvObserver = new MutationObserver(() => {
+                    // Usar setTimeout para permitir que el DOM se actualice completamente
+                    setTimeout(highlightBestLine, 100);
+                });
+                
+                pvObserver.observe(pvLineElement, {
+                    childList: true,
+                    characterData: true,
+                    subtree: true
+                });
+            }
+        }
+
+        // Función para generar SVG del tablero
+        function generateChessboardSVG() {
+            let svg = `<svg width="${boardSize + 40}" height="${boardSize + 40}" xmlns="http://www.w3.org/2000/svg">`;
+
+            // Dibujar casillas
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const x = col * squareSize + 20;
+                    const y = row * squareSize + 20;
+                    const fill = (row + col) % 2 === 0 ? '#F5F5DC' : '#C19A6B';
+                    const squareName = String.fromCharCode(97 + col) + (8 - row);
+                    svg += `<rect x="${x}" y="${y}" width="${squareSize}" height="${squareSize}" fill="${fill}" data-square="${squareName}" />`;
+                }
+            }
+
+            // Resaltar último movimiento
+            if (lastMove) {
+                const history = chess.history({ verbose: true });
+                if (history.length > 0) {
+                    const move = history[history.length - 1];
+                    const fromCol = move.from.charCodeAt(0) - 97;
+                    const fromRow = 8 - parseInt(move.from[1]);
+                    const toCol = move.to.charCodeAt(0) - 97;
+                    const toRow = 8 - parseInt(move.to[1]);
+
+                    const fromX = fromCol * squareSize + 20;
+                    const fromY = fromRow * squareSize + 20;
+                    const toX = toCol * squareSize + 20;
+                    const toY = toRow * squareSize + 20;
+
+                    svg += `<rect x="${fromX}" y="${fromY}" width="${squareSize}" height="${squareSize}" fill="rgba(255, 255, 0, 0.5)" />`;
+                    svg += `<rect x="${toX}" y="${toY}" width="${squareSize}" height="${squareSize}" fill="rgba(255, 255, 0, 0.5)" />`;
+                }
+            }
+
+            // Flecha del mejor movimiento
+            if (lastStats.bestMove && lastStats.bestMove.length >= 4) {
+                const from = lastStats.bestMove.substring(0, 2);
+                const to = lastStats.bestMove.substring(2, 4);
+                
+                const fromCol = from.charCodeAt(0) - 97;
+                const fromRow = 8 - parseInt(from[1]);
+                const toCol = to.charCodeAt(0) - 97;
+                const toRow = 8 - parseInt(to[1]);
+                
+                const fromX = (fromCol * squareSize) + squareSize/2 + 20;
+                const fromY = (fromRow * squareSize) + squareSize/2 + 20;
+                const toX = (toCol * squareSize) + squareSize/2 + 20;
+                const toY = (toRow * squareSize) + squareSize/2+ 20;
+                
+                svg += `<defs>
+                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#3B82F6" />
+                    </marker>
+                </defs>
+                <line x1="${fromX}" y1="${fromY}" x2="${toX}" y2="${toY}" stroke="#3B82F6" 
+                    stroke-width="4" opacity="0.8" marker-end="url(#arrowhead)" />`;
+            }
+
+            // Dibujar piezas
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const piece = board[7 - row][col];
+                    if (piece) {
+                        const x = col * squareSize + squareSize / 2 + 20;
+                        const y = row * squareSize + squareSize / 2 + 42;
+                        const symbol = pieceSymbols[piece] || '';
+                        svg += `<text x="${x}" y="${y}" font-size="48" text-anchor="middle" fill="#000">${symbol}</text>`;
+                    }
+                }
+            }
+
+            // Coordenadas
+            for (let i = 0; i < 8; i++) {
+                svg += `<text x="10" y="${i * squareSize + squareSize / 1.5 + 20}" font-size="16" text-anchor="middle" fill="#666">${8 - i}</text>`;
+                svg += `<text x="${i * squareSize + squareSize / 2 + 20}" y="${boardSize + 35}" font-size="16" text-anchor="middle" fill="#666">${String.fromCharCode(97 + i)}</text>`;
+            }
+
+            svg += '</svg>';
+            return svg;
+        }
+
+        // Función para mostrar estado del juego
+        function showGameStatus() {
+            const statusElement = document.getElementById('gameStatus');
+            let status = "";
+            let iconClass = "fas fa-info-circle";
+            let statusClass = "status-info";
+
+            if (chess.in_checkmate()) {
+                status = "¡Jaque mate!";
+                iconClass = "fas fa-crown";
+                statusClass = "status-danger";
+            } else if (chess.in_stalemate()) {
+                status = "Tablas por ahogado";
+                iconClass = "fas fa-handshake";
+                statusClass = "status-warning";
+            } else if (chess.in_draw()) {
+                if (chess.in_threefold_repetition()) {
+                    status = "Tablas por repetición";
+                } else if (chess.insufficient_material()) {
+                    status = "Tablas por material";
+                } else {
+                    status = "Tablas por 50 movimientos";
+                }
+                iconClass = "fas fa-handshake";
+                statusClass = "status-warning";
+            } else if (chess.in_check()) {
+                status = "¡Jaque!";
+                iconClass = "fas fa-exclamation-triangle";
+                statusClass = "status-warning";
+            } else {
+                status = chess.turn() === 'w' ? "Turno: Blancas" : "Turno: Negras";
+                iconClass = "fas fa-chess";
+                statusClass = "status-success";
+            }
+
+            statusElement.className = `game-status-compact ${statusClass}`;
+            statusElement.innerHTML = `
+                <i class="${iconClass}"></i>
+                <span>${status}</span>
+            `;
+        }
+
+        // Función principal para dibujar tablero
+        function drawBoard() {
+            const fen = document.getElementById('fenInput').value.trim();
+            if (!fen) {
+                alert('Por favor, ingresa una posición FEN válida.');
+                return;
+            }
+
+            chess = new Chess();
+            const validation = chess.validate_fen(fen);
+            if (!validation.valid) {
+                alert(`Posición FEN inválida: ${validation.error}`);
+                return;
+            }
+
+            chess.load(fen);
+            parseFEN(fen);
+            
+            // Limpiar estadísticas
+            lastStats = { 
+                nps: 0, 
+                pv: '', 
+                evaluation: null,
+                depth: 0,
+                bestMove: '',
+                bestMoveSan: ''
+            };
+            
+            document.getElementById('chessboard').innerHTML = generateChessboardSVG();
+            document.getElementById('legalMoves').style.display = 'none';
+            lastMove = null;
+            showGameStatus();
+            updateButtonStates();
+            
+            // Limpiar información del motor
+            document.getElementById('evaluation').textContent = '';
+            document.getElementById('bestMove').textContent = '';
+            document.getElementById('engineStats').textContent = '';
+            document.getElementById('pvLine').textContent = 'Inicia el análisis para ver la mejor línea';
+            
+            // Resetear destacados
+            resetHighlights();
+            
+            if (isAnalyzing) {
+                stopAnalysis();
+            }
+            
+            updateMemoryStats();
+            
+            // Configurar observador para la línea principal
+            setTimeout(setupPVObserver, 100);
+        }
+
+        // Función alternante para motor
+        function toggleEngine() {
+            if (isEngineConnected) {
+                disconnectEngine();
+            } else {
+                connectEngine();
+            }
+        }
+
+        // Función alternante para análisis
+        function toggleAnalysis() {
+            if (isAnalyzing) {
+                stopAnalysis();
+            } else {
+                startAnalysis();
+            }
+        }
+
+        // Función para mostrar movimientos legales
+        function showLegalMoves() {
+            if (chess.game_over()) return;
+
+            const moves = chess.moves({ verbose: true });
+            const movesList = document.getElementById('legalMovesList');
+            const movesHeader = document.getElementById('legalMovesHeader');
+            movesList.innerHTML = '';
+
+            movesHeader.innerHTML = `<i class="fas fa-chess-knight"></i> Movimientos Legales (${moves.length})`;
+
+            if (moves.length === 0) {
+                movesList.innerHTML = '<div style="text-align: center; padding: 20px; color: #9ca3af;">No hay movimientos legales</div>';
+            } else {
+                moves.forEach(move => {
+                    const div = document.createElement('div');
+                    div.className = 'move-item';
+                    
+                    div.innerHTML = `
+                        <span class="move-notation">${move.san}</span>
+                        <span class="move-coords">${move.from}-${move.to}</span>
+                    `;
+                    
+                    div.addEventListener('click', () => {
+                        makeMove(move.san);
+                    });
+                    movesList.appendChild(div);
+                });
+            }
+
+            document.getElementById('legalMoves').style.display = 'block';
+        }
+
+        // Función para ocultar movimientos legales
+        function hideLegalMoves() {
+            document.getElementById('legalMoves').style.display = 'none';
+        }
+
+        // Función para hacer un movimiento
+        function makeMove(move) {
+            chess.move(move);
+            lastMove = move;
+            parseFEN(chess.fen());
+            
+            document.getElementById('fenInput').value = chess.fen();
+            document.getElementById('chessboard').innerHTML = generateChessboardSVG();
+            
+            showLegalMoves();
+            showGameStatus();
+            updateButtonStates();
+            
+            if (isAnalyzing) {
+                stopAnalysis();
+            }
+            
+            // Limpiar información del motor
+            document.getElementById('bestMove').textContent = '';
+            document.getElementById('evaluation').textContent = '';
+            document.getElementById('engineStats').textContent = '';
+            document.getElementById('pvLine').textContent = 'Inicia el análisis para ver la mejor línea';
+            
+            // Resetear destacados
+            resetHighlights();
+            
+            lastStats = { 
+                nps: 0, 
+                pv: '', 
+                evaluation: null,
+                depth: 0,
+                bestMove: '',
+                bestMoveSan: ''
+            };
+            
+            if (isEngineConnected && !chess.game_over()) {
+                setTimeout(() => startAnalysis(), 500);
+            }
+            
+            updateMemoryStats();
+            
+            // Reconfigurar observador
+            setTimeout(setupPVObserver, 100);
+        }
+
+        // Funciones del motor
+        async function connectEngine() {
+            if (isEngineConnected) return;
+
+            try {
+                document.getElementById('engineStatus').textContent = 'Conectando motor...';
+                const response = await fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
+                if (!response.ok) {
+                    throw new Error('Error al descargar Stockfish');
+                }
+                const workerScript = await response.text();
+
+                const blob = new Blob([workerScript], { type: 'application/javascript' });
+                blobURL = URL.createObjectURL(blob);
+
+                stockfish = new Worker(blobURL);
+                stockfish.onmessage = function(event) {
+                    handleEngineMessage(event.data);
+                };
+                
+                stockfish.postMessage('uci');
+                stockfish.postMessage('setoption name MultiPV value 1');
+                stockfish.postMessage('isready');
+                
+                isEngineConnected = true;
+                document.getElementById('engineStatus').textContent = 'Motor conectado y listo';
+                updateButtonStates();
+                
+                if (!chess.game_over()) {
+                    startAnalysis();
+                }
+            } catch (error) {
+                document.getElementById('engineStatus').textContent = 'Error: ' + error.message;
+                isEngineConnected = false;
+                updateButtonStates();
+            }
+        }
+        
+        function disconnectEngine() {
+            if (!isEngineConnected) return;
+            
+            if (isAnalyzing) {
+                stopAnalysis();
+            }
+            
+            if (stockfish) {
+                stockfish.terminate();
+                stockfish = null;
+            }
+            
+            if (blobURL) {
+                URL.revokeObjectURL(blobURL);
+                blobURL = null;
+            }
+            
+            // Limpiar observador
+            if (pvObserver) {
+                pvObserver.disconnect();
+                pvObserver = null;
+            }
+            
+            isEngineConnected = false;
+            document.getElementById('engineStatus').textContent = 'Motor desconectado';
+            document.getElementById('evaluation').textContent = '';
+            document.getElementById('bestMove').textContent = '';
+            document.getElementById('engineStats').textContent = '';
+            document.getElementById('pvLine').textContent = 'Motor desconectado';
+            
+            // Resetear destacados
+            resetHighlights();
+            
+            updateButtonStates();
+            updateMemoryStats();
+        }
+
+        function startAnalysis() {
+            if (!isEngineConnected || isAnalyzing || chess.game_over()) return;
+
+            const fen = chess.fen();
+            stockfish.postMessage('position fen ' + fen);
+            stockfish.postMessage('go infinite');
+            
+            isAnalyzing = true;
+            document.getElementById('engineStatus').textContent = 'Analizando posición...';
+            document.getElementById('pvLine').textContent = 'Analizando...';
+            updateButtonStates();
+
+            analysisInterval = setInterval(() => {
+                if (lastStats.nps > 0) {
+                    document.getElementById('engineStats').textContent = 
+                        `Profundidad: ${lastStats.depth} | ${lastStats.nps.toLocaleString()} nodos/s`;
+                }
+                if (lastStats.bestMove && lastStats.bestMove.length >= 4) {
+                    document.getElementById('chessboard').innerHTML = generateChessboardSVG();
+                }
+                updateMemoryStats();
+            }, 1000);
+        }
+
+        function stopAnalysis() {
+            if (!isEngineConnected || !isAnalyzing) return;
+
+            if (stockfish) {
+                stockfish.postMessage('stop');
+            }
+            if (analysisInterval) {
+                clearInterval(analysisInterval);
+                analysisInterval = null;
+            }
+            
+            isAnalyzing = false;
+            document.getElementById('engineStatus').textContent = 'Motor conectado - Análisis detenido';
+            updateButtonStates();
+        }
+
+        // Manejar mensajes del motor
+        function handleEngineMessage(message) {
+            if (message.startsWith('bestmove')) {
+                const parts = message.split(' ');
+                const bestMove = parts[1];
+                lastStats.bestMove = bestMove;
+                lastStats.bestMoveSan = uciToSan(bestMove);
+                
+                document.getElementById('bestMove').textContent = 
+                    `Mejor: ${lastStats.bestMoveSan}`;
+                
+                document.getElementById('chessboard').innerHTML = generateChessboardSVG();
+            } 
+            else if (message.startsWith('info')) {
+                const parts = message.split(' ');
+                
+                // Procesar nodos y tiempo
+                const nodesIndex = parts.indexOf('nodes');
+                const timeIndex = parts.indexOf('time');
+                if (nodesIndex !== -1 && timeIndex !== -1) {
+                    const nodes = parseInt(parts[nodesIndex + 1]);
+                    const time = parseInt(parts[timeIndex + 1]) / 1000;
+                    if (time > 0) {
+                        lastStats.nps = Math.round(nodes / time);
+                    }
+                }
+                
+                // Procesar profundidad
+                const depthIndex = parts.indexOf('depth');
+                if (depthIndex !== -1) {
+                    lastStats.depth = parseInt(parts[depthIndex + 1]);
+                }
+                
+                // Procesar evaluación
+                const scoreIndex = parts.indexOf('score');
+                if (scoreIndex !== -1) {
+                    if (parts[scoreIndex + 1] === 'cp') {
+                        const evalValue = parseInt(parts[scoreIndex + 2]);
+                        const adjustedEval = chess.turn() === 'w' ? evalValue : -evalValue;
+                        lastStats.evaluation = {
+                            value: adjustedEval,
+                            type: 'cp'
+                        };
+                        
+                        const evalElement = document.getElementById('evaluation');
+                        const formattedEval = formatEvaluation(adjustedEval, false);
+                        evalElement.textContent = formattedEval;
+                        
+                        // Aplicar clases de color
+                        evalElement.className = 'evaluation';
+                        if (adjustedEval > 50) {
+                            evalElement.classList.add('eval-positive');
+                        } else if (adjustedEval < -50) {
+                            evalElement.classList.add('eval-negative');
+                        } else {
+                            evalElement.classList.add('eval-neutral');
+                        }
+                    } 
+                    else if (parts[scoreIndex + 1] === 'mate') {
+                        const mateInN = parseInt(parts[scoreIndex + 2]);
+                        const adjustedMate = chess.turn() === 'w' ? mateInN : -mateInN;
+                        lastStats.evaluation = {
+                            value: adjustedMate,
+                            type: 'mate'
+                        };
+                        
+                        const evalElement = document.getElementById('evaluation');
+                        const formattedEval = formatEvaluation(adjustedMate, true);
+                        evalElement.textContent = formattedEval;
+                        
+                        // Aplicar clases de color para mate
+                        evalElement.className = 'evaluation';
+                        if (adjustedMate > 0) {
+                            evalElement.classList.add('eval-positive');
+                        } else {
+                            evalElement.classList.add('eval-negative');
+                        }
+                    }
+                }
+                
+                // Procesar línea principal
+                const pvIndex = parts.indexOf('pv');
+                if (pvIndex !== -1 && parts.length > pvIndex + 1) {
+                    const pvMoves = parts.slice(pvIndex + 1, pvIndex + 10); // Más movimientos para mayor análisis
+                    const tempChess = new Chess(chess.fen());
+                    const sanMoves = [];
+                    
+                    for (const uciMove of pvMoves) {
+                        if (uciMove.length >= 4) {
+                            try {
+                                const from = uciMove.substring(0, 2);
+                                const to = uciMove.substring(2, 4);
+                                const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
+                                
+                                const move = tempChess.move({
+                                    from: from,
+                                    to: to,
+                                    promotion: promotion
+                                });
+                                
+                                if (move) {
+                                    sanMoves.push(move.san);
+                                } else {
+                                    break;
+                                }
+                            } catch (e) {
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Mostrar la línea principal con números de movimiento mejorado
+                    if (sanMoves.length > 0) {
+                        let pvText = '';
+                        let fullMoveNumber = parseInt(chess.fen().split(' ')[5]);
+                        let isWhiteTurn = chess.turn() === 'w';
+                        
+                        for (let i = 0; i < sanMoves.length; i++) {
+                            if (i === 0 && !isWhiteTurn) {
+                                pvText += `${fullMoveNumber}... ${sanMoves[i]} `;
+                            } else if (i === 0 && isWhiteTurn) {
+                                pvText += `${fullMoveNumber}. ${sanMoves[i]} `;
+                            } else if ((i + (isWhiteTurn ? 1 : 0)) % 2 === 0) {
+                                if (!isWhiteTurn || i > 0) {
+                                    fullMoveNumber++;
+                                }
+                                pvText += `${fullMoveNumber}. ${sanMoves[i]} `;
+                            } else {
+                                pvText += `${sanMoves[i]} `;
+                            }
+                        }
+                        
+                        document.getElementById('pvLine').textContent = pvText.trim();
+                    }
+                }
+            }
+        }
+
+        // Función para estimar el uso de memoria
+        function updateMemoryStats() {
+            if (window.performance && window.performance.memory) {
+                const memory = window.performance.memory;
+                document.getElementById('memoryStats').textContent = 
+                    `Memoria: ${Math.round(memory.usedJSHeapSize / (1024 * 1024))}MB`;
+            } else {
+                document.getElementById('memoryStats').textContent = '';
+            }
+        }
+        
+        // Inicializar al cargar la página
+        window.onload = function() {
+            drawBoard();
+            updateMemoryStats();
+            updateButtonStates();
+            setupPVObserver();
+        };
+        
+        // Limpiar recursos al cerrar la página
+        window.onbeforeunload = function() {
+            if (stockfish) {
+                stockfish.terminate();
+            }
+            if (blobURL) {
+                URL.revokeObjectURL(blobURL);
+            }
+            if (analysisInterval) {
+                clearInterval(analysisInterval);
+            }
+            if (pvObserver) {
+                pvObserver.disconnect();
+            }
+        };
+    </script>
+</body>
+</html>
