@@ -1,0 +1,2017 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analizador de Ajedrez con Logs Adaptativos</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #f8f9fa;
+            min-height: 100vh;
+            line-height: 1.4;
+            color: #212529;
+            font-size: 14px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 16px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 16px;
+        }
+
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            color: #343a40;
+            margin-bottom: 4px;
+        }
+
+        .input-section {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .input-row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .input-group {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .input-group label {
+            display: block;
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.875rem;
+            margin-bottom: 4px;
+        }
+
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            transition: border-color 0.15s ease-in-out;
+            background-color: #fff;
+        }
+
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: #80bdff;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease-in-out;
+            font-size: 0.875rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+            text-decoration: none;
+        }
+
+        .btn:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background-color: #007bff;
+            border-color: #007bff;
+            color: #fff;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: #0056b3;
+            border-color: #004085;
+        }
+
+        .btn-success {
+            background-color: #28a745;
+            border-color: #28a745;
+            color: #fff;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background-color: #1e7e34;
+            border-color: #1c7430;
+        }
+
+        .btn-warning {
+            background-color: #ffc107;
+            border-color: #ffc107;
+            color: #212529;
+        }
+
+        .btn-warning:hover:not(:disabled) {
+            background-color: #e0a800;
+            border-color: #d39e00;
+        }
+
+        .btn-danger {
+            background-color: #dc3545;
+            border-color: #dc3545;
+            color: #fff;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background-color: #c82333;
+            border-color: #bd2130;
+        }
+
+        .btn-secondary {
+            background-color: #6c757d;
+            border-color: #6c757d;
+            color: #fff;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background-color: #5a6268;
+            border-color: #545b62;
+        }
+
+        .main-layout {
+            display: flex;
+            gap: 20px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .board-container-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .board-section {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 16px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .game-status-compact {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.875rem;
+        }
+
+        .game-status-compact.status-info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+            color: #0c5460;
+        }
+
+        .game-status-compact.status-success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+
+        .game-status-compact.status-warning {
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+            color: #856404;
+        }
+
+        .game-status-compact.status-danger {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+
+        .right-panel {
+            width: 450px;
+            min-width: 450px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .analysis-panel {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 16px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .analysis-section {
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .analysis-section:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .section-title {
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.875rem;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .engine-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+
+        .engine-controls .btn {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .engine-status {
+            font-size: 0.8125rem;
+            color: #6c757d;
+            margin-bottom: 8px;
+            padding: 6px 8px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border-left: 3px solid #007bff;
+        }
+
+        .evaluation-display {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .evaluation {
+            font-weight: 600;
+            font-size: 1.125rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            min-width: 80px;
+            text-align: center;
+            border: 1px solid #dee2e6;
+        }
+
+        .eval-positive {
+            color: #155724;
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .eval-negative {
+            color: #721c24;
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        .eval-neutral {
+            color: #495057;
+            background-color: #e9ecef;
+            border-color: #ced4da;
+        }
+
+        .best-move {
+            font-weight: 500;
+            color: #007bff;
+            font-size: 0.875rem;
+            flex: 1;
+        }
+
+        .stats-display {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: #6c757d;
+            margin-bottom: 8px;
+            gap: 8px;
+        }
+
+        .stats-display > span {
+            flex: 1;
+            text-align: center;
+            padding: 4px 6px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        /* LOGS SECTION - Nueva sección de logs */
+        .logs-section {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        .logs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #333;
+        }
+
+        .logs-title {
+            color: #fff;
+            font-size: 0.875rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .logs-controls {
+            display: flex;
+            gap: 6px;
+        }
+
+        .logs-controls button {
+            background: #333;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.15s ease-in-out;
+        }
+
+        .logs-controls button:hover {
+            background: #555;
+        }
+
+        .logs-container {
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+            line-height: 1.4;
+            height: 120px;
+            overflow-y: auto;
+            background: #0d1117;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #21262d;
+        }
+
+        .log-entry {
+            display: flex;
+            margin-bottom: 4px;
+            padding: 2px 4px;
+            border-radius: 2px;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .log-entry.info {
+            color: #58a6ff;
+            background-color: rgba(88, 166, 255, 0.1);
+        }
+
+        .log-entry.success {
+            color: #3fb950;
+            background-color: rgba(63, 185, 80, 0.1);
+        }
+
+        .log-entry.warning {
+            color: #f85149;
+            background-color: rgba(248, 81, 73, 0.1);
+        }
+
+        .log-entry.adaptation {
+            color: #f0883e;
+            background-color: rgba(240, 136, 62, 0.1);
+        }
+
+        .log-timestamp {
+            color: #8b949e;
+            margin-right: 8px;
+            min-width: 60px;
+        }
+
+        .log-message {
+            flex: 1;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .pv-section {
+            background-color: #f8f9fa;
+            padding: 8px 12px;
+            border-radius: 4px;
+            border-left: 3px solid #28a745;
+        }
+
+        .pv-title {
+            font-size: 0.75rem;
+            color: #6c757d;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+        }
+
+        .pv-line {
+            font-family: 'Courier New', monospace;
+            font-size: 0.8125rem;
+            color: #495057;
+            line-height: 1.4;
+            word-wrap: break-word;
+            max-height: 80px;
+            overflow-y: auto;
+        }
+
+        .moves-panel {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 16px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            flex: 1;
+            min-height: 0;
+        }
+
+        .moves-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .moves-header h3 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1rem;
+            color: #6c757d;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .close-btn:hover {
+            color: #495057;
+            background-color: #f8f9fa;
+        }
+
+        .moves-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .move-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 8px;
+            margin: 1px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.15s ease-in-out;
+            border: 1px solid transparent;
+        }
+
+        .move-item:hover {
+            background-color: #f8f9fa;
+            border-color: #dee2e6;
+        }
+
+        .move-notation {
+            font-weight: 500;
+            color: #495057;
+            font-size: 0.875rem;
+            font-family: 'Courier New', monospace;
+        }
+
+        .move-coords {
+            font-size: 0.75rem;
+            color: #6c757d;
+            font-family: 'Courier New', monospace;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+
+        .loading i {
+            font-size: 2.5rem;
+            margin-bottom: 16px;
+            color: #007bff;
+        }
+
+        /* Scrollbar para logs */
+        .logs-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .logs-container::-webkit-scrollbar-track {
+            background: #21262d;
+        }
+
+        .logs-container::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 3px;
+        }
+
+        .logs-container::-webkit-scrollbar-thumb:hover {
+            background: #484f58;
+        }
+
+        /* Destacado de casillas */
+        .square-highlight {
+            animation: blink-light 0.2s ease-in-out 8;
+        }
+
+        .square-highlight.dark {
+            animation: blink-dark 0.2s ease-in-out 8;
+        }
+
+        @keyframes blink-light {
+            0%, 50% { fill: #cce5ff; }
+            50.1%, 100% { fill: #F5F5DC; }
+        }
+
+        @keyframes blink-dark {
+            0%, 50% { fill: #99ccff; }
+            50.1%, 100% { fill: #C19A6B; }
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .main-layout {
+                flex-direction: column;
+            }
+
+            .board-container-wrapper {
+                align-self: center;
+            }
+
+            .right-panel {
+                width: 100%;
+                min-width: unset;
+            }
+
+            .analysis-panel {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 16px;
+            }
+
+            .analysis-section {
+                border-bottom: none;
+                padding-bottom: 0;
+                margin-bottom: 0;
+            }
+
+            .logs-section {
+                grid-column: 1 / -1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 12px;
+            }
+
+            .input-row {
+                flex-direction: column;
+            }
+
+            .input-group {
+                min-width: unset;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .analysis-panel {
+                grid-template-columns: 1fr;
+            }
+
+            .engine-controls {
+                flex-direction: column;
+            }
+
+            .engine-controls .btn {
+                min-width: unset;
+            }
+
+            .right-panel {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Título -->
+        <div class="header">
+            <h1>Analizador de Ajedrez con Adaptación Dinámica</h1>
+        </div>
+
+        <!-- Input FEN y controles principales -->
+        <div class="input-section">
+            <div class="input-row">
+                <div class="input-group">
+                    <label for="fenInput">
+                        <i class="fas fa-code"></i> Posición FEN:
+                    </label>
+                    <input type="text" 
+                           id="fenInput" 
+                           value="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+                           placeholder="Ingresa la posición FEN" 
+                           onclick="this.select()">
+                </div>
+                <div class="input-group" style="max-width: 200px;">
+                    <label for="modeSelect">
+                        <i class="fas fa-gamepad"></i> Modo:
+                    </label>
+                    <select id="modeSelect">
+                        <option value="edit">Edición</option>
+                        <option value="human">Humano vs Humano</option>
+                        <option value="cpu">Versus CPU</option>
+                    </select>
+                </div>
+                <div class="button-group">
+                    <button onclick="drawBoard()" class="btn btn-primary">
+                        <i class="fas fa-chess-board"></i> Cargar Posición
+                    </button>
+                    <button onclick="showLegalMoves()" id="showMovesBtn" class="btn btn-success">
+                        <i class="fas fa-list"></i> Movimientos
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Layout principal -->
+        <div class="main-layout">
+            <!-- Sección del tablero -->
+            <div class="board-container-wrapper">
+                <div class="board-section">
+                    <div id="chessboard">
+                        <div class="loading">
+                            <i class="fas fa-chess-board"></i>
+                            <p>Cargando tablero...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Estado del juego -->
+                <div id="gameStatus" class="game-status-compact">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Cargando...</span>
+                </div>
+            </div>
+
+            <!-- Panel derecho -->
+            <div class="right-panel">
+                <!-- Logs de Adaptación -->
+                <div class="logs-section">
+                    <div class="logs-header">
+                        <div class="logs-title">
+                            <i class="fas fa-terminal"></i>
+                            Logs de Adaptación
+                        </div>
+                        <div class="logs-controls">
+                            <button onclick="clearLogs()" title="Limpiar logs">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            <button onclick="toggleLogsPause()" id="pauseLogsBtn" title="Pausar logs">
+                                <i class="fas fa-pause"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="logs-container" id="logsContainer">
+                        <!-- Los logs aparecerán aquí dinámicamente -->
+                    </div>
+                </div>
+
+                <!-- Panel de análisis -->
+                <div class="analysis-panel">
+                    <!-- Sección de Motor -->
+                    <div class="analysis-section">
+                        <div class="section-title">
+                            <i class="fas fa-microchip"></i>
+                            Motor de Análisis
+                        </div>
+                        <div class="engine-controls">
+                            <button onclick="toggleEngine()" id="engineToggleBtn" class="btn btn-secondary">
+                                <i class="fas fa-plug"></i> Conectar Motor
+                            </button>
+                            <button onclick="toggleAnalysis()" id="analysisToggleBtn" class="btn btn-success">
+                                <i class="fas fa-play"></i> Analizar
+                            </button>
+                            <button onclick="forceBestMove()" id="forceMoveBtn" class="btn btn-warning" style="display: none;">
+                                <i class="fas fa-forward"></i> Forzar
+                            </button>
+                        </div>
+                        <div id="engineStatus" class="engine-status">Motor no conectado</div>
+                        
+                        <!-- Configuración adaptativa -->
+                        <div style="margin-top: 8px;">
+                            <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem;">
+                                <input type="checkbox" id="adaptiveToggle" checked>
+                                <span>Modo adaptativo</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Sección de Evaluación -->
+                    <div class="analysis-section">
+                        <div class="section-title">
+                            <i class="fas fa-balance-scale"></i>
+                            Evaluación
+                        </div>
+                        <div class="evaluation-display">
+                            <span id="evaluation" class="evaluation">--</span>
+                            <span id="bestMove" class="best-move">--</span>
+                        </div>
+                        <div class="stats-display">
+                            <span id="engineStats">--</span>
+                            <span id="memoryStats">--</span>
+                        </div>
+                    </div>
+
+                    <!-- Sección de Línea Principal -->
+                    <div class="analysis-section">
+                        <div class="pv-section">
+                            <div class="pv-title">
+                                <i class="fas fa-route"></i>
+                                Mejor línea de juego:
+                            </div>
+                            <div id="pvLine" class="pv-line">Inicia el análisis para ver la mejor línea</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel de movimientos legales -->
+                <div id="legalMoves" class="moves-panel" style="display: none;">
+                    <div class="moves-header">
+                        <h3 id="legalMovesHeader">
+                            <i class="fas fa-chess-knight"></i>
+                            Movimientos Legales
+                        </h3>
+                        <button onclick="hideLegalMoves()" class="close-btn">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div id="legalMovesList" class="moves-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===================== VARIABLES GLOBALES =====================
+        
+        const pieceSymbols = {
+            'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
+            'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
+        };
+
+        const squareSize = 65;
+        const boardSize = 8 * squareSize;
+        let board = [];
+        let chess = new Chess();
+        let lastMove = null;
+        let stockfish = null;
+        let blobURL = null;
+        let isEngineConnected = false;
+        let isAnalyzing = false;
+        let gameMode = 'edit';
+        let playerColor = 'white';
+        let selectedSquare = null;
+        let possibleMoves = [];
+        
+        // Sistema de logs
+        let logs = [];
+        let logsPaused = false;
+        const MAX_LOGS = 5;
+        
+        // Variables para destacar casillas
+        let previousHighlightedSquares = [];
+        let pvObserver = null;
+        
+        // Estadísticas del motor
+        let lastStats = { 
+            nps: 0, 
+            pv: '', 
+            evaluation: null,
+            depth: 0,
+            bestMove: '',
+            bestMoveSan: '',
+            nodes: 0,
+            time: 0
+        };
+
+        // Adaptación progresiva
+        let currentPVAnalysis = {
+            pvCount: 3,
+            targetEvaluation: 0,
+            searchInProgress: false,
+            adaptationActive: false
+        };
+
+        // ===================== SISTEMA DE LOGS =====================
+        
+        function addLog(type, message) {
+            if (logsPaused) return;
+            
+            const timestamp = new Date().toLocaleTimeString('es-ES', { 
+                hour12: false, 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+            });
+            
+            const logEntry = {
+                id: Date.now(),
+                timestamp: timestamp,
+                type: type,
+                message: message
+            };
+            
+            logs.unshift(logEntry);
+            
+            // Mantener solo los últimos MAX_LOGS
+            if (logs.length > MAX_LOGS) {
+                logs = logs.slice(0, MAX_LOGS);
+            }
+            
+            updateLogsDisplay();
+        }
+        
+        function updateLogsDisplay() {
+            const container = document.getElementById('logsContainer');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            logs.forEach(log => {
+                const logDiv = document.createElement('div');
+                logDiv.className = `log-entry ${log.type}`;
+                
+                logDiv.innerHTML = `
+                    <span class="log-timestamp">${log.timestamp}</span>
+                    <span class="log-message">${log.message}</span>
+                `;
+                
+                container.appendChild(logDiv);
+            });
+            
+            // Auto-scroll si no está en pausa
+            if (!logsPaused) {
+                container.scrollTop = 0;
+            }
+        }
+        
+        function clearLogs() {
+            logs = [];
+            updateLogsDisplay();
+            addLog('info', 'Logs limpiados');
+        }
+        
+        function toggleLogsPause() {
+            logsPaused = !logsPaused;
+            const btn = document.getElementById('pauseLogsBtn');
+            
+            if (logsPaused) {
+                btn.innerHTML = '<i class="fas fa-play"></i>';
+                btn.title = 'Reanudar logs';
+                addLog('info', 'Logs pausados');
+            } else {
+                btn.innerHTML = '<i class="fas fa-pause"></i>';
+                btn.title = 'Pausar logs';
+                addLog('info', 'Logs reanudados');
+            }
+        }
+
+        // ===================== FUNCIONES PRINCIPALES =====================
+
+        function updateButtonStates() {
+            const engineToggleBtn = document.getElementById('engineToggleBtn');
+            const analysisToggleBtn = document.getElementById('analysisToggleBtn');
+            const showMovesBtn = document.getElementById('showMovesBtn');
+            const forceMoveBtn = document.getElementById('forceMoveBtn');
+
+            if (isEngineConnected) {
+                engineToggleBtn.innerHTML = '<i class="fas fa-power-off"></i> Desconectar';
+                engineToggleBtn.className = 'btn btn-warning';
+            } else {
+                engineToggleBtn.innerHTML = '<i class="fas fa-plug"></i> Conectar Motor';
+                engineToggleBtn.className = 'btn btn-secondary';
+            }
+
+            if (isAnalyzing) {
+                analysisToggleBtn.innerHTML = '<i class="fas fa-stop"></i> Detener';
+                analysisToggleBtn.className = 'btn btn-danger';
+                analysisToggleBtn.disabled = false;
+            } else {
+                analysisToggleBtn.innerHTML = '<i class="fas fa-play"></i> Analizar';
+                analysisToggleBtn.className = 'btn btn-success';
+                analysisToggleBtn.disabled = !isEngineConnected || chess.game_over();
+            }
+
+            if (showMovesBtn) {
+                showMovesBtn.disabled = chess.game_over();
+            }
+
+            // Mostrar botón de forzar solo en modo CPU cuando está analizando
+            if (forceMoveBtn) {
+                const cpuTurn = gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b');
+                const shouldShow = gameMode === 'cpu' && (isAnalyzing || cpuTurn);
+                forceMoveBtn.style.display = shouldShow ? 'inline-flex' : 'none';
+                forceMoveBtn.disabled = !isAnalyzing && !lastStats.bestMoveSan;
+            }
+        }
+
+        function parseFEN(fen) {
+            const [position] = fen.split(' ');
+            const rows = position.split('/');
+            board = Array(8).fill().map(() => Array(8).fill(null));
+
+            for (let row = 0; row < 8; row++) {
+                let col = 0;
+                const actualRow = 7 - row;
+                for (let char of rows[row]) {
+                    if (/\d/.test(char)) {
+                        col += parseInt(char);
+                    } else {
+                        board[actualRow][col] = char;
+                        col++;
+                    }
+                }
+            }
+        }
+
+        function uciToSan(uciMove) {
+            if (!uciMove || uciMove.length < 4) return uciMove;
+            
+            const from = uciMove.substring(0, 2);
+            const to = uciMove.substring(2, 4);
+            const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
+            
+            const tempChess = new Chess(chess.fen());
+            
+            try {
+                const move = tempChess.move({
+                    from: from,
+                    to: to,
+                    promotion: promotion
+                });
+                return move ? move.san : uciMove;
+            } catch (e) {
+                return uciMove;
+            }
+        }
+
+        function formatEvaluation(score, isMate) {
+            if (isMate) {
+                return score > 0 ? `+M${score}` : `-M${Math.abs(score)}`;
+            }
+            
+            const pawns = score / 100;
+            return pawns > 0 ? `+${pawns.toFixed(2)}` : pawns.toFixed(2);
+        }
+
+        function generateChessboardSVG() {
+            let svg = `<svg width="${boardSize + 40}" height="${boardSize + 40}" xmlns="http://www.w3.org/2000/svg">`;
+
+            // Dibujar casillas
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const x = col * squareSize + 20;
+                    const y = row * squareSize + 20;
+                    const fill = (row + col) % 2 === 0 ? '#F5F5DC' : '#C19A6B';
+                    const squareName = String.fromCharCode(97 + col) + (8 - row);
+                    svg += `<rect x="${x}" y="${y}" width="${squareSize}" height="${squareSize}" fill="${fill}" 
+                            data-square="${squareName}" onclick="handleSquareClick('${squareName}')" 
+                            style="cursor: pointer;" />`;
+                }
+            }
+
+            // Resaltar último movimiento
+            if (lastMove) {
+                const history = chess.history({ verbose: true });
+                if (history.length > 0) {
+                    const move = history[history.length - 1];
+                    const fromCol = move.from.charCodeAt(0) - 97;
+                    const fromRow = 8 - parseInt(move.from[1]);
+                    const toCol = move.to.charCodeAt(0) - 97;
+                    const toRow = 8 - parseInt(move.to[1]);
+
+                    const fromX = fromCol * squareSize + 20;
+                    const fromY = fromRow * squareSize + 20;
+                    const toX = toCol * squareSize + 20;
+                    const toY = toRow * squareSize + 20;
+
+                    svg += `<rect x="${fromX}" y="${fromY}" width="${squareSize}" height="${squareSize}" fill="rgba(255, 255, 0, 0.4)" />`;
+                    svg += `<rect x="${toX}" y="${toY}" width="${squareSize}" height="${squareSize}" fill="rgba(255, 255, 0, 0.4)" />`;
+                }
+            }
+
+            // Destacar casilla seleccionada
+            if (selectedSquare) {
+                const col = selectedSquare.charCodeAt(0) - 97;
+                const row = 8 - parseInt(selectedSquare[1]);
+                const x = col * squareSize + 20;
+                const y = row * squareSize + 20;
+                svg += `<rect x="${x}" y="${y}" width="${squareSize}" height="${squareSize}" fill="rgba(0, 123, 255, 0.3)" />`;
+            }
+
+            // Mostrar movimientos posibles
+            possibleMoves.forEach(move => {
+                const col = move.to.charCodeAt(0) - 97;
+                const row = 8 - parseInt(move.to[1]);
+                const x = col * squareSize + 20;
+                const y = row * squareSize + 20;
+                const centerX = x + squareSize / 2;
+                const centerY = y + squareSize / 2;
+                
+                if (chess.get(move.to)) {
+                    svg += `<circle cx="${centerX}" cy="${centerY}" r="8" fill="rgba(220, 53, 69, 0.7)" />`;
+                } else {
+                    svg += `<circle cx="${centerX}" cy="${centerY}" r="6" fill="rgba(40, 167, 69, 0.7)" />`;
+                }
+            });
+
+            // Flecha del mejor movimiento
+            if (lastStats.bestMove && lastStats.bestMove.length >= 4) {
+                const from = lastStats.bestMove.substring(0, 2);
+                const to = lastStats.bestMove.substring(2, 4);
+                
+                const fromCol = from.charCodeAt(0) - 97;
+                const fromRow = 8 - parseInt(from[1]);
+                const toCol = to.charCodeAt(0) - 97;
+                const toRow = 8 - parseInt(to[1]);
+                
+                const fromX = (fromCol * squareSize) + squareSize/2 + 20;
+                const fromY = (fromRow * squareSize) + squareSize/2 + 20;
+                const toX = (toCol * squareSize) + squareSize/2 + 20;
+                const toY = (toRow * squareSize) + squareSize/2 + 20;
+                
+                svg += `<defs>
+                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#007bff" />
+                    </marker>
+                </defs>
+                <line x1="${fromX}" y1="${fromY}" x2="${toX}" y2="${toY}" stroke="#007bff" 
+                    stroke-width="3" opacity="0.8" marker-end="url(#arrowhead)" />`;
+            }
+
+            // Dibujar piezas
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const piece = board[7 - row][col];
+                    if (piece) {
+                        const x = col * squareSize + squareSize / 2 + 20;
+                        const y = row * squareSize + squareSize / 2 + 42;
+                        const symbol = pieceSymbols[piece] || '';
+                        const squareName = String.fromCharCode(97 + col) + (8 - row);
+                        svg += `<text x="${x}" y="${y}" font-size="48" text-anchor="middle" fill="#000" 
+                                onclick="handleSquareClick('${squareName}')" style="cursor: pointer;">${symbol}</text>`;
+                    }
+                }
+            }
+
+            // Coordenadas
+            for (let i = 0; i < 8; i++) {
+                svg += `<text x="10" y="${i * squareSize + squareSize / 1.5 + 20}" font-size="14" text-anchor="middle" fill="#666">${8 - i}</text>`;
+                svg += `<text x="${i * squareSize + squareSize / 2 + 20}" y="${boardSize + 35}" font-size="14" text-anchor="middle" fill="#666">${String.fromCharCode(97 + i)}</text>`;
+            }
+
+            svg += '</svg>';
+            return svg;
+        }
+
+        function showGameStatus() {
+            const statusElement = document.getElementById('gameStatus');
+            let status = "";
+            let iconClass = "fas fa-info-circle";
+            let statusClass = "status-info";
+
+            if (chess.in_checkmate()) {
+                status = "¡Jaque mate!";
+                iconClass = "fas fa-crown";
+                statusClass = "status-danger";
+            } else if (chess.in_stalemate()) {
+                status = "Tablas por ahogado";
+                iconClass = "fas fa-handshake";
+                statusClass = "status-warning";
+            } else if (chess.in_draw()) {
+                if (chess.in_threefold_repetition()) {
+                    status = "Tablas por repetición";
+                } else if (chess.insufficient_material()) {
+                    status = "Tablas por material";
+                } else {
+                    status = "Tablas por 50 movimientos";
+                }
+                iconClass = "fas fa-handshake";
+                statusClass = "status-warning";
+            } else if (chess.in_check()) {
+                status = "¡Jaque!";
+                iconClass = "fas fa-exclamation-triangle";
+                statusClass = "status-warning";
+            } else {
+                status = chess.turn() === 'w' ? "Turno: Blancas" : "Turno: Negras";
+                iconClass = "fas fa-chess";
+                statusClass = "status-success";
+            }
+
+            statusElement.className = `game-status-compact ${statusClass}`;
+            statusElement.innerHTML = `
+                <i class="${iconClass}"></i>
+                <span>${status}</span>
+            `;
+        }
+
+        // ===================== FUNCIONES DE INTERACCIÓN =====================
+
+        function handleSquareClick(square) {
+            if (gameMode === 'edit') return;
+
+            if (!selectedSquare) {
+                const piece = chess.get(square);
+                if (piece && canSelectPiece(piece)) {
+                    selectedSquare = square;
+                    possibleMoves = chess.moves({ square, verbose: true });
+                    updateBoard();
+                }
+            } else {
+                const moveObj = possibleMoves.find(m => m.to === square);
+                if (moveObj) {
+                    makeMove(moveObj.san);
+                    return;
+                }
+                
+                const piece = chess.get(square);
+                if (piece && canSelectPiece(piece)) {
+                    selectedSquare = square;
+                    possibleMoves = chess.moves({ square, verbose: true });
+                } else {
+                    selectedSquare = null;
+                    possibleMoves = [];
+                }
+                updateBoard();
+            }
+        }
+
+        function canSelectPiece(piece) {
+            if (!piece) return false;
+            if (gameMode === 'human') {
+                return piece.color === chess.turn();
+            }
+            if (gameMode === 'cpu') {
+                return piece.color === (playerColor === 'white' ? 'w' : 'b') && piece.color === chess.turn();
+            }
+            return false;
+        }
+
+        function setGameMode(mode) {
+            gameMode = mode;
+            const select = document.getElementById('modeSelect');
+            if (select && select.value !== mode) select.value = mode;
+            selectedSquare = null;
+            possibleMoves = [];
+            updateButtonStates();
+            
+            addLog('info', `Modo cambiado a: ${mode}`);
+        }
+
+        function updateBoard() {
+            document.getElementById('chessboard').innerHTML = generateChessboardSVG();
+        }
+
+        function drawBoard() {
+            const fen = document.getElementById('fenInput').value.trim();
+            if (!fen) {
+                alert('Por favor, ingresa una posición FEN válida.');
+                return;
+            }
+
+            chess = new Chess();
+            const validation = chess.validate_fen(fen);
+            if (!validation.valid) {
+                alert(`Posición FEN inválida: ${validation.error}`);
+                return;
+            }
+
+            chess.load(fen);
+            parseFEN(fen);
+            
+            lastStats = { 
+                nps: 0, 
+                pv: '', 
+                evaluation: null,
+                depth: 0,
+                bestMove: '',
+                bestMoveSan: '',
+                nodes: 0,
+                time: 0
+            };
+            
+            selectedSquare = null;
+            possibleMoves = [];
+            updateBoard();
+            
+            document.getElementById('legalMoves').style.display = 'none';
+            lastMove = null;
+            showGameStatus();
+            updateButtonStates();
+            
+            document.getElementById('evaluation').textContent = '--';
+            document.getElementById('bestMove').textContent = '--';
+            document.getElementById('engineStats').textContent = '--';
+            document.getElementById('pvLine').textContent = 'Inicia el análisis para ver la mejor línea';
+            
+            resetHighlights();
+            
+            if (isAnalyzing) {
+                stopAnalysis();
+            }
+            
+            updateMemoryStats();
+            setupPVObserver();
+            
+            addLog('success', 'Posición cargada correctamente');
+        }
+
+        function makeMove(move) {
+            try {
+                const moveResult = chess.move(move);
+                if (!moveResult) {
+                    console.warn('Movimiento inválido:', move);
+                    return;
+                }
+                
+                lastMove = moveResult;
+                document.getElementById('fenInput').value = chess.fen();
+                parseFEN(chess.fen());
+                
+                selectedSquare = null;
+                possibleMoves = [];
+                updateBoard();
+                
+                showLegalMoves();
+                showGameStatus();
+                updateButtonStates();
+                
+                if (isAnalyzing) {
+                    stopAnalysis();
+                }
+                
+                resetStats();
+                resetAnalysisDisplay();
+                
+                addLog('success', `Movimiento: ${moveResult.san}`);
+                
+                if (isEngineConnected && !chess.game_over()) {
+                    setTimeout(() => {
+                        const cpuTurn = gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b');
+                        if (cpuTurn) {
+                            startAdaptiveAnalysis();
+                        }
+                    }, 500);
+                }
+                
+                updateMemoryStats();
+                setTimeout(setupPVObserver, 100);
+                
+            } catch (error) {
+                console.error('Error al hacer movimiento:', error);
+                addLog('warning', `Error en movimiento: ${error.message}`);
+            }
+        }
+
+        function resetStats() {
+            lastStats = {
+                nps: 0,
+                pv: '',
+                evaluation: null,
+                depth: 0,
+                bestMove: '',
+                bestMoveSan: '',
+                nodes: 0,
+                time: 0
+            };
+        }
+
+        function resetAnalysisDisplay() {
+            document.getElementById('evaluation').textContent = '--';
+            document.getElementById('bestMove').textContent = '--';
+            document.getElementById('engineStats').textContent = '--';
+            document.getElementById('pvLine').textContent = 'Inicia el análisis para ver la mejor línea';
+        }
+
+        // ===================== MOTOR DE ANÁLISIS CON ADAPTACIÓN =====================
+
+        function toggleEngine() {
+            if (isEngineConnected) {
+                disconnectEngine();
+            } else {
+                connectEngine();
+            }
+        }
+
+        function toggleAnalysis() {
+            if (isAnalyzing) {
+                stopAnalysis();
+            } else {
+                if (gameMode === 'cpu') {
+                    startEngineTurnIfNeeded();
+                } else {
+                    startAdaptiveAnalysis();
+                }
+            }
+        }
+
+        function startEngineTurnIfNeeded() {
+            const cpuTurn = gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b');
+            if (!cpuTurn || chess.game_over()) return;
+
+            if (isEngineConnected) {
+                startAdaptiveAnalysis();
+            } else {
+                connectEngine();
+            }
+        }
+
+        function startAdaptiveAnalysis() {
+            if (!isEngineConnected || isAnalyzing || chess.game_over()) return;
+            
+            const adaptiveToggle = document.getElementById('adaptiveToggle');
+            const adaptiveEnabled = adaptiveToggle ? adaptiveToggle.checked : true;
+            
+            if (adaptiveEnabled && gameMode === 'cpu') {
+                // Iniciar búsqueda progresiva de PV
+                startProgressivePVSearch();
+            } else {
+                // Análisis estándar
+                startStandardAnalysis();
+            }
+        }
+
+        function startProgressivePVSearch() {
+            currentPVAnalysis.searchInProgress = true;
+            currentPVAnalysis.adaptationActive = true;
+            currentPVAnalysis.pvCount = 3;
+            
+            // Calcular evaluación objetivo (simplificado para demo)
+            const currentEval = lastStats.evaluation ? lastStats.evaluation.value : 0;
+            currentPVAnalysis.targetEvaluation = calculateTargetEvaluation(currentEval);
+            
+            addLog('adaptation', `Iniciando búsqueda progresiva PV=${currentPVAnalysis.pvCount} objetivo=${(currentPVAnalysis.targetEvaluation/100).toFixed(2)}`);
+            
+            executeProgressiveStep();
+        }
+
+        function executeProgressiveStep() {
+            if (!currentPVAnalysis.searchInProgress) return;
+            
+            const fen = chess.fen();
+            stockfish.postMessage(`setoption name MultiPV value ${currentPVAnalysis.pvCount}`);
+            stockfish.postMessage(`position fen ${fen}`);
+            stockfish.postMessage(`go depth 15`);
+            
+            isAnalyzing = true;
+            updateButtonStates();
+            
+            const engineStatus = document.getElementById('engineStatus');
+            if (engineStatus) {
+                engineStatus.textContent = `Búsqueda progresiva PV=${currentPVAnalysis.pvCount}...`;
+            }
+            
+            addLog('info', `Analizando ${currentPVAnalysis.pvCount} líneas...`);
+        }
+
+        function calculateTargetEvaluation(currentEval) {
+            // Lógica simplificada para demo
+            if (Math.abs(currentEval) < 50) {
+                return 0; // Mantener igualdad
+            } else if (currentEval > 200) {
+                return currentEval * 0.3; // Reducir ventaja
+            } else if (currentEval < -200) {
+                return currentEval * 0.7; // Mejorar desventaja
+            }
+            return currentEval * 0.5;
+        }
+
+        function startStandardAnalysis() {
+            if (!isEngineConnected || isAnalyzing || chess.game_over()) return;
+
+            const fen = chess.fen();
+            stockfish.postMessage('setoption name MultiPV value 1');
+            stockfish.postMessage(`position fen ${fen}`);
+            stockfish.postMessage('go infinite');
+            
+            isAnalyzing = true;
+            
+            const engineStatus = document.getElementById('engineStatus');
+            if (engineStatus) {
+                engineStatus.textContent = 'Análisis estándar en progreso...';
+            }
+            
+            updateButtonStates();
+            
+            const pvLine = document.getElementById('pvLine');
+            if (pvLine) pvLine.textContent = 'Analizando...';
+            
+            addLog('info', 'Análisis estándar iniciado');
+        }
+
+        function forceBestMove() {
+            addLog('warning', 'Forzando movimiento de CPU...');
+            
+            if (stockfish) {
+                stockfish.postMessage('stop');
+            }
+            
+            setTimeout(() => {
+                if (lastStats.bestMoveSan) {
+                    makeMove(lastStats.bestMoveSan);
+                } else {
+                    const legalMoves = chess.moves();
+                    if (legalMoves.length > 0) {
+                        const randomMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
+                        makeMove(randomMove);
+                        addLog('warning', `Movimiento aleatorio: ${randomMove}`);
+                    }
+                }
+                
+                isAnalyzing = false;
+                currentPVAnalysis.searchInProgress = false;
+                updateButtonStates();
+            }, 200);
+        }
+
+        async function connectEngine() {
+            if (isEngineConnected) return;
+
+            try {
+                document.getElementById('engineStatus').textContent = 'Conectando motor...';
+                addLog('info', 'Conectando motor Stockfish...');
+                
+                const response = await fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
+                if (!response.ok) {
+                    throw new Error('Error al descargar Stockfish');
+                }
+                const workerScript = await response.text();
+
+                const blob = new Blob([workerScript], { type: 'application/javascript' });
+                blobURL = URL.createObjectURL(blob);
+
+                stockfish = new Worker(blobURL);
+                stockfish.onmessage = function(event) {
+                    handleEngineMessage(event.data);
+                };
+                
+                stockfish.postMessage('uci');
+                stockfish.postMessage('setoption name MultiPV value 1');
+                stockfish.postMessage('setoption name Hash value 128');
+                stockfish.postMessage('isready');
+                
+                isEngineConnected = true;
+                document.getElementById('engineStatus').textContent = 'Motor conectado y listo';
+                updateButtonStates();
+                
+                addLog('success', 'Motor Stockfish conectado');
+                
+                if (gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b') && !chess.game_over()) {
+                    setTimeout(() => {
+                        startAdaptiveAnalysis();
+                    }, 500);
+                }
+            } catch (error) {
+                document.getElementById('engineStatus').textContent = 'Error: ' + error.message;
+                isEngineConnected = false;
+                updateButtonStates();
+                addLog('warning', `Error conectando motor: ${error.message}`);
+            }
+        }
+        
+        function disconnectEngine() {
+            if (!isEngineConnected) return;
+            
+            if (isAnalyzing) {
+                stopAnalysis();
+            }
+            
+            if (stockfish) {
+                stockfish.terminate();
+                stockfish = null;
+            }
+            
+            if (blobURL) {
+                URL.revokeObjectURL(blobURL);
+                blobURL = null;
+            }
+            
+            if (pvObserver) {
+                pvObserver.disconnect();
+                pvObserver = null;
+            }
+            
+            isEngineConnected = false;
+            currentPVAnalysis.searchInProgress = false;
+            document.getElementById('engineStatus').textContent = 'Motor desconectado';
+            resetAnalysisDisplay();
+            resetHighlights();
+            updateButtonStates();
+            updateMemoryStats();
+            
+            addLog('info', 'Motor desconectado');
+        }
+
+        function stopAnalysis() {
+            if (!isEngineConnected || !isAnalyzing) return;
+
+            if (stockfish) {
+                stockfish.postMessage('stop');
+            }
+            
+            isAnalyzing = false;
+            currentPVAnalysis.searchInProgress = false;
+            document.getElementById('engineStatus').textContent = 'Motor conectado - Análisis detenido';
+            updateButtonStates();
+            
+            addLog('info', 'Análisis detenido');
+        }
+
+        function handleEngineMessage(message) {
+            if (message.startsWith('bestmove')) {
+                processBestMove(message);
+            } 
+            else if (message.startsWith('info')) {
+                parseInfoLine(message);
+            }
+        }
+
+        function processBestMove(message) {
+            const parts = message.split(' ');
+            const bestMove = parts[1];
+            
+            if (bestMove && bestMove !== '(none)') {
+                lastStats.bestMove = bestMove;
+                lastStats.bestMoveSan = uciToSan(bestMove);
+                
+                document.getElementById('bestMove').textContent = 
+                    `Mejor: ${lastStats.bestMoveSan}`;
+                
+                updateBoard();
+                
+                addLog('success', `Mejor línea encontrada: ${lastStats.bestMoveSan} (${(lastStats.evaluation?.value/100 || 0).toFixed(2)})`);
+                
+                if (currentPVAnalysis.adaptationActive) {
+                    evaluateAdaptationResult();
+                }
+                
+                if (gameMode === 'cpu') {
+                    stopAnalysis();
+                    if (lastStats.bestMoveSan) {
+                        setTimeout(() => {
+                            makeMove(lastStats.bestMoveSan);
+                        }, 300);
+                    }
+                }
+            }
+        }
+
+        function evaluateAdaptationResult() {
+            if (!currentPVAnalysis.adaptationActive || !lastStats.evaluation) return;
+            
+            const currentEval = lastStats.evaluation.value;
+            const targetEval = currentPVAnalysis.targetEvaluation;
+            const distance = Math.abs(currentEval - targetEval);
+            
+            if (distance <= 25) {
+                // Convergencia lograda
+                addLog('adaptation', `Balance alcanzado: ${(currentEval/100).toFixed(2)} ≈ ${(targetEval/100).toFixed(2)} (Δ${distance}cp)`);
+                currentPVAnalysis.adaptationActive = false;
+            } else if (currentPVAnalysis.pvCount < 30) {
+                // Continuar búsqueda con más PV
+                currentPVAnalysis.pvCount += 3;
+                addLog('adaptation', `Expandiendo búsqueda a PV=${currentPVAnalysis.pvCount} (Δ${distance}cp)`);
+                setTimeout(() => {
+                    if (currentPVAnalysis.searchInProgress) {
+                        executeProgressiveStep();
+                    }
+                }, 500);
+            } else {
+                // Límite alcanzado
+                addLog('adaptation', `Límite PV alcanzado. Mejor balance: ${(currentEval/100).toFixed(2)} (Δ${distance}cp)`);
+                currentPVAnalysis.adaptationActive = false;
+            }
+        }
+
+        function parseInfoLine(message) {
+            const parts = message.split(' ');
+            
+            // Nodos y tiempo
+            const nodesIndex = parts.indexOf('nodes');
+            const timeIndex = parts.indexOf('time');
+            if (nodesIndex !== -1 && timeIndex !== -1) {
+                const nodes = parseInt(parts[nodesIndex + 1]);
+                const time = parseInt(parts[timeIndex + 1]);
+                lastStats.nodes = nodes;
+                lastStats.time = time;
+                
+                if (time > 0) {
+                    lastStats.nps = Math.round(nodes / (time / 1000));
+                }
+            }
+            
+            // Profundidad
+            const depthIndex = parts.indexOf('depth');
+            if (depthIndex !== -1) {
+                lastStats.depth = parseInt(parts[depthIndex + 1]);
+            }
+            
+            // Evaluación
+            const scoreIndex = parts.indexOf('score');
+            if (scoreIndex !== -1) {
+                parseScore(parts, scoreIndex);
+            }
+            
+            // Línea principal
+            const pvIndex = parts.indexOf('pv');
+            if (pvIndex !== -1 && parts.length > pvIndex + 1) {
+                const pvMoves = parts.slice(pvIndex + 1, pvIndex + 8);
+                lastStats.pv = convertPVToSAN(pvMoves);
+            }
+            
+            updateEngineDisplay();
+        }
+
+        function parseScore(parts, scoreIndex) {
+            const scoreType = parts[scoreIndex + 1];
+            const scoreValue = parseInt(parts[scoreIndex + 2]);
+            
+            if (scoreType === 'cp') {
+                const adjustedEval = chess.turn() === 'w' ? scoreValue : -scoreValue;
+                lastStats.evaluation = {
+                    value: adjustedEval,
+                    type: 'cp'
+                };
+            } else if (scoreType === 'mate') {
+                const adjustedMate = chess.turn() === 'w' ? scoreValue : -scoreValue;
+                lastStats.evaluation = {
+                    value: adjustedMate,
+                    type: 'mate'
+                };
+            }
+        }
+
+        function convertPVToSAN(pvMoves) {
+            try {
+                const tempChess = new Chess(chess.fen());
+                const sanMoves = [];
+                
+                for (const uciMove of pvMoves) {
+                    if (uciMove.length >= 4) {
+                        const from = uciMove.substring(0, 2);
+                        const to = uciMove.substring(2, 4);
+                        const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
+                        
+                        const move = tempChess.move({
+                            from: from,
+                            to: to,
+                            promotion: promotion
+                        });
+                        
+                        if (move) {
+                            sanMoves.push(move.san);
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                
+                if (sanMoves.length > 0) {
+                    let pvText = '';
+                    let fullMoveNumber = parseInt(chess.fen().split(' ')[5]);
+                    let isWhiteTurn = chess.turn() === 'w';
+                    
+                    for (let i = 0; i < sanMoves.length; i++) {
+                        if (i === 0 && !isWhiteTurn) {
+                            pvText += `${fullMoveNumber}... ${sanMoves[i]} `;
+                        } else if (i === 0 && isWhiteTurn) {
+                            pvText += `${fullMoveNumber}. ${sanMoves[i]} `;
+                        } else if ((i + (isWhiteTurn ? 1 : 0)) % 2 === 0) {
+                            if (!isWhiteTurn || i > 0) {
+                                fullMoveNumber++;
+                            }
+                            pvText += `${fullMoveNumber}. ${sanMoves[i]} `;
+                        } else {
+                            pvText += `${sanMoves[i]} `;
+                        }
+                    }
+                    
+                    return pvText.trim();
+                }
+            } catch (error) {
+                console.warn('Error convirtiendo PV a SAN:', error);
+            }
+            
+            return pvMoves.join(' ');
+        }
+
+        function updateEngineDisplay() {
+            // Actualizar evaluación
+            const evalEl = document.getElementById('evaluation');
+            if (lastStats.evaluation && evalEl) {
+                const evalData = lastStats.evaluation;
+                const isMate = evalData.type === 'mate';
+                const score = evalData.value;
+                
+                evalEl.textContent = formatEvaluation(score, isMate);
+                evalEl.className = 'evaluation';
+                
+                if (isMate) {
+                    evalEl.classList.add(score > 0 ? 'eval-positive' : 'eval-negative');
+                } else {
+                    if (score > 50) {
+                        evalEl.classList.add('eval-positive');
+                    } else if (score < -50) {
+                        evalEl.classList.add('eval-negative');
+                    } else {
+                        evalEl.classList.add('eval-neutral');
+                    }
+                }
+            }
+
+            // Actualizar línea principal
+            const pvLineEl = document.getElementById('pvLine');
+            if (lastStats.pv && pvLineEl) {
+                pvLineEl.textContent = lastStats.pv;
+            }
+
+            // Actualizar estadísticas del motor
+            const engineStatsEl = document.getElementById('engineStats');
+            if (engineStatsEl) {
+                const depthText = `Prof: ${lastStats.depth}`;
+                const npsText = lastStats.nps > 0 ? ` | ${(lastStats.nps / 1000).toFixed(0)}k n/s` : '';
+                engineStatsEl.textContent = depthText + npsText;
+                
+                // Log periódico de estadísticas
+                if (lastStats.nps > 0 && Math.random() < 0.1) { // 10% probabilidad por update
+                    addLog('info', `Prof: ${lastStats.depth} | ${(lastStats.nps / 1000).toFixed(0)}k n/s | Score: ${lastStats.evaluation ? (lastStats.evaluation.value/100).toFixed(2) : '--'}`);
+                }
+            }
+        }
+
+        // ===================== FUNCIONES DE DESTACADO =====================
+
+        function highlightBestLine() {
+            resetHighlights();
+            
+            const bestLineElement = document.getElementById('pvLine');
+            const bestLine = bestLineElement.textContent.trim();
+
+            if (bestLine === "Inicia el análisis para ver la mejor línea" || 
+                bestLine === "Analizando..." || 
+                !bestLine || 
+                bestLine.length < 3) {
+                return;
+            }
+
+            try {
+                const moves = bestLine.split(/\s+/).filter(move => 
+                    move.match(/^[a-h1-8KQRBNOX+#=\-]+$/) && 
+                    !move.match(/^\d+\.+$/)
+                );
+
+                if (moves.length === 0) return;
+
+                const tempChess = new Chess(chess.fen());
+                const squares = [];
+                const movesToProcess = moves.slice(0, 3);
+
+                movesToProcess.forEach(move => {
+                    try {
+                        const moveObj = tempChess.move(move, { sloppy: true });
+                        if (moveObj) {
+                            squares.push(moveObj.from);
+                            squares.push(moveObj.to);
+                        }
+                    } catch (e) {
+                        console.warn(`Movimiento inválido en línea principal: ${move}`);
+                    }
+                });
+
+                squares.forEach(square => {
+                    const squareElements = document.querySelectorAll(`[data-square="${square}"]`);
+                    squareElements.forEach(squareElement => {
+                        if (squareElement && squareElement.tagName === 'rect') {
+                            const file = square.charCodeAt(0) - 97;
+                            const rank = parseInt(square[1]) - 1;
+                            const isDark = (file + rank) % 2 === 1;
+                            
+                            squareElement.classList.add('square-highlight');
+                            if (isDark) {
+                                squareElement.classList.add('dark');
+                            }
+                            previousHighlightedSquares.push(squareElement);
+                        }
+                    });
+                });
+            } catch (error) {
+                console.warn('Error al destacar la mejor línea:', error);
+            }
+        }
+
+        function resetHighlights() {
+            previousHighlightedSquares.forEach(square => {
+                square.classList.remove('square-highlight', 'dark');
+            });
+            previousHighlightedSquares = [];
+        }
+
+        function setupPVObserver() {
+            if (pvObserver) {
+                pvObserver.disconnect();
+            }
+            
+            const pvLineElement = document.getElementById('pvLine');
+            if (pvLineElement) {
+                pvObserver = new MutationObserver(() => {
+                    setTimeout(highlightBestLine, 100);
+                });
+                
+                pvObserver.observe(pvLineElement, {
+                    childList: true,
+                    characterData: true,
+                    subtree: true
+                });
+            }
+        }
+
+        // ===================== FUNCIONES DE MOVIMIENTOS =====================
+
+        function showLegalMoves() {
+            if (chess.game_over()) return;
+
+            const moves = chess.moves({ verbose: true });
+            const movesList = document.getElementById('legalMovesList');
+            const movesHeader = document.getElementById('legalMovesHeader');
+            movesList.innerHTML = '';
+
+            movesHeader.innerHTML = `<i class="fas fa-chess-knight"></i> Movimientos Legales (${moves.length})`;
+
+            if (moves.length === 0) {
+                movesList.innerHTML = '<div style="text-align: center; padding: 20px; color: #6c757d;">No hay movimientos legales</div>';
+            } else {
+                moves.forEach(move => {
+                    const div = document.createElement('div');
+                    div.className = 'move-item';
+                    
+                    div.innerHTML = `
+                        <span class="move-notation">${move.san}</span>
+                        <span class="move-coords">${move.from}-${move.to}</span>
+                    `;
+                    
+                    div.addEventListener('click', () => {
+                        makeMove(move.san);
+                    });
+                    movesList.appendChild(div);
+                });
+            }
+
+            document.getElementById('legalMoves').style.display = 'block';
+        }
+
+        function hideLegalMoves() {
+            document.getElementById('legalMoves').style.display = 'none';
+        }
+
+        // ===================== FUNCIONES UTILITARIAS =====================
+
+        function updateMemoryStats() {
+            if (window.performance && window.performance.memory) {
+                const memory = window.performance.memory;
+                document.getElementById('memoryStats').textContent = 
+                    `Mem: ${Math.round(memory.usedJSHeapSize / (1024 * 1024))}MB`;
+            } else {
+                document.getElementById('memoryStats').textContent = 'Mem: N/A';
+            }
+        }
+
+        // ===================== EVENTOS E INICIALIZACIÓN =====================
+
+        window.addEventListener('load', function() {
+            drawBoard();
+            updateMemoryStats();
+            updateButtonStates();
+            setupPVObserver();
+            
+            // Configurar evento de cambio de modo
+            const modeSelect = document.getElementById('modeSelect');
+            if (modeSelect) {
+                modeSelect.addEventListener('change', function(e) {
+                    setGameMode(e.target.value);
+                });
+            }
+            
+            // Configurar toggle adaptativo
+            const adaptiveToggle = document.getElementById('adaptiveToggle');
+            if (adaptiveToggle) {
+                adaptiveToggle.addEventListener('change', function(e) {
+                    const status = e.target.checked ? 'activado' : 'desactivado';
+                    addLog('info', `Modo adaptativo ${status}`);
+                });
+            }
+            
+            // Log inicial
+            addLog('success', 'Sistema de ajedrez inicializado');
+        });
+        
+        window.addEventListener('beforeunload', function() {
+            if (stockfish) {
+                stockfish.terminate();
+            }
+            if (blobURL) {
+                URL.revokeObjectURL(blobURL);
+            }
+            if (pvObserver) {
+                pvObserver.disconnect();
+            }
+        });
+
+        // Exponer funciones globalmente para onclick
+        window.drawBoard = drawBoard;
+        window.showLegalMoves = showLegalMoves;
+        window.hideLegalMoves = hideLegalMoves;
+        window.toggleEngine = toggleEngine;
+        window.toggleAnalysis = toggleAnalysis;
+        window.forceBestMove = forceBestMove;
+        window.handleSquareClick = handleSquareClick;
+        window.clearLogs = clearLogs;
+        window.toggleLogsPause = toggleLogsPause;
+    </script>
+</body>
+</html>
