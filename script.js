@@ -19,6 +19,7 @@
     let pvObserver = null;
     let previousHighlightedSquares = [];
     let fractalEngine = null;
+    let adaptiveEngine = null;
     let fractalAnalysisActive = true;
     let fractalDimension = 1.247;
     let fractalIntensity = 0.6;
@@ -31,6 +32,12 @@
     let averageNPS = 0;
     let timerInterval = null;
     let analysisStartTimestamp = 0;
+
+    // Variables adicionales para modo adaptativo
+    let cpuAnalysisMode = 'adaptive'; // 'adaptive', 'full', 'balanced'
+    let multiPVLines = [];
+    let targetEvaluation = 0;
+    let adaptiveAnalysisDepth = 15;
 
     let lastStats = {
         nps: 0,
@@ -352,6 +359,90 @@
 
         clearCache() {
             this.cache.clear();
+        }
+    }
+
+    class AdaptiveChessEngine {
+        constructor(fractalEngine) {
+            this.fractalEngine = fractalEngine;
+            this.evaluationThreshold = 50;
+            this.multiPVCount = 5;
+        }
+
+        determineAnalysisMode(currentEval) {
+            const absEval = Math.abs(currentEval);
+
+            if (currentEval > this.evaluationThreshold) {
+                return {
+                    mode: 'seek_balance',
+                    targetRange: [-this.evaluationThreshold, this.evaluationThreshold],
+                    depth: adaptiveAnalysisDepth + 3,
+                    multiPV: this.multiPVCount
+                };
+            } else if (currentEval < -this.evaluationThreshold) {
+                return {
+                    mode: 'seek_improvement',
+                    targetRange: [-this.evaluationThreshold, this.evaluationThreshold],
+                    depth: adaptiveAnalysisDepth + 5,
+                    multiPV: this.multiPVCount + 2
+                };
+            }
+            return {
+                mode: 'maintain_balance',
+                targetRange: [-this.evaluationThreshold, this.evaluationThreshold],
+                depth: adaptiveAnalysisDepth,
+                multiPV: 3
+            };
+        }
+
+        selectAdaptiveMove(pvLines, analysisConfig) {
+            if (!pvLines || pvLines.length === 0) return null;
+
+            const validLines = pvLines.filter(line =>
+                line && line.moves && line.moves.length > 0 &&
+                line.evaluation !== undefined
+            );
+
+            if (validLines.length === 0) return null;
+
+            const sortedLines = validLines.map(line => {
+                const evalScore = line.evaluation;
+                let distance;
+
+                if (evalScore < analysisConfig.targetRange[0]) {
+                    distance = analysisConfig.targetRange[0] - evalScore;
+                } else if (evalScore > analysisConfig.targetRange[1]) {
+                    distance = evalScore - analysisConfig.targetRange[1];
+                } else {
+                    distance = 0;
+                }
+
+                return {
+                    ...line,
+                    targetDistance: distance,
+                    inTargetRange: distance === 0
+                };
+            }).sort((a, b) => {
+                if (a.inTargetRange && !b.inTargetRange) return -1;
+                if (!a.inTargetRange && b.inTargetRange) return 1;
+                return a.targetDistance - b.targetDistance;
+            });
+
+            console.log('🎯 Análisis Adaptativo:', {
+                mode: analysisConfig.mode,
+                targetRange: analysisConfig.targetRange,
+                currentEval: validLines[0].evaluation,
+                movesAnalyzed: sortedLines.length,
+                selectedMove: sortedLines[0].moves[0],
+                selectedEval: sortedLines[0].evaluation
+            });
+
+            return sortedLines[0];
+        }
+
+        adjustDepthByComplexity(baseDepth, complexity) {
+            const complexityFactor = Math.min(1.5, complexity / 30);
+            return Math.round(baseDepth * (1 + complexityFactor * 0.3));
         }
     }
 
@@ -859,9 +950,10 @@
         if (!cpuTurn || chess.game_over()) return;
 
         if (isEngineConnected) {
-            startAnalysis();
+            startAdaptiveAnalysis();
         } else {
-            makeCpuMove();
+            console.log('🔌 Conectando motor para análisis adaptativo...');
+            connectEngine();
         }
     }
 
@@ -900,8 +992,8 @@
                 engineStatus.textContent = 'Motor conectado y listo';
                 updateButtonStates();
                 
-                if (!chess.game_over()) {
-                    setTimeout(startEngineTurnIfNeeded, 500);
+                if (gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b') && !chess.game_over()) {
+                    setTimeout(startAdaptiveAnalysis, 500);
                 }
             })
             .catch(err => {
@@ -910,6 +1002,25 @@
                 isEngineConnected = false;
                 updateButtonStates();
             });
+    }
+
+    function addAdaptiveControls() {
+        const adaptiveConfig = {
+            threshold: 50,
+            depthBonus: 3,
+            multiPVBase: 5
+        };
+
+        return adaptiveConfig;
+    }
+
+    function logAdaptiveAnalysis(config, result) {
+        console.group('🎮 Análisis Adaptativo');
+        console.log('Configuración:', config);
+        console.log('Líneas analizadas:', multiPVLines.length);
+        console.log('Evaluación actual:', lastStats.evaluation);
+        console.log('Movimiento seleccionado:', result);
+        console.groupEnd();
     }
 
     function disconnectEngine() {
@@ -973,6 +1084,47 @@
         }, 1000);
     }
 
+    function startAdaptiveAnalysis() {
+        if (!isEngineConnected || isAnalyzing || chess.game_over()) return;
+        if (gameMode === 'cpu' && chess.turn() === (playerColor === 'white' ? 'w' : 'b')) return;
+
+        const engineStatus = document.getElementById('engineStatus');
+        if (!engineStatus) return;
+
+        const currentEval = lastStats.evaluation ? lastStats.evaluation.value : 0;
+        const analysisConfig = adaptiveEngine.determineAnalysisMode(currentEval);
+
+        if (fractalAnalysisActive && fractalEngine) {
+            const complexity = fractalEngine.calculateFractalComplexity(chess.fen());
+            analysisConfig.depth = adaptiveEngine.adjustDepthByComplexity(
+                analysisConfig.depth,
+                complexity
+            );
+        }
+
+        stockfish.postMessage(`setoption name MultiPV value ${analysisConfig.multiPV}`);
+
+        const fen = chess.fen();
+        engineStatus.textContent = `Análisis adaptativo (modo: ${analysisConfig.mode}, d=${analysisConfig.depth})...`;
+
+        multiPVLines = [];
+
+        stockfish.postMessage(`position fen ${fen}`);
+        stockfish.postMessage(`go depth ${analysisConfig.depth}`);
+
+        isAnalyzing = true;
+        updateButtonStates();
+
+        const pvLine = document.getElementById('pvLine');
+        if (pvLine) pvLine.textContent = `Analizando (${analysisConfig.mode})...`;
+
+        analysisStartTimestamp = Date.now();
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(updateAnalysisTimer, 100);
+
+        window.currentAnalysisConfig = analysisConfig;
+    }
+
     function stopAnalysis() {
         if (!isAnalyzing) return;
         
@@ -1011,9 +1163,9 @@
 
         try {
             if (line.startsWith('bestmove')) {
-                processBestMove(line);
+                processAdaptiveBestMove(line);
             } else if (line.startsWith('info')) {
-                parseInfoLine(line);
+                parseAdaptiveInfoLine(line);
             }
         } catch (error) {
             console.warn('Error procesando mensaje UCI:', error);
@@ -1091,6 +1243,92 @@
         }
 
         updateEvaluationDisplay();
+    }
+
+    function parseAdaptiveInfoLine(line) {
+        const parts = line.split(' ');
+
+        const multipvIndex = parts.indexOf('multipv');
+        const pvIndex = parts.indexOf('pv');
+        const scoreIndex = parts.indexOf('score');
+        const depthIndex = parts.indexOf('depth');
+
+        if (multipvIndex !== -1 && pvIndex !== -1 && scoreIndex !== -1) {
+            const pvNumber = parseInt(parts[multipvIndex + 1]) - 1;
+            const moves = parts.slice(pvIndex + 1);
+
+            let evaluation = 0;
+            const scoreType = parts[scoreIndex + 1];
+            const scoreValue = parseInt(parts[scoreIndex + 2]);
+
+            if (scoreType === 'cp') {
+                evaluation = chess.turn() === 'w' ? scoreValue : -scoreValue;
+            } else if (scoreType === 'mate') {
+                evaluation = chess.turn() === 'w'
+                    ? (scoreValue > 0 ? 100000 : -100000)
+                    : (scoreValue > 0 ? -100000 : 100000);
+            }
+
+            multiPVLines[pvNumber] = {
+                moves: moves,
+                evaluation: evaluation,
+                depth: depthIndex !== -1 ? parseInt(parts[depthIndex + 1]) : 0,
+                san: convertPVToSAN(moves.slice(0, 5))
+            };
+
+            if (pvNumber === 0) {
+                updateEvaluationDisplay();
+                lastStats.evaluation = { value: evaluation, type: scoreType };
+                lastStats.pv = multiPVLines[0].san;
+            }
+        }
+
+        parseInfoLine(line);
+    }
+
+    function processAdaptiveBestMove(line) {
+        if (!window.currentAnalysisConfig || multiPVLines.length === 0) {
+            processBestMove(line);
+            return;
+        }
+
+        const adaptiveResult = adaptiveEngine.selectAdaptiveMove(
+            multiPVLines,
+            window.currentAnalysisConfig
+        );
+
+        if (adaptiveResult && adaptiveResult.moves && adaptiveResult.moves.length > 0) {
+            const bestMove = adaptiveResult.moves[0];
+            lastStats.bestMove = bestMove;
+            lastStats.bestMoveSan = uciToSan(bestMove);
+
+            const bestMoveEl = document.getElementById('bestMove');
+            if (bestMoveEl) {
+                const modeIcon = window.currentAnalysisConfig.mode === 'seek_balance' ? '⚖️' :
+                               window.currentAnalysisConfig.mode === 'seek_improvement' ? '📈' : '🎯';
+                bestMoveEl.textContent = `${modeIcon} ${lastStats.bestMoveSan} (${formatEvaluation(adaptiveResult.evaluation, false)})`;
+            }
+
+            const engineStatus = document.getElementById('engineStatus');
+            if (engineStatus) {
+                engineStatus.textContent = `Movimiento adaptativo seleccionado (${window.currentAnalysisConfig.mode})`;
+            }
+
+            const chessboard = document.getElementById('chessboard');
+            if (chessboard) chessboard.innerHTML = generateChessboardSVG();
+            highlightSelection();
+
+            if (gameMode === 'cpu') {
+                stopAnalysis();
+                setTimeout(() => {
+                    makeMove(lastStats.bestMoveSan);
+                }, 500);
+            }
+        } else {
+            processBestMove(line);
+        }
+
+        window.currentAnalysisConfig = null;
     }
 
     function parseScore(parts, scoreIndex) {
@@ -1280,14 +1518,13 @@
     }
 
     function makeCpuMove() {
-        const moves = chess.moves({ verbose: true });
-        if (moves.length === 0) return;
-        const move = moves[Math.floor(Math.random() * moves.length)];
-        chess.move(move);
-        lastMove = move;
-        const fenInput = document.getElementById('fenInput');
-        if (fenInput) fenInput.value = chess.fen();
-        drawBoard();
+        if (!isEngineConnected) {
+            console.warn('Motor no conectado, conectando automáticamente...');
+            connectEngine();
+            return;
+        }
+
+        startAdaptiveAnalysis();
     }
 
     function makeMove(moveStr) {
@@ -1375,6 +1612,7 @@
 
     function setupFractalControls() {
         fractalEngine = new FractalChessEngine(fractalDimension);
+        adaptiveEngine = new AdaptiveChessEngine(fractalEngine);
 
         const dimSlider = document.getElementById('dimensionSlider');
         const intSlider = document.getElementById('intensitySlider');
