@@ -27,7 +27,7 @@
 
     // Variables de adaptación dinámica
     let evaluationHistory = [];
-    let predictedDepth = 12;
+    let predictedDepth = 1;
     let predictedTimeMs = 2000;
     let averageNPS = 0;
     let timerInterval = null;
