@@ -565,6 +565,33 @@ body {
     overflow-y: auto;
 }
 
+/* Destacado de casillas de la mejor línea */
+.square-highlight {
+    animation: blink-light 0.2s ease-in-out 10;
+}
+
+.square-highlight.dark {
+    animation: blink-dark 0.2s ease-in-out 10;
+}
+
+@keyframes blink-light {
+    0%, 50% {
+        fill: #D3D3D3;
+    }
+    50.1%, 100% {
+        fill: #F5F5DC;
+    }
+}
+
+@keyframes blink-dark {
+    0%, 50% {
+        fill: #808080;
+    }
+    50.1%, 100% {
+        fill: #C19A6B;
+    }
+}
+
 /* ===================== SECCIÓN FRACTAL OPTIMIZADA ===================== */
 .fractal-section {
     background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(124, 58, 237, 0.1));

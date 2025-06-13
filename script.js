@@ -17,6 +17,7 @@
     let isAnalyzing = false;
     let analysisInterval = null;
     let pvObserver = null;
+    let previousHighlightedSquares = [];
     let fractalEngine = null;
     let fractalAnalysisActive = true;
     let fractalDimension = 1.247;
@@ -455,6 +456,78 @@
         }
         const pawns = score / 100;
         return pawns > 0 ? `+${pawns.toFixed(2)}` : pawns.toFixed(2);
+    }
+
+    function highlightBestLine() {
+        resetHighlights();
+
+        const bestLineEl = document.getElementById('pvLine');
+        if (!bestLineEl) return;
+
+        const bestLine = bestLineEl.textContent.trim();
+        if (bestLine === 'Inicia el análisis para ver la mejor línea' ||
+            bestLine === 'Analizando...' || !bestLine || bestLine.length < 3) {
+            return;
+        }
+
+        try {
+            const moves = bestLine.split(/\s+/).filter(m =>
+                /^[a-h1-8KQRBNOX+#=\-]+$/.test(m) && !/^\d+\.+$/.test(m)
+            );
+            if (moves.length === 0) return;
+
+            const tempChess = new Chess(chess.fen());
+            const squares = [];
+            const movesToProcess = moves.slice(0, 4);
+
+            movesToProcess.forEach(move => {
+                try {
+                    const mv = tempChess.move(move, { sloppy: true });
+                    if (mv) {
+                        squares.push(mv.from);
+                        squares.push(mv.to);
+                    }
+                } catch (e) {
+                    console.warn(`Movimiento inválido en línea principal: ${move}`);
+                }
+            });
+
+            squares.forEach(square => {
+                const elements = document.querySelectorAll(`[data-square="${square}"]`);
+                elements.forEach(el => {
+                    if (el && el.tagName === 'rect') {
+                        const file = square.charCodeAt(0) - 97;
+                        const rank = parseInt(square[1]) - 1;
+                        const isDark = (file + rank) % 2 === 1;
+                        el.classList.add('square-highlight');
+                        if (isDark) el.classList.add('dark');
+                        previousHighlightedSquares.push(el);
+                    }
+                });
+            });
+        } catch (err) {
+            console.warn('Error al destacar la mejor línea:', err);
+        }
+    }
+
+    function resetHighlights() {
+        previousHighlightedSquares.forEach(el => {
+            el.classList.remove('square-highlight', 'dark');
+        });
+        previousHighlightedSquares = [];
+    }
+
+    function setupPVObserver() {
+        if (pvObserver) {
+            pvObserver.disconnect();
+        }
+        const pvEl = document.getElementById('pvLine');
+        if (pvEl) {
+            pvObserver = new MutationObserver(() => {
+                setTimeout(highlightBestLine, 100);
+            });
+            pvObserver.observe(pvEl, { childList: true, characterData: true, subtree: true });
+        }
     }
 
     function generateChessboardSVG() {
@@ -1196,6 +1269,7 @@
                 updateButtonStates();
                 updateMemoryStats();
                 updateFractalDisplay();
+                setupPVObserver();
                 manageFractalAnimations();
                 
                 console.log('✅ Aplicación inicializada correctamente');
