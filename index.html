@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
       
     <!-- Meta tags adicionales para SEO y rendimiento -->
-    <meta name="description" content="Analizador de ajedrez avanzado con motor fractal híbrido. Combina Stockfish con geometría fractal para análisis adaptativos.">
-    <meta name="keywords" content="ajedrez, fractal, análisis, stockfish, motor, geometría, híbrido">
-    <meta name="author" content="Motor Fractal Team">
+    <meta name="description" content="Analizador de ajedrez avanzado con motor Stockfish para partidas y análisis.">
+    <meta name="keywords" content="ajedrez, análisis, stockfish, motor">
+    <meta name="author" content="Chess Engine Team">
     
     <!-- Optimización de carga -->
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
@@ -106,8 +106,8 @@
     ">
         <div style="text-align: center;">
             <i class="fas fa-chess-queen" style="font-size: 4rem; margin-bottom: 1rem; animation: pulse 2s infinite;"></i>
-            <h2 style="margin-bottom: 0.5rem;">Motor Fractal v2.0</h2>
-            <p style="opacity: 0.8;">Cargando sistema híbrido...</p>
+            <h2 style="margin-bottom: 0.5rem;">Motor de Ajedrez v2.0</h2>
+            <p style="opacity: 0.8;">Cargando sistema...</p>
         </div>
     </div>
 
@@ -172,7 +172,7 @@
                     <div id="chessboard">
                         <div class="loading">
                             <i class="fas fa-chess-board"></i>
-                            <p>Inicializando motor fractal...</p>
+                            <p>Inicializando motor de ajedrez...</p>
                             <div class="progress-bar">
                                 <div class="progress-fill"></div>
                             </div>
@@ -186,10 +186,6 @@
                 
                 <!-- Indicadores de rendimiento -->
                 <div class="performance-indicators">
-                    <div class="indicator" id="complexityIndicator">
-                        <span class="indicator-label">Complejidad Fractal</span>
-                        <span class="indicator-value" id="complexityValue">--</span>
-                    </div>
                     <div class="indicator" id="depthIndicator">
                         <span class="indicator-label">Profundidad Adaptativa</span>
                         <span class="indicator-value" id="depthValue">--</span>
@@ -209,7 +205,7 @@
                         <div class="analysis-section motor-eval-section">
                             <div class="section-title">
                                 <i class="fas fa-microchip"></i>
-                                Motor Híbrido
+                                Motor Stockfish
                                 <div class="status-indicator" id="engineStatusIndicator"></div>
                             </div>
                             <div class="engine-controls">
@@ -222,7 +218,7 @@
                                 <button onclick="window.chessApp.toggleAnalysis()"
                                         id="analysisToggleBtn"
                                         class="btn btn-success"
-                                        title="Iniciar/Detener análisis fractal">
+                                        title="Iniciar/Detener análisis">
                                     <i class="fas fa-play"></i>Analizar
                                 </button>
                                 <button onclick="window.chessApp.forceBestMove()"
@@ -231,11 +227,15 @@
                                         title="Forzar el movimiento de la mejor línea">
                                     <i class="fas fa-forward"></i>Forzar movimiento
                                 </button>
+                                <label style="display:flex;align-items:center;margin-left:8px;gap:4px;">
+                                    <input type="checkbox" id="adaptiveToggle" checked>
+                                    <span style="font-size:0.9rem;">Modo adaptativo</span>
+                                </label>
                             </div>
                             <div id="engineStatus" class="engine-status">Motor no conectado</div>
                             <div class="section-title">
                                 <i class="fas fa-balance-scale"></i>
-                                Evaluación Fractal
+                                Evaluación
                             </div>
                             <div class="evaluation-display">
                                 <span id="evaluation" class="evaluation">--</span>
@@ -248,69 +248,6 @@
                             </div>
                         </div>
 
-                        <!-- CONFIGURACIÓN FRACTAL -->
-                        <div class="analysis-section fractal-section-wrapper">
-                            <div class="section-title">
-                                <i class="fas fa-infinity"></i>
-                                Configuración Fractal
-                                <div class="fractal-info-btn" onclick="showFractalInfo()" title="Información sobre análisis fractal">
-                                    <i class="fas fa-info-circle"></i>
-                                </div>
-                            </div>
-                            <div class="fractal-section">
-                                <div class="fractal-controls">
-                                    <label class="fractal-toggle">
-                                        <input type="checkbox" id="enableFractal" checked>
-                                        <span>Activar análisis fractal</span>
-                                        <div class="toggle-switch"></div>
-                                    </label>
-                                    <div class="slider-group">
-                                        <label>
-                                            Dimensión D: <span id="dimensionValue" class="value-highlight">1.247</span>
-                                            <small>(1.0 = Lineal, 2.0 = Planar)</small>
-                                        </label>
-                                        <input type="range" 
-                                               id="dimensionSlider" 
-                                               min="1.0" 
-                                               max="2.0" 
-                                               step="0.001" 
-                                               value="1.247"
-                                               title="Dimensión fractal para cálculo de complejidad">
-                                    </div>
-                                    <div class="slider-group">
-                                        <label>
-                                            Intensidad: <span id="intensityValue" class="value-highlight">60%</span>
-                                            <small>(Influencia del ajuste fractal)</small>
-                                        </label>
-                                        <input type="range" 
-                                               id="intensitySlider" 
-                                               min="20" 
-                                               max="90" 
-                                               step="5" 
-                                               value="60"
-                                               title="Intensidad del ajuste fractal en la evaluación">
-                                    </div>
-                                </div>
-                                <div class="fractal-metrics">
-                                    <div class="fractal-metric">
-                                        <div class="label">Complejidad</div>
-                                        <div class="value" id="fractalComplexity" style="min-width: 60px; text-align: right;">--</div>
-                                    </div>
-                                    <div class="fractal-metric">
-                                        <div class="label">Profundidad óptima</div>
-                                        <div class="value" id="optimalDepth">--</div>
-                                    </div>
-                                    <div class="fractal-metric">
-                                        <div class="label">Confianza</div>
-                                        <div class="value" id="fractalConfidence">--</div>
-                                    </div>
-                                    <div class="fractal-metric">
-                                        <div class="label">Memoria</div>
-                                        <div class="value" id="engineMemory">--</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
 
                         <!-- VARIANTE PRINCIPAL -->
                         <div class="analysis-section pv-section-wrapper">
@@ -323,7 +260,7 @@
                                     </button>
                                 </div>
                                 <div id="pvLine" class="pv-line">
-                                    Inicia el análisis para ver la mejor línea calculada por el motor fractal
+                                    Inicia el análisis para ver la mejor línea calculada por el motor
                                 </div>
                             </div>
                         </div>
@@ -347,27 +284,6 @@
         </div>
     </div>
 
-    <!-- Modal de información fractal -->
-    <div id="fractalInfoModal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3><i class="fas fa-infinity"></i> Análisis Fractal</h3>
-                <button onclick="closeFractalInfo()" class="close-btn">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="modal-body">
-                <p><strong>¿Qué es el análisis fractal?</strong></p>
-                <p>El motor fractal utiliza geometría fractal para optimizar el análisis de ajedrez:</p>
-                <ul>
-                    <li><strong>Dimensión D:</strong> Controla la complejidad del cálculo (1.247 es óptimo)</li>
-                    <li><strong>Intensidad:</strong> Define cuánto influye el ajuste fractal</li>
-                    <li><strong>Profundidad adaptativa:</strong> Se ajusta automáticamente según la complejidad</li>
-                    <li><strong>Cache inteligente:</strong> Optimiza el rendimiento evitando recálculos</li>
-                </ul>
-            </div>
-        </div>
-    </div>
 
     <!-- Scripts -->
     <script>
@@ -381,13 +297,6 @@
             if (window.chessApp) window.chessApp.drawBoard();
         }
         
-        function showFractalInfo() {
-            document.getElementById('fractalInfoModal').style.display = 'flex';
-        }
-        
-        function closeFractalInfo() {
-            document.getElementById('fractalInfoModal').style.display = 'none';
-        }
         
         function copyPVToClipboard() {
             const pvText = document.getElementById('pvLine').textContent;

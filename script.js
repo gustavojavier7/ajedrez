@@ -1,7 +1,5 @@
 /**
- * Motor de Ajedrez con Análisis Fractal - Versión Optimizada
- * Sistema híbrido que combina Stockfish con algoritmos fractales
- * para análisis adaptativos de posiciones de ajedrez
+ * Motor de Ajedrez basado en Stockfish con modo de análisis adaptativo
  */
 
 (function () {
@@ -18,12 +16,7 @@
     let analysisInterval = null;
     let pvObserver = null;
     let previousHighlightedSquares = [];
-    let fractalEngine = null;
     let adaptiveEngine = null;
-    let fractalAnalysisActive = true;
-    let fractalDimension = 1.247;
-    let fractalIntensity = 0.6;
-    let currentComplexity = 0;
 
     // Variables de adaptación dinámica
     let evaluationHistory = [];
@@ -38,6 +31,7 @@
     let multiPVLines = [];
     let targetEvaluation = 0;
     let adaptiveAnalysisDepth = 15;
+    let adaptiveEnabled = true;
 
     let lastStats = {
         nps: 0,
@@ -46,9 +40,6 @@
         depth: 0,
         bestMove: '',
         bestMoveSan: '',
-        fractalComplexity: 0,
-        optimalDepth: 0,
-        fractalConfidence: 0,
         memoryUsage: 0
     };
 
@@ -133,238 +124,8 @@
         }
     }
 
-    /* ===================== CLASE MOTOR FRACTAL ===================== */
-    class FractalChessEngine {
-        constructor(dimension = 1.247) {
-            this.D = dimension;
-            this.cache = new Map();
-            this.pieceValues = {
-                'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000,
-                'P': 100, 'N': 320, 'B': 330, 'R': 500, 'Q': 900, 'K': 20000
-            };
-            this.complexityThreshold = 12.0;
-            this.maxCacheSize = 1000;
-        }
-
-        findKingSquare(chess, color) {
-            for (let rank = 0; rank < 8; rank++) {
-                for (let file = 0; file < 8; file++) {
-                    const square = String.fromCharCode(97 + file) + (rank + 1);
-                    const piece = chess.get(square);
-                    if (piece && piece.type.toLowerCase() === 'k' && piece.color === color) {
-                        return square;
-                    }
-                }
-            }
-            return null;
-        }
-
-        calculateFractalComplexity(fen) {
-            if (this.cache.has(fen)) {
-                return this.cache.get(fen);
-            }
-            
-            try {
-                const pieces = this.countPieces(fen);
-                const mobility = this.estimateMobility(fen);
-                const centerControl = Math.abs(this.evaluateCenterControl(fen));
-                const kingSafety = this.evaluateKingSafety(fen);
-
-                const piecesNorm = Math.pow(Math.max(pieces / 32, 0.1), 1 / this.D);
-                const mobilityNorm = Math.pow(Math.max(mobility / 60, 0.1), 1 / this.D);
-                const centerControlNorm = Math.pow(Math.max(centerControl / 40, 0.1), 1 / this.D);
-                const kingSafetyNorm = Math.pow(Math.max((kingSafety + 50) / 100, 0.1), 1 / this.D);
-
-                const sumNorm = piecesNorm + mobilityNorm + centerControlNorm + kingSafetyNorm;
-                const maxSum = 4;
-                const complexity = 1 + 49 * (sumNorm / maxSum);
-
-                const result = Math.max(1.0, complexity);
-                
-                if (this.cache.size >= this.maxCacheSize) {
-                    const firstKey = this.cache.keys().next().value;
-                    this.cache.delete(firstKey);
-                }
-                this.cache.set(fen, result);
-                
-                return result;
-            } catch (error) {
-                console.warn('Error calculating fractal complexity:', error);
-                return 10.0;
-            }
-        }
-
-        countPieces(fen) {
-            const position = fen.split(' ')[0];
-            return position.replace(/[0-8\/]/g, '').length;
-        }
-
-        estimateMobility(fen) {
-            try {
-                const tempChess = new Chess(fen);
-                return tempChess.moves().length;
-            } catch (e) {
-                return 20;
-            }
-        }
-
-        evaluateCenterControl(fen) {
-            try {
-                const tempChess = new Chess(fen);
-                const centerSquares = ['d4', 'd5', 'e4', 'e5'];
-                let control = 0;
-                
-                centerSquares.forEach(square => {
-                    const piece = tempChess.get(square);
-                    if (piece) {
-                        control += piece.color === 'w' ? 10 : -10;
-                    }
-                });
-                
-                return control;
-            } catch (e) {
-                return 0;
-            }
-        }
-
-        evaluateKingSafety(fen) {
-            try {
-                const tempChess = new Chess(fen);
-                let safety = 0;
-
-                const kingSquare = tempChess.turn() === 'w' ? 
-                    this.findKingSquare(tempChess, 'w') : this.findKingSquare(tempChess, 'b');
-                
-                if (!kingSquare) {
-                    throw new Error('King not found on board');
-                }
-
-                const [file, rank] = [kingSquare.charCodeAt(0) - 97, parseInt(kingSquare[1]) - 1];
-                const isCentral = (file >= 3 && file <= 4 && rank >= 3 && rank <= 4);
-                const isEnroque = (file <= 2 || file >= 5) && (rank <= 1 || rank >= 6);
-                safety += isCentral ? -10 : 0;
-                safety += isEnroque ? 10 : 0;
-
-                const totalPieces = this.countPieces(fen);
-                const pieceFactor = Math.min(1, totalPieces / 32);
-                safety += 10 * (1 - pieceFactor);
-
-                const materialBalance = this.evaluateMaterialBalance(tempChess);
-                safety += materialBalance * 0.5;
-
-                const opponentColor = tempChess.turn() === 'w' ? 'b' : 'w';
-                const attackers = this.getAttackers(tempChess, kingSquare, opponentColor);
-                safety -= attackers * 5;
-
-                const pawnShield = this.evaluatePawnShield(tempChess, kingSquare, tempChess.turn());
-                safety += pawnShield * 5;
-
-                if (tempChess.in_check()) {
-                    safety -= 20;
-                }
-                const threats = this.countThreats(tempChess, kingSquare, opponentColor);
-                safety -= threats * 10;
-
-                return Math.max(-50, Math.min(50, safety));
-            } catch (e) {
-                console.warn('Error calculating king safety:', e);
-                return 0;
-            }
-        }
-
-        evaluateMaterialBalance(chess) {
-            const pieceValues = this.pieceValues;
-            let balance = 0;
-            
-            for (let rank = 0; rank < 8; rank++) {
-                for (let file = 0; file < 8; file++) {
-                    const square = String.fromCharCode(97 + file) + (rank + 1);
-                    const piece = chess.get(square);
-                    if (piece) {
-                        const value = pieceValues[piece.type.toLowerCase()];
-                        balance += piece.color === 'w' ? value : -value;
-                    }
-                }
-            }
-            
-            return balance / 900;
-        }
-
-        getAttackers(chess, kingSquare, opponentColor) {
-            const [kingFile, kingRank] = [
-                kingSquare.charCodeAt(0) - 97,
-                parseInt(kingSquare[1]) - 1
-            ];
-            let attackers = 0;
-            
-            for (let rank = 0; rank < 8; rank++) {
-                for (let file = 0; file < 8; file++) {
-                    const square = String.fromCharCode(97 + file) + (rank + 1);
-                    const piece = chess.get(square);
-                    if (piece && piece.color === opponentColor && 
-                        ['q', 'r', 'b', 'n'].includes(piece.type.toLowerCase())) {
-                        const distance = Math.max(Math.abs(file - kingFile), Math.abs(rank - kingRank));
-                        if (distance <= 3) {
-                            attackers++;
-                        }
-                    }
-                }
-            }
-            
-            return attackers;
-        }
-
-        evaluatePawnShield(chess, kingSquare, color) {
-            const [kingFile, kingRank] = [
-                kingSquare.charCodeAt(0) - 97,
-                parseInt(kingSquare[1]) - 1
-            ];
-            let shield = 0;
-            
-            const direction = color === 'w' ? 1 : -1;
-            const pawnRanks = [kingRank + direction, kingRank + 2 * direction];
-            const pawnFiles = [Math.max(0, kingFile - 1), kingFile, Math.min(7, kingFile + 1)];
-            
-            for (const rank of pawnRanks) {
-                if (rank < 0 || rank > 7) continue;
-                for (const file of pawnFiles) {
-                    const square = String.fromCharCode(97 + file) + (rank + 1);
-                    const piece = chess.get(square);
-                    if (piece && piece.type.toLowerCase() === 'p' && piece.color === color) {
-                        shield += 1;
-                    }
-                }
-            }
-            
-            return shield;
-        }
-
-        countThreats(chess, kingSquare, opponentColor) {
-            const opponentMoves = chess.moves({ verbose: true, legal: false })
-                .filter(move => move.color === opponentColor && move.to === kingSquare);
-            return opponentMoves.length;
-        }
-
-        calculateOptimalDepth(complexity) {
-            const baseDepth = 12;
-            const complexityFactor = Math.pow(complexity / 10, 1/this.D);
-            const optimalDepth = Math.round(baseDepth + complexityFactor * 6);
-            return Math.max(optimalDepth, 8);
-        }
-
-        updateDimension(newDimension) {
-            this.D = Math.max(1.0, Math.min(2.0, newDimension));
-            this.cache.clear();
-        }
-
-        clearCache() {
-            this.cache.clear();
-        }
-    }
-
     class AdaptiveChessEngine {
-        constructor(fractalEngine) {
-            this.fractalEngine = fractalEngine;
+        constructor() {
             this.evaluationThreshold = 50;
             this.multiPVCount = 5;
         }
@@ -440,10 +201,6 @@
             return sortedLines[0];
         }
 
-        adjustDepthByComplexity(baseDepth, complexity) {
-            const complexityFactor = Math.min(1.5, complexity / 30);
-            return Math.round(baseDepth * (1 + complexityFactor * 0.3));
-        }
     }
 
     /* ===================== FUNCIONES UTILITARIAS ===================== */
@@ -545,7 +302,7 @@
                     }
                 }
                 
-                return fractalAnalysisActive ? `🌀 ${pvText.trim()}` : pvText.trim();
+                return pvText.trim();
             }
         } catch (error) {
             console.warn('Error convirtiendo PV a SAN:', error);
@@ -690,7 +447,7 @@
             const toX = (toCol * squareSize) + squareSize/2 + 20;
             const toY = (toRow * squareSize) + squareSize/2 + 20;
             
-            const arrowColor = fractalAnalysisActive ? "#8b5cf6" : "#3B82F6";
+            const arrowColor = "#3B82F6";
             
             svgParts.push(
                 `<defs>
@@ -791,55 +548,6 @@
         }
     }
 
-    function updateFractalDisplay() {
-        const complexityEl = document.getElementById('fractalComplexity');
-        const depthEl = document.getElementById('depthValue');
-        const confidenceEl = document.getElementById('fractalConfidence');
-        const memoryEl = document.getElementById('engineMemory');
-        
-        if (!fractalAnalysisActive || !fractalEngine) {
-            if (complexityEl) complexityEl.textContent = '--';
-            if (depthEl) depthEl.textContent = '--';
-            if (confidenceEl) confidenceEl.textContent = '--';
-            if (memoryEl) memoryEl.textContent = '--';
-            lastStats.fractalComplexity = 0;
-            lastStats.optimalDepth = 0;
-            lastStats.fractalConfidence = 0;
-            return;
-        }
-        
-        try {
-            const fen = chess.fen();
-            const complexity = fractalEngine.calculateFractalComplexity(fen);
-            const optimalDepth = fractalEngine.calculateOptimalDepth(complexity);
-            currentComplexity = complexity;
-            lastStats.fractalComplexity = complexity;
-            lastStats.optimalDepth = optimalDepth;
-            
-            if (complexityEl) {
-                complexityEl.textContent = complexity.toFixed(2);
-                complexityEl.className = 'value' + (complexity > 50 ? ' high-complexity-warning' : '');
-            }
-            if (depthEl) {
-                depthEl.textContent = optimalDepth.toString();
-                depthEl.className = 'indicator-value' + (optimalDepth > 30 ? ' high-depth-warning' : '');
-            }
-            
-            const confidenceValue = 60 + (complexity / 20 * 35);
-            if (confidenceEl) confidenceEl.textContent = confidenceValue.toFixed(1) + '%';
-            lastStats.fractalConfidence = confidenceValue;
-
-            if (memoryEl) {
-                if (lastStats.memoryUsage > 0) {
-                    memoryEl.textContent = `${lastStats.memoryUsage}MB`;
-                } else {
-                    memoryEl.textContent = 'N/A';
-                }
-            }
-        } catch (error) {
-            console.warn('Error updating fractal display:', error);
-        }
-    }
 
     function updateButtonStates() {
         const engineBtn = document.getElementById('engineToggleBtn');
@@ -883,19 +591,6 @@
     function computeAdaptiveParameters() {
         let baseDepth = 12;
 
-        if (fractalAnalysisActive && fractalEngine) {
-            try {
-                const fen = chess.fen();
-                const complexity = fractalEngine.calculateFractalComplexity(fen);
-                baseDepth = fractalEngine.calculateOptimalDepth(complexity);
-                lastStats.fractalComplexity = complexity;
-                lastStats.optimalDepth = baseDepth;
-            } catch (err) {
-                console.warn('Error calculando complejidad fractal:', err);
-            }
-        } else if (lastStats.optimalDepth > 0) {
-            baseDepth = lastStats.optimalDepth;
-        }
 
         if (evaluationHistory.length >= 2) {
             const lastEval = evaluationHistory[evaluationHistory.length - 1].value;
@@ -950,9 +645,13 @@
         if (!cpuTurn || chess.game_over()) return;
 
         if (isEngineConnected) {
-            startAdaptiveAnalysis();
+            if (adaptiveEnabled) {
+                startAdaptiveAnalysis();
+            } else {
+                startAnalysis();
+            }
         } else {
-            console.log('🔌 Conectando motor para análisis adaptativo...');
+            console.log('🔌 Conectando motor...');
             connectEngine();
         }
     }
@@ -993,7 +692,13 @@
                 updateButtonStates();
                 
                 if (gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b') && !chess.game_over()) {
-                    setTimeout(startAdaptiveAnalysis, 500);
+                    setTimeout(() => {
+                        if (adaptiveEnabled) {
+                            startAdaptiveAnalysis();
+                        } else {
+                            startAnalysis();
+                        }
+                    }, 500);
                 }
             })
             .catch(err => {
@@ -1080,7 +785,6 @@
 
         analysisInterval = setInterval(() => {
             updateMemoryStats();
-            updateFractalDisplay();
         }, 1000);
     }
 
@@ -1094,13 +798,6 @@
         const currentEval = lastStats.evaluation ? lastStats.evaluation.value : 0;
         const analysisConfig = adaptiveEngine.determineAnalysisMode(currentEval);
 
-        if (fractalAnalysisActive && fractalEngine) {
-            const complexity = fractalEngine.calculateFractalComplexity(chess.fen());
-            analysisConfig.depth = adaptiveEngine.adjustDepthByComplexity(
-                analysisConfig.depth,
-                complexity
-            );
-        }
 
         stockfish.postMessage(`setoption name MultiPV value ${analysisConfig.multiPV}`);
 
@@ -1148,10 +845,7 @@
         isAnalyzing = false;
         const engineStatus = document.getElementById('engineStatus');
         if (engineStatus) {
-            const statusText = fractalAnalysisActive ?
-                'Motor conectado - Análisis fractal detenido' :
-                'Motor conectado - Análisis detenido';
-            engineStatus.textContent = statusText;
+            engineStatus.textContent = 'Motor conectado - Análisis detenido';
         }
         const timerEl = document.getElementById('analysisTimer');
         if (timerEl) timerEl.textContent = '--';
@@ -1180,9 +874,7 @@
             lastStats.bestMove = bestMove;
             lastStats.bestMoveSan = uciToSan(bestMove);
             
-            const moveText = fractalAnalysisActive ? 
-                `🌀 Mejor: ${lastStats.bestMoveSan}` : 
-                `Mejor: ${lastStats.bestMoveSan}`;
+            const moveText = `Mejor: ${lastStats.bestMoveSan}`;
             
             const bestMoveEl = document.getElementById('bestMove');
             if (bestMoveEl) bestMoveEl.textContent = moveText;
@@ -1336,15 +1028,7 @@
         const value = parseInt(parts[scoreIndex + 2]);
         
         if (type === 'cp') {
-            let adjustedEval = chess.turn() === 'w' ? value : -value;
-            
-            if (fractalAnalysisActive && currentComplexity > 0) {
-                const fractalAdjustment = Math.min(0.1, 
-                    Math.max(0, Math.pow(currentComplexity / 10, 1/fractalDimension) * 0.05)
-                );
-                adjustedEval *= (1 + fractalAdjustment);
-            }
-            
+            const adjustedEval = chess.turn() === 'w' ? value : -value;
             lastStats.evaluation = { value: adjustedEval, type: 'cp' };
         } else if (type === 'mate') {
             const adjustedMate = chess.turn() === 'w' ? value : -value;
@@ -1383,9 +1067,7 @@
         }
 
         if (engineStatsEl) {
-            const depthText = fractalAnalysisActive && fractalEngine ?
-                `Profundidad: ${lastStats.depth}/${fractalEngine.calculateOptimalDepth(currentComplexity)}` :
-                `Profundidad: ${lastStats.depth}`;
+            const depthText = `Profundidad: ${lastStats.depth}`;
             
             const npsText = lastStats.nps > 0 ? ` | ${lastStats.nps.toLocaleString()} nodos/s` : '';
             engineStatsEl.textContent = depthText + npsText;
@@ -1524,7 +1206,11 @@
             return;
         }
 
-        startAdaptiveAnalysis();
+        if (adaptiveEnabled) {
+            startAdaptiveAnalysis();
+        } else {
+            startAnalysis();
+        }
     }
 
     function makeMove(moveStr) {
@@ -1567,9 +1253,6 @@
             depth: 0,
             bestMove: '',
             bestMoveSan: '',
-            fractalComplexity: 0,
-            optimalDepth: 0,
-            fractalConfidence: 0,
             memoryUsage: 0
         };
     }
@@ -1596,7 +1279,6 @@
             showGameStatus();
             updateButtonStates();
             updateMemoryStats();
-            updateFractalDisplay();
             
             if (isAnalyzing) {
                 stopAnalysis();
@@ -1610,59 +1292,6 @@
         }
     }
 
-    function setupFractalControls() {
-        fractalEngine = new FractalChessEngine(fractalDimension);
-        adaptiveEngine = new AdaptiveChessEngine(fractalEngine);
-
-        const dimSlider = document.getElementById('dimensionSlider');
-        const intSlider = document.getElementById('intensitySlider');
-        const dimVal = document.getElementById('dimensionValue');
-        const intVal = document.getElementById('intensityValue');
-        const enableChk = document.getElementById('enableFractal');
-
-        if (dimSlider && dimVal) {
-            dimSlider.addEventListener('input', e => {
-                fractalDimension = parseFloat(e.target.value);
-                dimVal.textContent = fractalDimension.toFixed(3);
-                if (fractalEngine) fractalEngine.updateDimension(fractalDimension);
-                updateFractalDisplay();
-            });
-        }
-
-        if (intSlider && intVal) {
-            intSlider.addEventListener('input', e => {
-                fractalIntensity = parseInt(e.target.value, 10) / 100;
-                intVal.textContent = `${e.target.value}%`;
-                updateFractalDisplay();
-            });
-        }
-
-        if (enableChk) {
-            enableChk.addEventListener('change', e => {
-                fractalAnalysisActive = e.target.checked;
-                const fractalSection = document.querySelector('.fractal-section');
-                if (fractalSection) {
-                    if (fractalAnalysisActive) {
-                        fractalSection.classList.add('fractal-active');
-                    } else {
-                        fractalSection.classList.remove('fractal-active');
-                    }
-                }
-                updateFractalDisplay();
-                
-                if (isAnalyzing) {
-                    stopAnalysis();
-                    setTimeout(() => {
-                        if (gameMode === 'cpu') {
-                            startEngineTurnIfNeeded();
-                        } else {
-                            startAnalysis();
-                        }
-                    }, 300);
-                }
-            });
-        }
-    }
 
     function toggleEngine() {
         if (isEngineConnected) {
@@ -1684,24 +1313,12 @@
         }
     }
 
-    function manageFractalAnimations() {
-        setInterval(() => {
-            const fractalSection = document.querySelector('.fractal-section');
-            if (fractalSection) {
-                if (fractalAnalysisActive && isAnalyzing) {
-                    fractalSection.classList.add('fractal-active');
-                } else if (!fractalAnalysisActive) {
-                    fractalSection.classList.remove('fractal-active');
-                }
-            }
-        }, 100);
-    }
 
     async function initializeChessApp() {
         try {
             await checkChessAvailability();
             
-            console.log('🚀 Iniciando Analizador de Ajedrez Fractal...');
+            console.log('🚀 Iniciando Analizador de Ajedrez...');
             
             chess = new Chess();
             console.log('✅ Chess.js inicializado correctamente');
@@ -1723,25 +1340,30 @@
         function initializeApp() {
             try {
                 console.log('🔧 Configurando componentes...');
-                
-                setupFractalControls();
+
+                adaptiveEngine = new AdaptiveChessEngine();
+
                 drawBoard();
                 updateButtonStates();
                 updateMemoryStats();
-                updateFractalDisplay();
                 setupPVObserver();
-                manageFractalAnimations();
 
                 const modeSelect = document.getElementById('modeSelect');
                 if (modeSelect) {
                     modeSelect.addEventListener('change', e => setGameMode(e.target.value));
                 }
 
+                const adaptiveToggle = document.getElementById('adaptiveToggle');
+                if (adaptiveToggle) {
+                    adaptiveEnabled = adaptiveToggle.checked;
+                    adaptiveToggle.addEventListener('change', e => {
+                        adaptiveEnabled = e.target.checked;
+                    });
+                }
+
                 setGameMode('edit');
                 
                 console.log('✅ Aplicación inicializada correctamente');
-                console.log('📐 Dimensión fractal por defecto: D =', fractalDimension);
-                console.log('⚡ Intensidad fractal por defecto:', (fractalIntensity * 100) + '%');
                 
             } catch (error) {
                 console.error('💥 Error en inicialización:', error);
@@ -1773,23 +1395,19 @@
             toggleAnalysis,
             forceBestMove,
             getStats: () => ({ ...lastStats }),
-            getComplexity: () => currentComplexity,
-            getFractalEngine: () => fractalEngine,
             getChessInstance: () => chess,
             isEngineConnected: () => isEngineConnected,
             isAnalyzing: () => isAnalyzing,
-            isFractalActive: () => fractalAnalysisActive,
             resetStats,
             resetAnalysisDisplay,
-            updateFractalDisplay,
             updateMemoryStats
         };
         
-        console.log('🔌 API pública del motor fractal expuesta correctamente');
+        console.log('🔌 API pública expuesta correctamente');
     }
 
     window.addEventListener('beforeunload', () => {
-        console.log('🧹 Limpiando recursos del motor fractal...');
+        console.log('🧹 Limpiando recursos del motor...');
         
         try {
             if (stockfish) {
@@ -1812,21 +1430,18 @@
                 pvObserver = null;
             }
 
-            if (fractalEngine) {
-                fractalEngine.clearCache();
-            }
         } catch (error) {
-            console.warn('Error durante limpieza del motor fractal:', error);
+            console.warn('Error durante limpieza del motor:', error);
         }
     });
     
     window.addEventListener('error', (event) => {
-        console.error('💥 Error global en motor fractal:', event.error);
+        console.error('💥 Error global en motor:', event.error);
     });
 
     document.addEventListener('visibilitychange', () => {
         if (document.hidden && isAnalyzing) {
-            console.log('👁️ Pestaña oculta, pausando análisis fractal...');
+            console.log('👁️ Pestaña oculta, pausando análisis...');
         }
     });
 
@@ -1836,7 +1451,6 @@
         initializeChessApp();
     }
 
-    console.log('🎮 Motor de Ajedrez Fractal v2.0 - Iniciando...');
-    console.log('🌀 Dimensión fractal D ≈ 1.247 | Análisis híbrido Stockfish + Geometría Fractal');
+    console.log('🎮 Motor de Ajedrez v2.0 - Iniciando...');
 
 })();
