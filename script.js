@@ -849,6 +849,8 @@
         stopAnalysis();
         if (lastStats.bestMoveSan) {
             makeMove(lastStats.bestMoveSan);
+        } else {
+            makeCpuMove();
         }
     }
 
@@ -1021,7 +1023,7 @@
     function processBestMove(line) {
         const parts = line.split(' ');
         const bestMove = parts[1];
-        
+
         if (bestMove && bestMove !== '(none)') {
             lastStats.bestMove = bestMove;
             lastStats.bestMoveSan = uciToSan(bestMove);
@@ -1046,6 +1048,15 @@
             if (timerInterval) {
                 clearInterval(timerInterval);
                 timerInterval = null;
+            }
+
+            if (gameMode === 'cpu') {
+                stopAnalysis();
+                if (lastStats.bestMoveSan) {
+                    makeMove(lastStats.bestMoveSan);
+                } else {
+                    makeCpuMove();
+                }
             }
         }
     }
