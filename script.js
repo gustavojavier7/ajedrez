@@ -23,7 +23,7 @@
     let fractalDimension = 1.247;
     let fractalIntensity = 0.6;
     let currentComplexity = 0;
-    
+
     let lastStats = {
         nps: 0,
         pv: '',
@@ -36,6 +36,11 @@
         fractalConfidence: 0,
         memoryUsage: 0
     };
+
+    let gameMode = 'edit';
+    let playerColor = 'white';
+    let selectedSquare = null;
+    let possibleMoves = [];
 
     /* ===================== CONSTANTES Y CONFIGURACIÓN ===================== */
     const PIECE_SYMBOLS = {
@@ -533,7 +538,7 @@
     function generateChessboardSVG() {
         const { squareSize, boardSize } = BOARD_CONFIG;
         const svgParts = [
-            `<svg width="${boardSize + 40}" height="${boardSize + 40}" xmlns="http://www.w3.org/2000/svg" role="grid" aria-label="Tablero de ajedrez">`
+            `<svg viewBox="0 0 ${boardSize + 40} ${boardSize + 40}" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg" role="grid" aria-label="Tablero de ajedrez">`
         ];
         
         for (let row = 0; row < 8; row++) {
@@ -545,7 +550,8 @@
                 
                 svgParts.push(
                     `<rect x="${x}" y="${y}" width="${squareSize}" height="${squareSize}" ` +
-                    `fill="${fill}" data-square="${squareName}" ` +
+                    `fill="${fill}" class="square" data-square="${squareName}" ` +
+                    `onclick="window.chessApp.handleSquare('${squareName}')" ` +
                     `role="gridcell" aria-label="Casilla ${squareName}" />`
                 );
             }
@@ -608,7 +614,9 @@
                     
                     svgParts.push(
                         `<text x="${x}" y="${y}" font-size="48" text-anchor="middle" ` +
-                        `fill="#000" aria-label="Pieza ${piece}">${symbol}</text>`
+                        `class="piece" fill="#000" data-square="${String.fromCharCode(97 + col) + (8 - row)}" ` +
+                        `onclick="window.chessApp.handleSquare('${String.fromCharCode(97 + col) + (8 - row)}')" ` +
+                        `aria-label="Pieza ${piece}">${symbol}</text>`
                     );
                 }
             }
@@ -938,6 +946,7 @@
             
             const chessboard = document.getElementById('chessboard');
             if (chessboard) chessboard.innerHTML = generateChessboardSVG();
+            highlightSelection();
         }
     }
 
@@ -1076,6 +1085,96 @@
     function hideLegalMoves() {
         const panel = document.getElementById('legalMoves');
         if (panel) panel.style.display = 'none';
+    }
+
+    function setGameMode(mode) {
+        gameMode = mode;
+        const select = document.getElementById('modeSelect');
+        if (select && select.value !== mode) select.value = mode;
+        clearSelection();
+    }
+
+    function handleSquare(square) {
+        if (gameMode === 'edit') return;
+
+        if (!selectedSquare) {
+            const piece = chess.get(square);
+            if (piece && canSelectPiece(piece)) {
+                selectedSquare = square;
+                possibleMoves = chess.moves({ square, verbose: true });
+            }
+        } else {
+            const moveObj = possibleMoves.find(m => m.to === square);
+            if (moveObj) {
+                chess.move(moveObj);
+                lastMove = moveObj;
+                const fenInput = document.getElementById('fenInput');
+                if (fenInput) fenInput.value = chess.fen();
+                selectedSquare = null;
+                possibleMoves = [];
+                drawBoard();
+                if (gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b')) {
+                    setTimeout(makeCpuMove, 300);
+                }
+                return;
+            }
+            const piece = chess.get(square);
+            if (piece && canSelectPiece(piece)) {
+                selectedSquare = square;
+                possibleMoves = chess.moves({ square, verbose: true });
+            } else {
+                selectedSquare = null;
+                possibleMoves = [];
+            }
+        }
+        highlightSelection();
+    }
+
+    function canSelectPiece(piece) {
+        if (!piece) return false;
+        if (gameMode === 'human') {
+            return piece.color === chess.turn();
+        }
+        if (gameMode === 'cpu') {
+            return piece.color === (playerColor === 'white' ? 'w' : 'b') && piece.color === chess.turn();
+        }
+        return false;
+    }
+
+    function highlightSelection() {
+        const squares = document.querySelectorAll('.square');
+        squares.forEach(el => el.classList.remove('selected', 'possible-move', 'possible-capture'));
+
+        if (selectedSquare) {
+            document.querySelectorAll(`[data-square="${selectedSquare}"]`).forEach(el => el.classList.add('selected'));
+        }
+
+        possibleMoves.forEach(m => {
+            document.querySelectorAll(`[data-square="${m.to}"]`).forEach(el => {
+                if (chess.get(m.to)) {
+                    el.classList.add('possible-capture');
+                } else {
+                    el.classList.add('possible-move');
+                }
+            });
+        });
+    }
+
+    function clearSelection() {
+        selectedSquare = null;
+        possibleMoves = [];
+        highlightSelection();
+    }
+
+    function makeCpuMove() {
+        const moves = chess.moves({ verbose: true });
+        if (moves.length === 0) return;
+        const move = moves[Math.floor(Math.random() * moves.length)];
+        chess.move(move);
+        lastMove = move;
+        const fenInput = document.getElementById('fenInput');
+        if (fenInput) fenInput.value = chess.fen();
+        drawBoard();
     }
 
     function makeMove(moveStr) {
@@ -1271,6 +1370,13 @@
                 updateFractalDisplay();
                 setupPVObserver();
                 manageFractalAnimations();
+
+                const modeSelect = document.getElementById('modeSelect');
+                if (modeSelect) {
+                    modeSelect.addEventListener('change', e => setGameMode(e.target.value));
+                }
+
+                setGameMode('edit');
                 
                 console.log('✅ Aplicación inicializada correctamente');
                 console.log('📐 Dimensión fractal por defecto: D =', fractalDimension);
@@ -1300,6 +1406,8 @@
             showLegalMoves,
             hideLegalMoves,
             makeMove,
+            handleSquare,
+            setGameMode,
             toggleEngine,
             toggleAnalysis,
             getStats: () => ({ ...lastStats }),
