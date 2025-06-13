@@ -123,12 +123,22 @@
                     <label for="fenInput">
                         <i class="fas fa-code"></i> Posición FEN:
                     </label>
-                    <input type="text" 
-                           id="fenInput" 
+                    <input type="text"
+                           id="fenInput"
                            value="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" 
                            placeholder="Ingresa la posición FEN o usa las posiciones predefinidas" 
                            onclick="this.select()"
                            title="Notación Forsyth-Edwards para describir posiciones de ajedrez">
+                </div>
+                <div class="input-group">
+                    <label for="modeSelect">
+                        <i class="fas fa-gamepad"></i> Modo:
+                    </label>
+                    <select id="modeSelect">
+                        <option value="edit">Edición</option>
+                        <option value="human">Humano vs Humano</option>
+                        <option value="cpu">Versus CPU</option>
+                    </select>
                 </div>
                 <div class="button-group">
                     <div class="primary-buttons" style="display: flex; gap: 10px;">

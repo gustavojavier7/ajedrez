@@ -242,6 +242,12 @@ body {
     padding: 16px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
+    overflow: hidden;
+}
+
+.board-section svg {
+    max-width: 100%;
+    height: auto;
 }
 
 .loading {
@@ -572,6 +578,31 @@ body {
 
 .square-highlight.dark {
     animation: blink-dark 0.2s ease-in-out 10;
+}
+
+.square.selected {
+    fill: #ffd700 !important;
+    stroke: #ffa500;
+    stroke-width: 3;
+}
+
+.square.possible-move {
+    fill: #90ee90 !important;
+    opacity: 0.7;
+}
+
+.square.possible-capture {
+    fill: #ff6b6b !important;
+    opacity: 0.7;
+}
+
+.piece {
+    cursor: pointer;
+    user-select: none;
+}
+
+.piece:hover {
+    filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.3));
 }
 
 @keyframes blink-light {
