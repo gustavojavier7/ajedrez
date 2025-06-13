@@ -219,11 +219,17 @@
                                         title="Conectar/Desconectar motor Stockfish">
                                     <i class="fas fa-plug"></i>Conectar Motor
                                 </button>
-                                <button onclick="window.chessApp.toggleAnalysis()" 
-                                        id="analysisToggleBtn" 
+                                <button onclick="window.chessApp.toggleAnalysis()"
+                                        id="analysisToggleBtn"
                                         class="btn btn-success"
                                         title="Iniciar/Detener análisis fractal">
                                     <i class="fas fa-play"></i>Analizar
+                                </button>
+                                <button onclick="window.chessApp.forceBestMove()"
+                                        id="forceMoveBtn"
+                                        class="btn btn-warning"
+                                        title="Forzar el movimiento de la mejor línea">
+                                    <i class="fas fa-forward"></i>Forzar movimiento
                                 </button>
                             </div>
                             <div id="engineStatus" class="engine-status">Motor no conectado</div>

@@ -753,6 +753,7 @@
     function updateButtonStates() {
         const engineBtn = document.getElementById('engineToggleBtn');
         const analysisBtn = document.getElementById('analysisToggleBtn');
+        const forceMoveBtn = document.getElementById('forceMoveBtn');
         const showMovesBtn = document.getElementById('showMovesBtn');
 
         if (engineBtn) {
@@ -773,8 +774,14 @@
             } else {
                 analysisBtn.innerHTML = '<i class="fas fa-play"></i>Analizar';
                 analysisBtn.className = 'btn btn-success';
-                analysisBtn.disabled = !isEngineConnected || chess.game_over();
+                analysisBtn.disabled = !isEngineConnected || chess.game_over() || gameMode === 'cpu';
             }
+        }
+
+        if (forceMoveBtn) {
+            const cpuTurn = gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b');
+            forceMoveBtn.style.display = gameMode === 'cpu' ? 'inline-flex' : 'none';
+            forceMoveBtn.disabled = !cpuTurn || !isEngineConnected || !lastStats.bestMoveSan;
         }
 
         if (showMovesBtn) {
@@ -845,6 +852,17 @@
         }
     }
 
+    function startEngineTurnIfNeeded() {
+        const cpuTurn = gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b');
+        if (!cpuTurn || chess.game_over()) return;
+
+        if (isEngineConnected) {
+            startAnalysis();
+        } else {
+            makeCpuMove();
+        }
+    }
+
     function connectEngine() {
         if (isEngineConnected) return;
 
@@ -881,7 +899,7 @@
                 updateButtonStates();
                 
                 if (!chess.game_over()) {
-                    setTimeout(startAnalysis, 500);
+                    setTimeout(startEngineTurnIfNeeded, 500);
                 }
             })
             .catch(err => {
@@ -923,6 +941,7 @@
 
     function startAnalysis() {
         if (!isEngineConnected || isAnalyzing || chess.game_over()) return;
+        if (gameMode === 'cpu' && chess.turn() === (playerColor === 'white' ? 'w' : 'b')) return;
 
         const engineStatus = document.getElementById('engineStatus');
         if (!engineStatus) return;
@@ -1197,7 +1216,7 @@
                 possibleMoves = [];
                 drawBoard();
                 if (gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b')) {
-                    setTimeout(makeCpuMove, 300);
+                    setTimeout(startEngineTurnIfNeeded, 300);
                 }
                 return;
             }
@@ -1284,7 +1303,7 @@
             resetAnalysisDisplay();
             
             if (isEngineConnected && !chess.game_over()) {
-                setTimeout(startAnalysis, 500);
+                setTimeout(startEngineTurnIfNeeded, 500);
             }
             
         } catch (error) {
@@ -1384,7 +1403,13 @@
                 
                 if (isAnalyzing) {
                     stopAnalysis();
-                    setTimeout(startAnalysis, 300);
+                    setTimeout(() => {
+                        if (gameMode === 'cpu') {
+                            startEngineTurnIfNeeded();
+                        } else {
+                            startAnalysis();
+                        }
+                    }, 300);
                 }
             });
         }
@@ -1402,7 +1427,11 @@
         if (isAnalyzing) {
             stopAnalysis();
         } else {
-            startAnalysis();
+            if (gameMode === 'cpu') {
+                startEngineTurnIfNeeded();
+            } else {
+                startAnalysis();
+            }
         }
     }
 
@@ -1493,6 +1522,7 @@
             setGameMode,
             toggleEngine,
             toggleAnalysis,
+            forceBestMove,
             getStats: () => ({ ...lastStats }),
             getComplexity: () => currentComplexity,
             getFractalEngine: () => fractalEngine,
