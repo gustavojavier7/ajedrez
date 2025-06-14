@@ -349,8 +349,8 @@
 
         /* LOGS SECTION - Nueva sección de logs */
         .logs-section {
-            background: #1a1a1a;
-            border: 1px solid #333;
+            background: #ffffff;
+            border: 1px solid #dee2e6;
             border-radius: 6px;
             padding: 12px;
             margin-bottom: 8px;
@@ -364,11 +364,11 @@
             align-items: center;
             margin-bottom: 8px;
             padding-bottom: 8px;
-            border-bottom: 1px solid #333;
+            border-bottom: 1px solid #dee2e6;
         }
 
         .logs-title {
-            color: #fff;
+            color: #000;
             font-size: 0.875rem;
             font-weight: 600;
             display: flex;
@@ -382,9 +382,9 @@
         }
 
         .logs-controls button {
-            background: #333;
-            border: 1px solid #555;
-            color: #fff;
+            background: #f8f9fa;
+            border: 1px solid #ced4da;
+            color: #000;
             padding: 4px 8px;
             border-radius: 4px;
             font-size: 0.75rem;
@@ -393,7 +393,7 @@
         }
 
         .logs-controls button:hover {
-            background: #555;
+            background: #e2e6ea;
         }
 
         .logs-container {
@@ -402,10 +402,11 @@
             line-height: 1.4;
             height: 120px;
             overflow-y: auto;
-            background: #0d1117;
+            background: #ffffff;
+            color: #000000;
             padding: 8px;
             border-radius: 4px;
-            border: 1px solid #21262d;
+            border: 1px solid #dee2e6;
         }
 
         .log-entry {
@@ -417,27 +418,27 @@
         }
 
         .log-entry.info {
-            color: #58a6ff;
+            color: #000;
             background-color: rgba(88, 166, 255, 0.1);
         }
 
         .log-entry.success {
-            color: #3fb950;
+            color: #000;
             background-color: rgba(63, 185, 80, 0.1);
         }
 
         .log-entry.warning {
-            color: #f85149;
+            color: #000;
             background-color: rgba(248, 81, 73, 0.1);
         }
 
         .log-entry.adaptation {
-            color: #f0883e;
+            color: #000;
             background-color: rgba(240, 136, 62, 0.1);
         }
 
         .log-timestamp {
-            color: #8b949e;
+            color: #6c757d;
             margin-right: 8px;
             min-width: 60px;
         }
@@ -456,6 +457,8 @@
             padding: 8px 12px;
             border-radius: 4px;
             border-left: 3px solid #28a745;
+            flex: 1;
+            min-width: 300px;
         }
 
         .pv-title {
@@ -475,6 +478,11 @@
             line-height: 1.4;
             word-wrap: break-word;
             max-height: 80px;
+            overflow-y: auto;
+        }
+
+        .pv-lines-panel {
+            max-height: 120px;
             overflow-y: auto;
         }
 
@@ -571,16 +579,16 @@
         }
 
         .logs-container::-webkit-scrollbar-track {
-            background: #21262d;
+            background: #e9ecef;
         }
 
         .logs-container::-webkit-scrollbar-thumb {
-            background: #30363d;
+            background: #ced4da;
             border-radius: 3px;
         }
 
         .logs-container::-webkit-scrollbar-thumb:hover {
-            background: #484f58;
+            background: #adb5bd;
         }
 
         /* Destacado de casillas */
@@ -726,6 +734,13 @@
                                 <i class="fas fa-list"></i> Movimientos
                             </button>
                         </div>
+                        <div class="pv-section pv-lines-panel">
+                            <div class="pv-title">
+                                <i class="fas fa-route"></i>
+                                Mejor línea de juego:
+                            </div>
+                            <div id="pvLine" class="pv-line">Inicia el análisis para ver la mejor línea</div>
+                        </div>
                     </div>
                 </div>
 
@@ -796,16 +811,6 @@
                         </div>
                     </div>
 
-                    <!-- Sección de Línea Principal -->
-                    <div class="analysis-section">
-                        <div class="pv-section">
-                            <div class="pv-title">
-                                <i class="fas fa-route"></i>
-                                Mejor línea de juego:
-                            </div>
-                            <div id="pvLine" class="pv-line">Inicia el análisis para ver la mejor línea</div>
-                        </div>
-                    </div>
                 </div>
 
                 <!-- Panel de movimientos legales -->
@@ -857,9 +862,10 @@
         let pvObserver = null;
         
         // Estadísticas del motor
-        let lastStats = { 
-            nps: 0, 
-            pv: '', 
+        let lastStats = {
+            nps: 0,
+            pv: '',
+            pvs: {},
             evaluation: null,
             depth: 0,
             bestMove: '',
@@ -1264,9 +1270,10 @@
             chess.load(fen);
             parseFEN(fen);
             
-            lastStats = { 
-                nps: 0, 
-                pv: '', 
+            lastStats = {
+                nps: 0,
+                pv: '',
+                pvs: {},
                 evaluation: null,
                 depth: 0,
                 bestMove: '',
@@ -1352,6 +1359,7 @@
             lastStats = {
                 nps: 0,
                 pv: '',
+                pvs: {},
                 evaluation: null,
                 depth: 0,
                 bestMove: '',
@@ -1435,6 +1443,7 @@
             if (!currentPVAnalysis.searchInProgress) return;
             
             const fen = chess.fen();
+            lastStats.pvs = {};
             stockfish.postMessage(`setoption name MultiPV value ${currentPVAnalysis.pvCount}`);
             stockfish.postMessage(`position fen ${fen}`);
             stockfish.postMessage(`go depth ${currentPVAnalysis.depth}`);
@@ -1466,6 +1475,7 @@
             if (!isEngineConnected || isAnalyzing || chess.game_over()) return;
 
             const fen = chess.fen();
+            lastStats.pvs = {};
             stockfish.postMessage('setoption name MultiPV value 1');
             stockfish.postMessage(`position fen ${fen}`);
             stockfish.postMessage('go infinite');
@@ -1716,11 +1726,20 @@
                 parseScore(parts, scoreIndex);
             }
             
-            // Línea principal
+            // Línea principal y MultiPV
             const pvIndex = parts.indexOf('pv');
             if (pvIndex !== -1 && parts.length > pvIndex + 1) {
-                const pvMoves = parts.slice(pvIndex + 1, pvIndex + 8);
-                lastStats.pv = convertPVToSAN(pvMoves);
+                const pvMoves = parts.slice(pvIndex + 1);
+                const multipvIndex = parts.indexOf('multipv');
+                const pvNumber = multipvIndex !== -1 ? parseInt(parts[multipvIndex + 1]) : 1;
+
+                const pvText = convertPVToSAN(pvMoves);
+                if (!lastStats.pvs) lastStats.pvs = {};
+                lastStats.pvs[pvNumber] = pvText;
+
+                if (pvNumber === 1) {
+                    lastStats.pv = pvText;
+                }
             }
             
             updateEngineDisplay();
@@ -1823,10 +1842,17 @@
                 }
             }
 
-            // Actualizar línea principal
+            // Actualizar líneas principales
             const pvLineEl = document.getElementById('pvLine');
-            if (lastStats.pv && pvLineEl) {
-                pvLineEl.textContent = lastStats.pv;
+            if (pvLineEl) {
+                if (lastStats.pvs && Object.keys(lastStats.pvs).length > 0) {
+                    const lines = Object.keys(lastStats.pvs)
+                        .sort((a, b) => parseInt(a) - parseInt(b))
+                        .map(num => `[${num}] ${lastStats.pvs[num]}`);
+                    pvLineEl.textContent = lines.join('\n');
+                } else if (lastStats.pv) {
+                    pvLineEl.textContent = lastStats.pv;
+                }
             }
 
             // Actualizar estadísticas del motor
@@ -1849,7 +1875,7 @@
             resetHighlights();
             
             const bestLineElement = document.getElementById('pvLine');
-            const bestLine = bestLineElement.textContent.trim();
+            const bestLine = bestLineElement.textContent.split('\n')[0].trim();
 
             if (bestLine === "Inicia el análisis para ver la mejor línea" || 
                 bestLine === "Analizando..." || 
