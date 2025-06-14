@@ -871,6 +871,7 @@
         // Adaptación progresiva
         let currentPVAnalysis = {
             pvCount: 3,
+            depth: 6,
             targetEvaluation: 0,
             searchInProgress: false,
             adaptationActive: false
@@ -1419,12 +1420,13 @@
             currentPVAnalysis.searchInProgress = true;
             currentPVAnalysis.adaptationActive = true;
             currentPVAnalysis.pvCount = 3;
-            
+            currentPVAnalysis.depth = 6;
+
             // Calcular evaluación objetivo (simplificado para demo)
             const currentEval = lastStats.evaluation ? lastStats.evaluation.value : 0;
             currentPVAnalysis.targetEvaluation = calculateTargetEvaluation(currentEval);
-            
-            addLog('adaptation', `Iniciando búsqueda progresiva PV=${currentPVAnalysis.pvCount} objetivo=${(currentPVAnalysis.targetEvaluation/100).toFixed(2)}`);
+
+            addLog('adaptation', `Iniciando búsqueda progresiva PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth} objetivo=${(currentPVAnalysis.targetEvaluation/100).toFixed(2)}`);
             
             executeProgressiveStep();
         }
@@ -1435,17 +1437,17 @@
             const fen = chess.fen();
             stockfish.postMessage(`setoption name MultiPV value ${currentPVAnalysis.pvCount}`);
             stockfish.postMessage(`position fen ${fen}`);
-            stockfish.postMessage(`go depth 15`);
+            stockfish.postMessage(`go depth ${currentPVAnalysis.depth}`);
             
             isAnalyzing = true;
             updateButtonStates();
             
             const engineStatus = document.getElementById('engineStatus');
             if (engineStatus) {
-                engineStatus.textContent = `Búsqueda progresiva PV=${currentPVAnalysis.pvCount}...`;
+                engineStatus.textContent = `Búsqueda progresiva PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth}...`;
             }
-            
-            addLog('info', `Analizando ${currentPVAnalysis.pvCount} líneas...`);
+
+            addLog('info', `Analizando ${currentPVAnalysis.pvCount} líneas a profundidad ${currentPVAnalysis.depth}...`);
         }
 
         function calculateTargetEvaluation(currentEval) {
@@ -1642,17 +1644,36 @@
 
         function evaluateAdaptationResult() {
             if (!currentPVAnalysis.adaptationActive || !lastStats.evaluation) return;
-            
+
             const currentEval = lastStats.evaluation.value;
             const targetEval = currentPVAnalysis.targetEvaluation;
             const distance = Math.abs(currentEval - targetEval);
-            
+            const maxDepth = 20;
+            const minDepth = 6;
+            const step = 2;
+
             if (distance <= 25) {
-                // Convergencia lograda
-                addLog('adaptation', `Balance alcanzado: ${(currentEval/100).toFixed(2)} ≈ ${(targetEval/100).toFixed(2)} (Δ${distance}cp)`);
-                currentPVAnalysis.adaptationActive = false;
+                if (currentPVAnalysis.depth < maxDepth) {
+                    currentPVAnalysis.depth += step;
+                    addLog('adaptation', `Aumentando profundidad a ${currentPVAnalysis.depth} (Δ${distance}cp)`);
+                    setTimeout(() => {
+                        if (currentPVAnalysis.searchInProgress) {
+                            executeProgressiveStep();
+                        }
+                    }, 500);
+                } else {
+                    addLog('adaptation', `Balance alcanzado: ${(currentEval/100).toFixed(2)} ≈ ${(targetEval/100).toFixed(2)} (Δ${distance}cp)`);
+                    currentPVAnalysis.adaptationActive = false;
+                }
+            } else if (currentPVAnalysis.depth > minDepth) {
+                currentPVAnalysis.depth = Math.max(minDepth, currentPVAnalysis.depth - step);
+                addLog('adaptation', `Reduciendo profundidad a ${currentPVAnalysis.depth} (Δ${distance}cp)`);
+                setTimeout(() => {
+                    if (currentPVAnalysis.searchInProgress) {
+                        executeProgressiveStep();
+                    }
+                }, 500);
             } else if (currentPVAnalysis.pvCount < 30) {
-                // Continuar búsqueda con más PV
                 currentPVAnalysis.pvCount += 3;
                 addLog('adaptation', `Expandiendo búsqueda a PV=${currentPVAnalysis.pvCount} (Δ${distance}cp)`);
                 setTimeout(() => {
@@ -1661,7 +1682,6 @@
                     }
                 }, 500);
             } else {
-                // Límite alcanzado
                 addLog('adaptation', `Límite PV alcanzado. Mejor balance: ${(currentEval/100).toFixed(2)} (Δ${distance}cp)`);
                 currentPVAnalysis.adaptationActive = false;
             }
