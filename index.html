@@ -228,6 +228,41 @@
             color: #721c24;
         }
 
+        /* Nueva sección principal para línea de juego debajo del tablero */
+        .pv-section-main {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+            margin-top: 8px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .pv-section-main .pv-title {
+            font-size: 0.875rem;
+            color: #495057;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+        }
+
+        .pv-line-main {
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+            color: #000;
+            line-height: 1.5;
+            word-wrap: break-word;
+            max-height: 120px;
+            overflow-y: auto;
+            background: white;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ced4da;
+            white-space: pre-wrap;
+        }
+
         .right-panel {
             width: 450px;
             min-width: 450px;
@@ -347,7 +382,7 @@
             border-radius: 4px;
         }
 
-        /* LOGS SECTION - Nueva sección de logs */
+        /* LOGS SECTION - Nueva sección de logs con más espacio */
         .logs-section {
             background: #ffffff;
             border: 1px solid #dee2e6;
@@ -400,7 +435,7 @@
             font-family: 'Courier New', monospace;
             font-size: 0.75rem;
             line-height: 1.4;
-            height: 120px;
+            height: 180px; /* Aumentado de 120px a 180px */
             overflow-y: auto;
             background: #ffffff;
             color: #000000;
@@ -450,40 +485,6 @@
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(-10px); }
             to { opacity: 1; transform: translateY(0); }
-        }
-
-        .pv-section {
-            background-color: #f8f9fa;
-            padding: 8px 12px;
-            border-radius: 4px;
-            border-left: 3px solid #28a745;
-            flex: 1;
-            min-width: 300px;
-        }
-
-        .pv-title {
-            font-size: 0.75rem;
-            color: #6c757d;
-            margin-bottom: 4px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-weight: 600;
-        }
-
-        .pv-line {
-            font-family: 'Courier New', monospace;
-            font-size: 0.8125rem;
-            color: #495057;
-            line-height: 1.4;
-            word-wrap: break-word;
-            max-height: 80px;
-            overflow-y: auto;
-        }
-
-        .pv-lines-panel {
-            max-height: 120px;
-            overflow-y: auto;
         }
 
         .moves-panel {
@@ -573,21 +574,25 @@
             color: #007bff;
         }
 
-        /* Scrollbar para logs */
-        .logs-container::-webkit-scrollbar {
+        /* Scrollbar personalizado para logs y línea principal */
+        .logs-container::-webkit-scrollbar,
+        .pv-line-main::-webkit-scrollbar {
             width: 6px;
         }
 
-        .logs-container::-webkit-scrollbar-track {
+        .logs-container::-webkit-scrollbar-track,
+        .pv-line-main::-webkit-scrollbar-track {
             background: #e9ecef;
         }
 
-        .logs-container::-webkit-scrollbar-thumb {
+        .logs-container::-webkit-scrollbar-thumb,
+        .pv-line-main::-webkit-scrollbar-thumb {
             background: #ced4da;
             border-radius: 3px;
         }
 
-        .logs-container::-webkit-scrollbar-thumb:hover {
+        .logs-container::-webkit-scrollbar-thumb:hover,
+        .pv-line-main::-webkit-scrollbar-thumb:hover {
             background: #adb5bd;
         }
 
@@ -679,8 +684,6 @@
 </head>
 <body>
     <div class="container">
-
-
         <!-- Layout principal -->
         <div class="main-layout">
             <!-- Sección del tablero -->
@@ -698,6 +701,15 @@
                 <div id="gameStatus" class="game-status-compact">
                     <i class="fas fa-info-circle"></i>
                     <span>Cargando...</span>
+                </div>
+
+                <!-- Mejor línea de juego debajo del tablero -->
+                <div class="pv-section-main">
+                    <div class="pv-title">
+                        <i class="fas fa-route"></i>
+                        Mejor línea de juego:
+                    </div>
+                    <div id="pvLine" class="pv-line-main">Inicia el análisis para ver la mejor línea</div>
                 </div>
             </div>
 
@@ -733,13 +745,6 @@
                             <button onclick="showLegalMoves()" id="showMovesBtn" class="btn btn-success">
                                 <i class="fas fa-list"></i> Movimientos
                             </button>
-                        </div>
-                        <div class="pv-section pv-lines-panel">
-                            <div class="pv-title">
-                                <i class="fas fa-route"></i>
-                                Mejor línea de juego:
-                            </div>
-                            <div id="pvLine" class="pv-line">Inicia el análisis para ver la mejor línea</div>
                         </div>
                     </div>
                 </div>
@@ -810,7 +815,6 @@
                             <span id="memoryStats">--</span>
                         </div>
                     </div>
-
                 </div>
 
                 <!-- Panel de movimientos legales -->
@@ -852,10 +856,10 @@
         let selectedSquare = null;
         let possibleMoves = [];
         
-        // Sistema de logs
+        // Sistema de logs con más capacidad
         let logs = [];
         let logsPaused = false;
-        const MAX_LOGS = 5;
+        const MAX_LOGS = 8; // Aumentado de 5 a 8 para aprovechar el espacio adicional
         
         // Variables para destacar casillas
         let previousHighlightedSquares = [];
