@@ -180,6 +180,9 @@
             display: flex;
             flex-direction: column;
             gap: 8px;
+            width: 560px; /* Ancho fijo para evitar expansión dinámica */
+            min-width: 560px; /* Asegurar ancho mínimo consistente */
+            flex-shrink: 0; /* Evitar que se comprima */
         }
 
         .board-section {
@@ -236,6 +239,9 @@
             border: 1px solid #dee2e6;
             margin-top: 8px;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            width: 100%; /* Ocupar todo el ancho del contenedor padre */
+            max-width: 536px; /* Restricción máxima para evitar expansión (560px - 24px padding) */
+            overflow: hidden; /* Evitar que el contenido se desborde */
         }
 
         .pv-section-main .pv-title {
@@ -623,6 +629,8 @@
 
             .board-container-wrapper {
                 align-self: center;
+                width: 560px; /* Mantener ancho fijo incluso en responsivo */
+                min-width: 560px;
             }
 
             .right-panel {
@@ -650,6 +658,17 @@
         @media (max-width: 768px) {
             .container {
                 padding: 12px;
+            }
+
+            .board-container-wrapper {
+                width: 100% !important; /* Permitir ancho completo en móvil */
+                min-width: unset !important;
+                max-width: 560px; /* Pero con límite máximo */
+                align-self: center;
+            }
+
+            .pv-section-main {
+                max-width: 100%; /* Adaptar al contenedor en móvil */
             }
 
             .input-row {
