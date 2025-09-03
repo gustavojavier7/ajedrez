@@ -2014,6 +2014,40 @@ function processBestMove(message) {
  * Esta función recopila estadísticas sobre el rendimiento del análisis
  * para ayudar en el diagnóstico y optimización del sistema.
  */
+
+        /**
+ * Evalúa la calidad de una jugada basada en su distancia del equilibrio perfecto
+ * 
+ * Esta función proporciona una clasificación cualitativa que ayuda tanto al sistema
+ * como al usuario a entender qué tan exitoso ha sido el proceso de búsqueda de equilibrio.
+ * Los umbrales están diseñados para reflejar niveles prácticos de equilibrio en ajedrez.
+ * 
+ * @param {number} distanceFromZero - Distancia en centipawns del equilibrio perfecto (valor absoluto)
+ * @returns {string} - Clasificación cualitativa del nivel de equilibrio
+ */
+function assessMoveQuality(distanceFromZero) {
+    // Verificar que el parámetro sea válido
+    if (typeof distanceFromZero !== 'number' || distanceFromZero < 0) {
+        return 'Evaluación inválida';
+    }
+    
+    // Clasificar según umbrales cuidadosamente calibrados
+    if (distanceFromZero <= 10) {
+        return 'EQUILIBRIO PERFECTO';      // Prácticamente igual, excelente resultado
+    } else if (distanceFromZero <= 25) {
+        return 'Muy equilibrada';          // Diferencia mínima, muy buen resultado
+    } else if (distanceFromZero <= 50) {
+        return 'Razonablemente equilibrada'; // Diferencia pequeña, resultado aceptable
+    } else if (distanceFromZero <= 100) {
+        return 'Moderadamente desequilibrada'; // Diferencia notable pero no crítica
+    } else if (distanceFromZero <= 200) {
+        return 'Significativamente desequilibrada'; // Diferencia considerable
+    } else if (distanceFromZero <= 400) {
+        return 'Altamente desequilibrada'; // Gran diferencia, resultado subóptimo
+    } else {
+        return 'Extremadamente desequilibrada'; // Diferencia muy grande
+    }
+}
 function updateEnginePerformanceMetrics() {
     if (!lastStats) return;
     
