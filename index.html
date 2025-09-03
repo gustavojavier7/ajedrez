@@ -1795,48 +1795,191 @@
         }
 
         function parseInfoLine(message) {
-            const parts = message.split(' ');
-            
-            const nodesIndex = parts.indexOf('nodes');
-            const timeIndex = parts.indexOf('time');
-            if (nodesIndex !== -1 && timeIndex !== -1) {
-                const nodes = parseInt(parts[nodesIndex + 1]);
-                const time = parseInt(parts[timeIndex + 1]);
-                lastStats.nodes = nodes;
-                lastStats.time = time;
-                
-                if (time > 0) {
-                    lastStats.nps = Math.round(nodes / (time / 1000));
-                }
-            }
-            
-            const depthIndex = parts.indexOf('depth');
-            if (depthIndex !== -1) {
-                lastStats.depth = parseInt(parts[depthIndex + 1]);
-            }
-            
-            const scoreIndex = parts.indexOf('score');
-            if (scoreIndex !== -1) {
-                parseScore(parts, scoreIndex);
-            }
-            
-            const pvIndex = parts.indexOf('pv');
-            if (pvIndex !== -1 && parts.length > pvIndex + 1) {
-                const pvMoves = parts.slice(pvIndex + 1);
-                const multipvIndex = parts.indexOf('multipv');
-                const pvNumber = multipvIndex !== -1 ? parseInt(parts[multipvIndex + 1]) : 1;
-
-                const pvText = convertPVToSAN(pvMoves);
-                if (!lastStats.pvs) lastStats.pvs = {};
-                lastStats.pvs[pvNumber] = pvText;
-
-                if (pvNumber === 1) {
-                    lastStats.pv = pvText;
-                }
-            }
-            
-            updateEngineDisplay();
+    const parts = message.split(' ');
+    
+    // ===================== PROCESAMIENTO DE ESTADÍSTICAS BÁSICAS =====================
+    
+    // Extraer número de nodos analizados y tiempo transcurrido
+    const nodesIndex = parts.indexOf('nodes');
+    const timeIndex = parts.indexOf('time');
+    if (nodesIndex !== -1 && timeIndex !== -1) {
+        const nodes = parseInt(parts[nodesIndex + 1]);
+        const time = parseInt(parts[timeIndex + 1]);
+        lastStats.nodes = nodes;
+        lastStats.time = time;
+        
+        // Calcular nodos por segundo (NPS) para monitorear rendimiento del motor
+        if (time > 0) {
+            lastStats.nps = Math.round(nodes / (time / 1000));
         }
+    }
+    
+    // Extraer profundidad de búsqueda actual
+    const depthIndex = parts.indexOf('depth');
+    if (depthIndex !== -1) {
+        lastStats.depth = parseInt(parts[depthIndex + 1]);
+    }
+    
+    // ===================== PROCESAMIENTO DE EVALUACIONES POR VARIANTE =====================
+    
+    // Identificar si esta línea contiene información de evaluación (score)
+    const scoreIndex = parts.indexOf('score');
+    const multipvIndex = parts.indexOf('multipv');
+    
+    if (scoreIndex !== -1 && multipvIndex !== -1) {
+        // Obtener el número de la variante principal (PV) que se está reportando
+        const pvNumber = parseInt(parts[multipvIndex + 1]);
+        const scoreType = parts[scoreIndex + 1]; // 'cp' para centipawns, 'mate' para mate
+        const scoreValue = parseInt(parts[scoreIndex + 2]);
+        
+        // Inicializar estructura de evaluaciones por PV si no existe
+        if (!lastStats.pvEvaluations) {
+            lastStats.pvEvaluations = {};
+        }
+        
+        // Procesar evaluación según su tipo
+        if (scoreType === 'cp') {
+            // Centipawns: ajustar signo según el turno actual
+            // Valores positivos siempre representan ventaja para el jugador que mueve
+            const adjustedEval = chess.turn() === 'w' ? scoreValue : -scoreValue;
+            lastStats.pvEvaluations[pvNumber] = {
+                value: adjustedEval,
+                type: 'cp',
+                rawValue: scoreValue, // Mantener valor original para debug
+                turn: chess.turn()
+            };
+            
+            // Logging detallado para debug del sistema adaptativo
+            if (currentPVAnalysis.adaptationActive && Math.random() < 0.3) {
+                addLog('info', `PV${pvNumber}: ${(adjustedEval/100).toFixed(2)} (raw: ${scoreValue}, turn: ${chess.turn()})`);
+            }
+            
+        } else if (scoreType === 'mate') {
+            // Mate en X movimientos: convertir a valor numérico muy alto
+            const adjustedMate = chess.turn() === 'w' ? scoreValue : -scoreValue;
+            
+            // Convertir mate a centipawns equivalentes para facilitar comparaciones
+            // Mate en 1 = ±10000, Mate en 2 = ±9000, etc.
+            const mateValue = adjustedMate > 0 ? 
+                (10000 - (adjustedMate * 100)) : 
+                (-10000 + (Math.abs(adjustedMate) * 100));
+                
+            lastStats.pvEvaluations[pvNumber] = {
+                value: mateValue,
+                type: 'mate',
+                mateIn: Math.abs(adjustedMate),
+                rawValue: scoreValue,
+                turn: chess.turn()
+            };
+            
+            addLog('adaptation', `PV${pvNumber}: Mate en ${Math.abs(adjustedMate)} (valor: ${(mateValue/100).toFixed(2)})`);
+        }
+        
+        // Actualizar evaluación principal con la información del PV 1
+        // Esta será la evaluación que se muestra en la interfaz principal
+        if (pvNumber === 1) {
+            lastStats.evaluation = {
+                value: lastStats.pvEvaluations[pvNumber].value,
+                type: lastStats.pvEvaluations[pvNumber].type
+            };
+            
+            // Si hay mate, agregar información específica
+            if (lastStats.pvEvaluations[pvNumber].type === 'mate') {
+                lastStats.evaluation.mateIn = lastStats.pvEvaluations[pvNumber].mateIn;
+            }
+        }
+    }
+    
+    // ===================== PROCESAMIENTO DE LÍNEAS PRINCIPALES (PV) =====================
+    
+    // Extraer y procesar las variantes principales (secuencias de movimientos)
+    const pvIndex = parts.indexOf('pv');
+    if (pvIndex !== -1 && parts.length > pvIndex + 1) {
+        const pvMoves = parts.slice(pvIndex + 1);
+        const multipvIndex = parts.indexOf('multipv');
+        const pvNumber = multipvIndex !== -1 ? parseInt(parts[multipvIndex + 1]) : 1;
+
+        // Convertir movimientos UCI a notación algebraica estándar (SAN)
+        const pvText = convertPVToSAN(pvMoves);
+        
+        // Inicializar estructura de PVs si no existe
+        if (!lastStats.pvs) {
+            lastStats.pvs = {};
+        }
+        
+        // Almacenar la línea convertida
+        lastStats.pvs[pvNumber] = pvText;
+
+        // La primera variante se considera la línea principal por defecto
+        if (pvNumber === 1) {
+            lastStats.pv = pvText;
+        }
+        
+        // Logging específico para el sistema adaptativo
+        if (currentPVAnalysis.adaptationActive && lastStats.pvEvaluations && lastStats.pvEvaluations[pvNumber]) {
+            const eval = lastStats.pvEvaluations[pvNumber].value;
+            const distance = Math.abs(eval);
+            
+            // Reportar variantes que estén cerca del equilibrio
+            if (distance <= 50) {
+                addLog('adaptation', `PV${pvNumber} equilibrada: ${(eval/100).toFixed(2)} - ${pvText.substring(0, 20)}...`);
+            }
+        }
+    }
+    
+    // ===================== PROCESAMIENTO ESPECÍFICO PARA MODO ADAPTATIVO =====================
+    
+    // Si el modo adaptativo está activo, realizar análisis adicional
+    if (currentPVAnalysis.adaptationActive && lastStats.pvEvaluations) {
+        // Contar cuántas variantes hemos recibido hasta ahora
+        const receivedPVs = Object.keys(lastStats.pvEvaluations).length;
+        const expectedPVs = currentPVAnalysis.pvCount;
+        
+        // Si hemos recibido todas las variantes esperadas, evaluar el equilibrio
+        if (receivedPVs >= expectedPVs && receivedPVs >= 5) {
+            // Buscar la variante más cercana al equilibrio
+            let bestBalanceDistance = Infinity;
+            let bestBalancePV = null;
+            let bestBalanceEval = null;
+            
+            Object.keys(lastStats.pvEvaluations).forEach(pvNum => {
+                const evalData = lastStats.pvEvaluations[pvNum];
+                const distance = Math.abs(evalData.value);
+                
+                if (distance < bestBalanceDistance) {
+                    bestBalanceDistance = distance;
+                    bestBalancePV = pvNum;
+                    bestBalanceEval = evalData.value;
+                }
+            });
+            
+            // Si encontramos una variante equilibrada, reportarla
+            if (bestBalancePV && Math.random() < 0.4) { // Reportar ocasionalmente para no saturar logs
+                addLog('adaptation', `Mejor equilibrio: PV${bestBalancePV} con ${(bestBalanceEval/100).toFixed(2)} (Δ${bestBalanceDistance}cp de ${receivedPVs} variantes)`);
+            }
+        }
+    }
+    
+    // ===================== ACTUALIZACIÓN DE INTERFAZ =====================
+    
+    // Actualizar la visualización de la interfaz con la nueva información
+    updateEngineDisplay();
+    
+    // Si hay cambios significativos en la evaluación y el modo adaptativo está activo,
+    // considerar si necesitamos ajustar los parámetros de búsqueda
+    if (currentPVAnalysis.adaptationActive && lastStats.evaluation) {
+        const currentDistance = Math.abs(lastStats.evaluation.value);
+        
+        // Si estamos muy lejos del equilibrio y es una profundidad baja, 
+        // el sistema podría necesitar más análisis
+        if (currentDistance > 100 && lastStats.depth < 3) {
+            // Esto se manejará en evaluateAdaptationResult(), pero podemos preparar información
+            if (Math.random() < 0.1) { // Logging ocasional
+                addLog('info', `Desequilibrio detectado: ${(lastStats.evaluation.value/100).toFixed(2)} a prof. ${lastStats.depth}`);
+            }
+        }
+    }
+}
 
         function parseScore(parts, scoreIndex) {
             const scoreType = parts[scoreIndex + 1];
