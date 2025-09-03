@@ -902,12 +902,18 @@
         };
 
         let currentPVAnalysis = {
-            pvCount: 3,
-            depth: 6,
-            targetEvaluation: 0,
-            searchInProgress: false,
-            adaptationActive: false
-        };
+    pvCount: 10,                    // Cambiado de 3 a 10 - analizar más variantes
+    depth: 1,                       // Cambiado de 6 a 1 - empezar con análisis superficial
+    targetEvaluation: 0,            // Siempre buscar equilibrio perfecto
+    searchInProgress: false,        // Estado de la búsqueda actual
+    adaptationActive: false,        // Estado del modo adaptativo
+    
+    // Nuevos campos para mejor control del proceso
+    iterationCount: 0,              // Contador de iteraciones del análisis
+    lastIterationTime: null,        // Timestamp de la última iteración
+    bestResultSoFar: null,          // Mejor equilibrio encontrado hasta ahora
+    convergenceHistory: []          // Historial de convergencia hacia equilibrio
+};
 
         // ===================== SISTEMA DE LOGS =====================
         function addLog(type, message) {
