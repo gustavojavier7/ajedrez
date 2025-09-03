@@ -1719,83 +1719,588 @@
             }
         }
 
-        function processBestMove(message) {
-            const parts = message.split(' ');
-            const bestMove = parts[1];
+        /**
+ * Procesa el mensaje "bestmove" del motor Stockfish e implementa la lógica adaptativa
+ * 
+ * Esta función representa el núcleo de la toma de decisiones del sistema adaptativo.
+ * En lugar de simplemente usar el mejor movimiento según el motor, evalúa todas
+ * las variantes disponibles y selecciona aquella que mantenga mejor el equilibrio
+ * de la posición cuando el modo adaptativo está activo.
+ * 
+ * @param {string} message - Mensaje del motor en formato "bestmove e2e4 ponder d7d5"
+ */
+function processBestMove(message) {
+    const parts = message.split(' ');
+    const engineBestMove = parts[1];
+    
+    // Validación básica del mensaje del motor
+    if (!engineBestMove || engineBestMove === '(none)') {
+        addLog('warning', 'Motor no proporcionó movimiento válido');
+        isAnalyzing = false;
+        currentPVAnalysis.searchInProgress = false;
+        updateButtonStates();
+        return;
+    }
+    
+    addLog('info', `Motor sugiere: ${engineBestMove}`);
+    
+    // ===================== LÓGICA DE SELECCIÓN ADAPTATIVA =====================
+    
+    let selectedMove = null;
+    let selectedMoveSAN = null;
+    let selectedEvaluation = lastStats.evaluation;
+    let adaptiveReason = '';
+    
+    // Determinar si aplicar lógica adaptativa
+    if (currentPVAnalysis.adaptationActive && hasValidPVEvaluations()) {
+        addLog('adaptation', 'Aplicando selección adaptativa de movimiento...');
+        
+        // Intentar encontrar el movimiento más equilibrado
+        const balancedMove = selectBestBalancedMove();
+        
+        if (balancedMove && balancedMove.pvNumber) {
+            // Extraer el movimiento UCI de la línea seleccionada
+            const extractedUCI = extractFirstMoveFromPVLine(balancedMove.line);
             
-            if (bestMove && bestMove !== '(none)') {
-                lastStats.bestMove = bestMove;
-                lastStats.bestMoveSan = uciToSan(bestMove);
+            if (extractedUCI && validateUCIMove(extractedUCI)) {
+                // Movimiento adaptativo válido encontrado
+                selectedMove = extractedUCI;
+                selectedMoveSAN = uciToSan(extractedUCI);
+                selectedEvaluation = {
+                    value: balancedMove.evaluation,
+                    type: Math.abs(balancedMove.evaluation) > 900 ? 'mate' : 'cp'
+                };
                 
-                document.getElementById('bestMove').textContent = 
-                    `Mejor: ${lastStats.bestMoveSan}`;
+                const distanceFromZero = Math.abs(balancedMove.evaluation);
+                adaptiveReason = `Adaptativo: PV${balancedMove.pvNumber} equilibrio ${(balancedMove.evaluation/100).toFixed(2)} (Δ${distanceFromZero}cp)`;
                 
-                updateBoard();
+                // Comparar con la sugerencia original del motor
+                const originalEval = lastStats.evaluation ? lastStats.evaluation.value : 0;
+                const originalDistance = Math.abs(originalEval);
+                const improvementGap = originalDistance - distanceFromZero;
                 
-                addLog('success', `Mejor línea encontrada: ${lastStats.bestMoveSan} (${(lastStats.evaluation?.value/100 || 0).toFixed(2)})`);
-                
-                if (currentPVAnalysis.adaptationActive) {
-                    evaluateAdaptationResult();
+                if (improvementGap > 25) {
+                    addLog('adaptation', `Mejora significativa: ${improvementGap}cp más equilibrado que motor (${(originalEval/100).toFixed(2)} → ${(balancedMove.evaluation/100).toFixed(2)})`);
+                } else if (improvementGap > 0) {
+                    addLog('adaptation', `Mejora marginal: ${improvementGap}cp más equilibrado que motor`);
+                } else if (improvementGap < -10) {
+                    addLog('warning', `Selección subóptima: ${Math.abs(improvementGap)}cp menos equilibrado que motor`);
                 }
                 
-                if (gameMode === 'cpu') {
-                    stopAnalysis();
-                    if (lastStats.bestMoveSan) {
-                        setTimeout(() => {
-                            makeMove(lastStats.bestMoveSan);
-                        }, 300);
-                    }
-                }
-            }
-        }
-
-        function evaluateAdaptationResult() {
-            if (!currentPVAnalysis.adaptationActive || !lastStats.evaluation) return;
-
-            const currentEval = lastStats.evaluation.value;
-            const targetEval = currentPVAnalysis.targetEvaluation;
-            const distance = Math.abs(currentEval - targetEval);
-            const maxDepth = 20;
-            const minDepth = 6;
-            const step = 2;
-
-            if (distance <= 25) {
-                if (currentPVAnalysis.depth < maxDepth) {
-                    currentPVAnalysis.depth += step;
-                    addLog('adaptation', `Aumentando profundidad a ${currentPVAnalysis.depth} (Δ${distance}cp)`);
-                    setTimeout(() => {
-                        if (currentPVAnalysis.searchInProgress) {
-                            executeProgressiveStep();
-                        }
-                    }, 500);
-                } else {
-                    addLog('adaptation', `Balance alcanzado: ${(currentEval/100).toFixed(2)} ≈ ${(targetEval/100).toFixed(2)} (Δ${distance}cp)`);
-                    currentPVAnalysis.adaptationActive = false;
-                }
-            } else if (currentPVAnalysis.depth > minDepth) {
-                currentPVAnalysis.depth = Math.max(minDepth, currentPVAnalysis.depth - step);
-                addLog('adaptation', `Reduciendo profundidad a ${currentPVAnalysis.depth} (Δ${distance}cp)`);
-                setTimeout(() => {
-                    if (currentPVAnalysis.searchInProgress) {
-                        executeProgressiveStep();
-                    }
-                }, 500);
-            } else if (currentPVAnalysis.pvCount < 30) {
-                currentPVAnalysis.pvCount += 3;
-                addLog('adaptation', `Expandiendo búsqueda a PV=${currentPVAnalysis.pvCount} (Δ${distance}cp)`);
-                setTimeout(() => {
-                    if (currentPVAnalysis.searchInProgress) {
-                        executeProgressiveStep();
-                    }
-                }, 500);
             } else {
-                addLog('adaptation', `Límite PV alcanzado. Mejor balance: ${(currentEval/100).toFixed(2)} (Δ${distance}cp)`);
-                currentPVAnalysis.adaptationActive = false;
+                // Fallback: movimiento extraído no es válido
+                addLog('warning', `Movimiento adaptativo inválido: ${extractedUCI}, usando motor`);
+                selectedMove = engineBestMove;
+                selectedMoveSAN = uciToSan(engineBestMove);
+                adaptiveReason = 'Fallback al motor (extracción fallida)';
+            }
+            
+        } else {
+            // Fallback: no se pudo encontrar movimiento equilibrado
+            addLog('warning', 'No se encontró movimiento equilibrado válido, usando motor');
+            selectedMove = engineBestMove;
+            selectedMoveSAN = uciToSan(engineBestMove);
+            adaptiveReason = 'Fallback al motor (sin opciones equilibradas)';
+        }
+        
+        // Análisis estadístico del proceso adaptativo
+        const analysisStats = analyzeEvaluationDistribution();
+        if (analysisStats && Math.random() < 0.4) {
+            addLog('info', `Análisis: ${analysisStats.totalEvaluations} variantes, ${analysisStats.reasonablyBalancedCount} equilibradas (${analysisStats.balancePercentage.toFixed(1)}%)`);
+        }
+        
+    } else {
+        // ===================== MODO ESTÁNDAR (NO ADAPTATIVO) =====================
+        
+        selectedMove = engineBestMove;
+        selectedMoveSAN = uciToSan(engineBestMove);
+        
+        if (currentPVAnalysis.adaptationActive) {
+            adaptiveReason = 'Sin datos PV suficientes para adaptación';
+        } else {
+            adaptiveReason = 'Modo estándar activo';
+        }
+        
+        addLog('info', `Usando movimiento estándar del motor: ${selectedMoveSAN}`);
+    }
+    
+    // ===================== ACTUALIZACIÓN DE ESTADO Y UI =====================
+    
+    // Actualizar estadísticas globales con la decisión final
+    lastStats.bestMove = selectedMove;
+    lastStats.bestMoveSan = selectedMoveSAN;
+    
+    // Si la evaluación fue modificada por el proceso adaptativo, actualizarla
+    if (selectedEvaluation && selectedEvaluation !== lastStats.evaluation) {
+        lastStats.evaluation = selectedEvaluation;
+    }
+    
+    // Actualizar interfaz de usuario
+    const bestMoveElement = document.getElementById('bestMove');
+    if (bestMoveElement) {
+        bestMoveElement.textContent = `Mejor: ${selectedMoveSAN}`;
+    }
+    
+    // Redibujar tablero con el nuevo movimiento destacado
+    updateBoard();
+    
+    // Log de la decisión final
+    if (adaptiveReason) {
+        addLog('success', `Decisión final: ${selectedMoveSAN} - ${adaptiveReason}`);
+    } else {
+        addLog('success', `Mejor movimiento encontrado: ${selectedMoveSAN}`);
+    }
+    
+    // ===================== PROCESAMIENTO POST-DECISIÓN =====================
+    
+    // Evaluar si necesitamos continuar con más análisis adaptativo
+    if (currentPVAnalysis.adaptationActive) {
+        evaluateAdaptationResult();
+    }
+    
+    // ===================== MANEJO ESPECÍFICO POR MODO DE JUEGO =====================
+    
+    if (gameMode === 'cpu') {
+        // En modo CPU, ejecutar el movimiento automáticamente después de una pausa
+        addLog('info', 'CPU ejecutará el movimiento seleccionado...');
+        
+        // Detener análisis antes de ejecutar movimiento
+        stopAnalysis();
+        
+        if (selectedMoveSAN) {
+            setTimeout(() => {
+                makeMove(selectedMoveSAN);
+            }, 300);
+        } else {
+            // Fallback de emergencia: movimiento aleatorio
+            addLog('warning', 'Error crítico: ejecutando movimiento aleatorio');
+            const legalMoves = chess.moves();
+            if (legalMoves.length > 0) {
+                const randomMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
+                setTimeout(() => {
+                    makeMove(randomMove);
+                }, 300);
             }
         }
+        
+    } else {
+        // En otros modos, el movimiento queda como sugerencia
+        addLog('info', `Movimiento sugerido disponible: ${selectedMoveSAN}`);
+    }
+    
+    // ===================== MÉTRICAS Y DIAGNÓSTICO =====================
+    
+    // Actualizar métricas de rendimiento
+    updateEnginePerformanceMetrics();
+    
+    // Verificar integridad del estado después del procesamiento
+    validateSystemState();
+}
+
+/**
+ * Actualiza métricas de rendimiento del motor y sistema adaptativo
+ * 
+ * Esta función recopila estadísticas sobre el rendimiento del análisis
+ * para ayudar en el diagnóstico y optimización del sistema.
+ */
+function updateEnginePerformanceMetrics() {
+    if (!lastStats) return;
+    
+    // Calcular eficiencia del análisis
+    const analysisEfficiency = {
+        nodesPerSecond: lastStats.nps,
+        totalNodes: lastStats.nodes,
+        analysisTime: lastStats.time,
+        depth: lastStats.depth,
+        pvCount: getAvailablePVCount()
+    };
+    
+    // Actualizar display de estadísticas si es necesario
+    const engineStatsEl = document.getElementById('engineStats');
+    if (engineStatsEl && Math.random() < 0.3) {
+        const efficiency = analysisEfficiency.nodesPerSecond > 0 ? 
+            `${(analysisEfficiency.nodesPerSecond / 1000).toFixed(0)}k n/s` : 'N/A';
+        engineStatsEl.textContent = `Prof: ${analysisEfficiency.depth} | ${efficiency} | PV: ${analysisEfficiency.pvCount}`;
+    }
+}
+
+/**
+ * Valida la integridad del estado del sistema después de procesamiento
+ * 
+ * Esta función realiza verificaciones de sanidad para asegurar que
+ * el sistema esté en un estado consistente después de tomar decisiones.
+ */
+function validateSystemState() {
+    let issuesFound = 0;
+    
+    // Verificar que tenemos un movimiento válido
+    if (!lastStats.bestMove || !lastStats.bestMoveSan) {
+        addLog('warning', 'Estado inconsistente: falta información de mejor movimiento');
+        issuesFound++;
+    }
+    
+    // Verificar que la evaluación es coherente
+    if (lastStats.evaluation && typeof lastStats.evaluation.value !== 'number') {
+        addLog('warning', 'Estado inconsistente: evaluación inválida');
+        issuesFound++;
+    }
+    
+    // Verificar coherencia entre PVs y evaluaciones
+    if (lastStats.pvs && lastStats.pvEvaluations) {
+        const pvCount = Object.keys(lastStats.pvs).length;
+        const evalCount = Object.keys(lastStats.pvEvaluations).length;
+        
+        if (Math.abs(pvCount - evalCount) > 1) {
+            addLog('warning', `Inconsistencia: ${pvCount} PVs vs ${evalCount} evaluaciones`);
+            issuesFound++;
+        }
+    }
+    
+    // Reportar estado si hay problemas
+    if (issuesFound > 0) {
+        addLog('warning', `Validación completada: ${issuesFound} problemas encontrados`);
+    }
+}
+
+        /**
+ * Evalúa el resultado del análisis adaptativo y decide si continuar o detener
+ * 
+ * Esta función controla el proceso iterativo de búsqueda de equilibrio,
+ * determinando si el sistema ha encontrado una solución suficientemente
+ * equilibrada o si necesita ajustar parámetros y continuar buscando.
+ */
+function evaluateAdaptationResult() {
+    // Verificar que el modo adaptativo sigue activo
+    if (!currentPVAnalysis.adaptationActive) {
+        addLog('info', 'Evaluación de adaptación omitida: modo no activo');
+        return;
+    }
+    
+    // Buscar la mejor opción equilibrada actual
+    const balancedMove = selectBestBalancedMove();
+    if (!balancedMove) {
+        addLog('warning', 'No se puede evaluar adaptación: sin movimientos equilibrados disponibles');
+        handleAdaptationFailure();
+        return;
+    }
+    
+    const currentEval = balancedMove.evaluation;
+    const distance = Math.abs(currentEval);
+    
+    // Configuración de parámetros adaptativos
+    const EQUILIBRIUM_THRESHOLD = 25; // Umbral de equilibrio aceptable (25 centipawns)
+    const MAX_DEPTH = 15; // Profundidad máxima (reducida desde niveles anteriores)
+    const MIN_DEPTH = 1;  // Profundidad mínima
+    const DEPTH_STEP = 1; // Incremento de profundidad
+    const ITERATION_DELAY = 600; // Delay entre iteraciones (ms)
+    
+    addLog('adaptation', `Evaluando: eval=${(currentEval/100).toFixed(2)}, distancia=${distance}cp, prof=${currentPVAnalysis.depth}`);
+    
+    // ===================== CRITERIOS DE FINALIZACIÓN =====================
+    
+    if (distance <= EQUILIBRIUM_THRESHOLD) {
+        // ¡Equilibrio encontrado!
+        const quality = assessMoveQuality(distance);
+        const stats = balancedMove.statisticalContext;
+        
+        addLog('success', `🎯 EQUILIBRIO ALCANZADO: ${(currentEval/100).toFixed(2)} (${quality})`);
+        addLog('adaptation', `Estadísticas finales: prof=${currentPVAnalysis.depth}, PVs=${getAvailablePVCount()}, avg_dist=${stats?.avgDistance?.toFixed(0)}cp`);
+        
+        // Finalizar proceso adaptativo
+        currentPVAnalysis.adaptationActive = false;
+        currentPVAnalysis.searchInProgress = false;
+        
+        // Actualizar interfaz
+        const engineStatus = document.getElementById('engineStatus');
+        if (engineStatus) {
+            engineStatus.textContent = `Equilibrio alcanzado - Prof: ${currentPVAnalysis.depth} - ${quality}`;
+        }
+        
+        // Métricas de éxito
+        trackAdaptationSuccess(distance, currentPVAnalysis.depth, getAvailablePVCount());
+        return;
+    }
+    
+    // ===================== ESTRATEGIAS DE CONTINUACIÓN =====================
+    
+    if (currentPVAnalysis.depth < MAX_DEPTH) {
+        // Estrategia: Aumentar profundidad para encontrar mejor equilibrio
+        currentPVAnalysis.depth += DEPTH_STEP;
+        
+        const newDepthReason = distance > 100 ? 
+            'Gran desequilibrio detectado' : 
+            'Refinando búsqueda de equilibrio';
+            
+        addLog('adaptation', `📈 Aumentando profundidad a ${currentPVAnalysis.depth} (${newDepthReason}, Δ${distance}cp)`);
+        
+        // Reiniciar búsqueda con nueva profundidad
+        setTimeout(() => {
+            if (currentPVAnalysis.searchInProgress) {
+                executeProgressiveStep();
+            }
+        }, ITERATION_DELAY);
+        
+    } else {
+        // ===================== LÍMITE DE PROFUNDIDAD ALCANZADO =====================
+        
+        // Evaluar si el resultado actual es aceptable
+        const isReasonablyBalanced = distance <= 50;
+        const isSignificantlyBetter = evaluateImprovementOverStandard(currentEval);
+        
+        if (isReasonablyBalanced || isSignificantlyBetter) {
+            // Resultado aceptable aunque no perfecto
+            const finalQuality = assessMoveQuality(distance);
+            
+            addLog('adaptation', `✅ Finalizando con resultado aceptable: ${(currentEval/100).toFixed(2)} (${finalQuality})`);
+            addLog('info', `Límite de profundidad alcanzado (${MAX_DEPTH}), manteniendo mejor equilibrio encontrado`);
+            
+        } else {
+            // Resultado no satisfactorio
+            addLog('warning', `⚠️ Límite alcanzado sin equilibrio ideal: ${(currentEval/100).toFixed(2)} (Δ${distance}cp)`);
+            addLog('adaptation', 'Considerando alternativas de fallback...');
+            
+            // Intentar estrategia de fallback
+            const fallbackResult = attemptFallbackStrategy();
+            if (fallbackResult) {
+                addLog('adaptation', `Fallback aplicado: ${fallbackResult}`);
+            }
+        }
+        
+        // Finalizar proceso independientemente del resultado
+        currentPVAnalysis.adaptationActive = false;
+        currentPVAnalysis.searchInProgress = false;
+        
+        // Actualizar interfaz con resultado final
+        const engineStatus = document.getElementById('engineStatus');
+        if (engineStatus) {
+            const finalQuality = assessMoveQuality(distance);
+            engineStatus.textContent = `Análisis completo - Prof: ${MAX_DEPTH} - ${finalQuality}`;
+        }
+        
+        // Métricas de finalización
+        trackAdaptationCompletion(distance, MAX_DEPTH, isReasonablyBalanced);
+    }
+}
+
+/**
+ * Maneja situaciones donde el proceso adaptativo no puede continuar
+ */
+function handleAdaptationFailure() {
+    addLog('warning', 'Proceso adaptativo fallido: finalizando');
+    
+    currentPVAnalysis.adaptationActive = false;
+    currentPVAnalysis.searchInProgress = false;
+    
+    // Intentar usar el mejor movimiento disponible del motor estándar
+    if (lastStats.bestMove) {
+        addLog('adaptation', 'Usando movimiento estándar como fallback');
+    } else {
+        addLog('warning', 'Sin movimientos disponibles - situación crítica');
+    }
+    
+    const engineStatus = document.getElementById('engineStatus');
+    if (engineStatus) {
+        engineStatus.textContent = 'Error en proceso adaptativo - Usando fallback';
+    }
+}
+
+/**
+ * Evalúa si el movimiento adaptativo es significativamente mejor que el estándar
+ * 
+ * @param {number} adaptiveEval - Evaluación del movimiento adaptativo
+ * @returns {boolean} - true si representa una mejora significativa
+ */
+function evaluateImprovementOverStandard(adaptiveEval) {
+    // Comparar con la evaluación original del motor (PV 1)
+    const originalEval = getPVEvaluation(1);
+    
+    if (originalEval === null) {
+        return false; // No podemos comparar
+    }
+    
+    const originalDistance = Math.abs(originalEval);
+    const adaptiveDistance = Math.abs(adaptiveEval);
+    const improvement = originalDistance - adaptiveDistance;
+    
+    // Considerar significativo si mejora el equilibrio en al menos 30 centipawns
+    const isSignificantImprovement = improvement >= 30;
+    
+    if (isSignificantImprovement) {
+        addLog('adaptation', `Mejora significativa vs motor: ${improvement}cp más equilibrado`);
+    } else if (improvement > 0) {
+        addLog('info', `Mejora marginal vs motor: ${improvement}cp más equilibrado`);
+    } else {
+        addLog('info', `Sin mejora vs motor: ${Math.abs(improvement)}cp diferencia`);
+    }
+    
+    return isSignificantImprovement;
+}
+
+/**
+ * Intenta estrategias de fallback cuando el análisis principal no logra equilibrio
+ * 
+ * @returns {string|null} - Descripción de la estrategia aplicada o null si falla
+ */
+function attemptFallbackStrategy() {
+    // Estrategia 1: Buscar el movimiento menos desequilibrado disponible
+    const allEvaluations = Object.keys(lastStats.pvEvaluations || {})
+        .map(pvNum => ({
+            pv: pvNum,
+            eval: getPVEvaluation(pvNum),
+            distance: Math.abs(getPVEvaluation(pvNum) || Infinity)
+        }))
+        .filter(item => item.eval !== null)
+        .sort((a, b) => a.distance - b.distance);
+    
+    if (allEvaluations.length > 0) {
+        const leastUnbalanced = allEvaluations[0];
+        
+        if (leastUnbalanced.distance < 100) {
+            addLog('adaptation', `Fallback: usando PV${leastUnbalanced.pv} como menos desequilibrado (${(leastUnbalanced.eval/100).toFixed(2)})`);
+            return `PV${leastUnbalanced.pv} seleccionado como menos desequilibrado`;
+        }
+    }
+    
+    // Estrategia 2: Usar movimiento estándar del motor si es razonablemente equilibrado
+    const standardEval = getPVEvaluation(1);
+    if (standardEval !== null && Math.abs(standardEval) < 150) {
+        addLog('adaptation', `Fallback: movimiento estándar aceptable (${(standardEval/100).toFixed(2)})`);
+        return 'Movimiento estándar del motor aceptado';
+    }
+    
+    // Sin opciones de fallback viables
+    return null;
+}
+
+/**
+ * Registra métricas de éxito del proceso adaptativo
+ */
+function trackAdaptationSuccess(finalDistance, depth, pvCount) {
+    const metrics = {
+        success: true,
+        finalDistance: finalDistance,
+        depthUsed: depth,
+        pvAnalyzed: pvCount,
+        timestamp: Date.now()
+    };
+    
+    // En un sistema más complejo, esto se guardaría para análisis posterior
+    addLog('success', `Métricas de éxito: Δ${finalDistance}cp en prof.${depth} con ${pvCount} variantes`);
+}
+
+/**
+ * Registra métricas de finalización del proceso adaptativo
+ */
+function trackAdaptationCompletion(finalDistance, maxDepth, wasAcceptable) {
+    const metrics = {
+        completed: true,
+        finalDistance: finalDistance,
+        maxDepthReached: maxDepth,
+        resultAcceptable: wasAcceptable,
+        timestamp: Date.now()
+    };
+    
+    const status = wasAcceptable ? 'ACEPTABLE' : 'SUBÓPTIMO';
+    addLog('info', `Adaptación completada: ${status} - Δ${finalDistance}cp en prof.${maxDepth}`);
+}
 
         function parseInfoLine(message) {
     const parts = message.split(' ');
+
+            /**
+ * Obtiene la evaluación numérica para una variante principal específica
+ * 
+ * Esta función sirve como interfaz de acceso a las evaluaciones almacenadas
+ * por parseInfoLine(), proporcionando un punto centralizado para recuperar
+ * valores de evaluación que serán utilizados por el algoritmo de selección
+ * de movimientos equilibrados.
+ * 
+ * @param {number|string} pvNumber - Número de la variante principal (1-based)
+ * @returns {number|null} - Valor de evaluación en centipawns, o null si no existe
+ */
+function getPVEvaluation(pvNumber) {
+    // Verificar que tenemos la estructura de datos necesaria
+    if (!lastStats.pvEvaluations) {
+        return null;
+    }
+    
+    // Convertir pvNumber a string para consistencia con las claves del objeto
+    const pvKey = pvNumber.toString();
+    
+    // Verificar que existe la evaluación para esta variante específica
+    if (!lastStats.pvEvaluations[pvKey]) {
+        return null;
+    }
+    
+    const evaluationData = lastStats.pvEvaluations[pvKey];
+    
+    // Retornar el valor numérico que ya fue procesado y ajustado por parseInfoLine
+    // Este valor está en centipawns y ya tiene el signo correcto según el turno
+    return evaluationData.value;
+}
+
+/**
+ * Función auxiliar para obtener información detallada de una evaluación PV
+ * 
+ * Útil para debugging y logging detallado del proceso adaptativo.
+ * Retorna toda la información disponible sobre la evaluación de una variante.
+ * 
+ * @param {number|string} pvNumber - Número de la variante principal
+ * @returns {Object|null} - Objeto con información completa o null si no existe
+ */
+function getPVEvaluationDetails(pvNumber) {
+    if (!lastStats.pvEvaluations) {
+        return null;
+    }
+    
+    const pvKey = pvNumber.toString();
+    
+    if (!lastStats.pvEvaluations[pvKey]) {
+        return null;
+    }
+    
+    // Retornar una copia del objeto para evitar modificaciones accidentales
+    return { ...lastStats.pvEvaluations[pvKey] };
+}
+
+/**
+ * Función de utilidad para verificar si tenemos evaluaciones válidas
+ * 
+ * Esta función es particularmente útil antes de iniciar procesos de selección
+ * de movimientos equilibrados, ya que nos permite verificar que tenemos
+ * suficientes datos para tomar decisiones informadas.
+ * 
+ * @returns {boolean} - true si tenemos al menos una evaluación válida
+ */
+function hasValidPVEvaluations() {
+    if (!lastStats.pvEvaluations) {
+        return false;
+    }
+    
+    // Contar cuántas evaluaciones válidas tenemos
+    const validEvaluations = Object.keys(lastStats.pvEvaluations).filter(pvKey => {
+        const evalData = lastStats.pvEvaluations[pvKey];
+        return evalData && typeof evalData.value === 'number';
+    });
+    
+    return validEvaluations.length > 0;
+}
+
+/**
+ * Función para obtener el número total de evaluaciones disponibles
+ * 
+ * Útil para determinar si hemos recibido suficientes variantes para
+ * realizar un análisis adaptativo completo.
+ * 
+ * @returns {number} - Número de evaluaciones PV disponibles
+ */
+function getAvailablePVCount() {
+    if (!lastStats.pvEvaluations) {
+        return 0;
+    }
+    
+    return Object.keys(lastStats.pvEvaluations).length;
+}
     
     // ===================== PROCESAMIENTO DE ESTADÍSTICAS BÁSICAS =====================
     
@@ -1889,6 +2394,451 @@
             }
         }
     }
+
+            /**
+ * Selecciona la variante principal que produce la evaluación más cercana al equilibrio
+ * 
+ * Esta función implementa el núcleo del algoritmo adaptativo equilibrado,
+ * analizando todas las variantes disponibles para encontrar la que mejor
+ * mantiene el balance de la posición. El objetivo es siempre alcanzar
+ * una evaluación de 0.00 (equilibrio perfecto).
+ * 
+ * @returns {Object|null} - Información de la mejor variante equilibrada o null
+ */
+function selectBestBalancedMove() {
+    // Verificación básica de datos requeridos
+    if (!lastStats.pvs || Object.keys(lastStats.pvs).length === 0) {
+        addLog('warning', 'No hay variantes PV disponibles para selección equilibrada');
+        return null;
+    }
+    
+    if (!hasValidPVEvaluations()) {
+        addLog('warning', 'No hay evaluaciones PV válidas para análisis de equilibrio');
+        return null;
+    }
+
+    // Variables para rastrear la mejor opción encontrada
+    let bestPV = null;
+    let closestToZero = Infinity;
+    let bestEvaluation = null;
+    let candidatesAnalyzed = 0;
+    let equilibriumCandidates = []; // Para logging detallado
+    
+    addLog('info', `Analizando ${getAvailablePVCount()} variantes para selección equilibrada...`);
+
+    // Recorrer todas las variantes analizadas por el motor
+    Object.keys(lastStats.pvs).forEach(pvNumber => {
+        const pvLine = lastStats.pvs[pvNumber];
+        
+        // Verificar que la línea PV no esté vacía
+        if (!pvLine || pvLine.trim().length === 0) {
+            return; // Continuar con la siguiente iteración
+        }
+        
+        // Obtener la evaluación numérica para esta variante
+        const evaluation = getPVEvaluation(pvNumber);
+        
+        if (evaluation !== null && typeof evaluation === 'number') {
+            candidatesAnalyzed++;
+            
+            // Calcular distancia absoluta del equilibrio perfecto (0 centipawns)
+            const distance = Math.abs(evaluation);
+            
+            // Agregar a candidatos para análisis estadístico
+            equilibriumCandidates.push({
+                pv: pvNumber,
+                eval: evaluation,
+                distance: distance,
+                line: pvLine.substring(0, 25) + (pvLine.length > 25 ? '...' : '')
+            });
+            
+            // Verificar si esta variante está más cerca del equilibrio
+            if (distance < closestToZero) {
+                closestToZero = distance;
+                bestPV = pvNumber;
+                bestEvaluation = evaluation;
+                
+                // Logging para variantes prometedoras
+                if (distance <= 25) {
+                    addLog('adaptation', `Nueva mejor opción: PV${pvNumber} eval ${(evaluation/100).toFixed(2)} (Δ${distance}cp)`);
+                }
+            }
+        }
+    });
+    
+    // Análisis estadístico de candidatos para logging informativo
+    if (equilibriumCandidates.length > 0) {
+        // Ordenar candidatos por proximidad al equilibrio
+        equilibriumCandidates.sort((a, b) => a.distance - b.distance);
+        
+        // Calcular estadísticas básicas
+        const avgDistance = equilibriumCandidates.reduce((sum, c) => sum + c.distance, 0) / equilibriumCandidates.length;
+        const medianDistance = equilibriumCandidates[Math.floor(equilibriumCandidates.length / 2)].distance;
+        
+        // Reportar análisis estadístico ocasionalmente
+        if (Math.random() < 0.3) {
+            addLog('info', `Análisis de ${candidatesAnalyzed} candidatos: avg Δ${avgDistance.toFixed(0)}cp, med Δ${medianDistance}cp`);
+        }
+        
+        // Mostrar top 3 candidatos más equilibrados
+        const topCandidates = equilibriumCandidates.slice(0, 3);
+        topCandidates.forEach((candidate, index) => {
+            if (Math.random() < 0.4 && index < 2) { // Reportar ocasionalmente top 2
+                addLog('adaptation', `Top ${index + 1}: PV${candidate.pv} = ${(candidate.eval/100).toFixed(2)} (Δ${candidate.distance}cp)`);
+            }
+        });
+    }
+
+    // Verificar si encontramos una solución válida
+    if (bestPV !== null) {
+        const qualityAssessment = assessMoveQuality(closestToZero);
+        
+        addLog('adaptation', `Seleccionada PV${bestPV}: ${(bestEvaluation/100).toFixed(2)} - ${qualityAssessment} (de ${candidatesAnalyzed} opciones)`);
+        
+        return {
+            pvNumber: bestPV,
+            evaluation: bestEvaluation,
+            line: lastStats.pvs[bestPV],
+            distanceFromEquilibrium: closestToZero,
+            qualityRating: qualityAssessment,
+            totalCandidates: candidatesAnalyzed,
+            statisticalContext: {
+                avgDistance: equilibriumCandidates.length > 0 ? 
+                    equilibriumCandidates.reduce((sum, c) => sum + c.distance, 0) / equilibriumCandidates.length : 0,
+                bestDistance: closestToZero
+            }
+        };
+    }
+
+    // No se encontró ninguna variante válida
+    addLog('warning', `No se encontró variante equilibrada válida entre ${candidatesAnalyzed} candidatos analizados`);
+    return null;
+}
+
+/**
+ * Evalúa la calidad de una jugada basada en su distancia del equilibrio
+ * 
+ * Esta función proporciona una clasificación cualitativa que ayuda a entender
+ * qué tan bien el sistema está logrando mantener el equilibrio deseado.
+ * 
+ * @param {number} distanceFromZero - Distancia en centipawns del equilibrio
+ * @returns {string} - Clasificación cualitativa de la jugada
+ */
+function assessMoveQuality(distanceFromZero) {
+    if (distanceFromZero <= 10) {
+        return 'EQUILIBRIO PERFECTO';
+    } else if (distanceFromZero <= 25) {
+        return 'Muy equilibrada';
+    } else if (distanceFromZero <= 50) {
+        return 'Razonablemente equilibrada';
+    } else if (distanceFromZero <= 100) {
+        return 'Moderadamente desequilibrada';
+    } else if (distanceFromZero <= 200) {
+        return 'Significativamente desequilibrada';
+    } else {
+        return 'Altamente desequilibrada';
+    }
+}
+
+/**
+ * Función de diagnóstico para analizar la distribución de evaluaciones
+ * 
+ * Útil para entender qué tan diversas son las opciones que el motor
+ * está proporcionando y si el sistema adaptativo tiene suficientes
+ * alternativas para encontrar jugadas equilibradas.
+ * 
+ * @returns {Object} - Estadísticas sobre la distribución de evaluaciones
+ */
+function analyzeEvaluationDistribution() {
+    if (!hasValidPVEvaluations()) {
+        return null;
+    }
+    
+    const evaluations = Object.keys(lastStats.pvEvaluations).map(pvNum => {
+        return getPVEvaluation(pvNum);
+    }).filter(eval => eval !== null);
+    
+    if (evaluations.length === 0) {
+        return null;
+    }
+    
+    // Calcular estadísticas básicas
+    const min = Math.min(...evaluations);
+    const max = Math.max(...evaluations);
+    const avg = evaluations.reduce((sum, eval) => sum + eval, 0) / evaluations.length;
+    const range = max - min;
+    
+    // Contar cuántas evaluaciones están cerca del equilibrio
+    const veryBalanced = evaluations.filter(eval => Math.abs(eval) <= 25).length;
+    const reasonablyBalanced = evaluations.filter(eval => Math.abs(eval) <= 50).length;
+    
+    return {
+        totalEvaluations: evaluations.length,
+        minEval: min,
+        maxEval: max,
+        averageEval: avg,
+        range: range,
+        veryBalancedCount: veryBalanced,
+        reasonablyBalancedCount: reasonablyBalanced,
+        balancePercentage: (reasonablyBalanced / evaluations.length) * 100
+    };
+}
+
+            /**
+ * Extrae el primer movimiento de una línea de variante principal (PV) en formato UCI
+ * 
+ * Esta función es crucial para el sistema adaptativo porque permite convertir
+ * la línea de análisis seleccionada en un movimiento ejecutable. Maneja la
+ * conversión de notación algebraica estándar (SAN) a notación UCI y valida
+ * que el movimiento sea legal en la posición actual.
+ * 
+ * @param {string} pvLine - Línea PV en formato SAN (ej: "1. Nf3 d5 2. g3 Nf6...")
+ * @returns {string|null} - Movimiento en formato UCI (ej: "g1f3") o null si error
+ */
+function extractFirstMoveFromPVLine(pvLine) {
+    // Validación básica de parámetros de entrada
+    if (!pvLine || typeof pvLine !== 'string' || pvLine.trim().length === 0) {
+        addLog('warning', 'Línea PV vacía o inválida para extracción de movimiento');
+        return null;
+    }
+    
+    if (!chess) {
+        addLog('warning', 'Objeto chess no inicializado para extracción de movimiento');
+        return null;
+    }
+    
+    try {
+        // Crear una copia temporal del estado del juego para no afectar el original
+        const tempChess = new Chess(chess.fen());
+        
+        // Limpiar y tokenizar la línea PV
+        // Esto maneja formatos como "1. Nf3 d5" o "Nf3 d5 g3" o "1... d5 2. Nf3"
+        const cleanLine = pvLine.trim();
+        
+        // Dividir en tokens y filtrar elementos irrelevantes
+        const tokens = cleanLine.split(/\s+/).filter(token => {
+            // Eliminar números de movimiento (ej: "1.", "2.", "1...", etc.)
+            if (token.match(/^\d+\.+$/)) {
+                return false;
+            }
+            
+            // Mantener solo tokens que parezcan movimientos de ajedrez válidos
+            // Esto incluye movimientos básicos, capturas, enroques, promociones, etc.
+            return token.match(/^[a-h1-8KQRBNOX+#=\-]+$/) && token.length >= 2;
+        });
+        
+        if (tokens.length === 0) {
+            addLog('warning', `No se encontraron movimientos válidos en línea PV: "${cleanLine}"`);
+            return null;
+        }
+        
+        // El primer token debería ser nuestro movimiento objetivo
+        const firstMoveToken = tokens[0];
+        
+        addLog('info', `Intentando extraer movimiento: "${firstMoveToken}" de línea: "${cleanLine.substring(0, 30)}${cleanLine.length > 30 ? '...' : ''}"`);
+        
+        // Intentar ejecutar el movimiento en el tablero temporal
+        const moveResult = tempChess.move(firstMoveToken, { sloppy: true });
+        
+        if (moveResult) {
+            // Construir el movimiento en formato UCI
+            const uciMove = moveResult.from + moveResult.to + (moveResult.promotion || '');
+            
+            // Validación adicional: verificar que el movimiento es realmente legal
+            // en la posición actual del juego principal
+            const validationChess = new Chess(chess.fen());
+            const validationMove = validationChess.move(firstMoveToken, { sloppy: true });
+            
+            if (!validationMove) {
+                addLog('warning', `Movimiento "${firstMoveToken}" no es válido en posición actual`);
+                return null;
+            }
+            
+            // Verificación de consistencia entre tableros temporal y de validación
+            if (validationMove.from !== moveResult.from || validationMove.to !== moveResult.to) {
+                addLog('warning', `Inconsistencia en movimiento: temp=${moveResult.from}${moveResult.to}, valid=${validationMove.from}${validationMove.to}`);
+                return null;
+            }
+            
+            addLog('success', `Movimiento extraído exitosamente: ${firstMoveToken} → ${uciMove}`);
+            return uciMove;
+            
+        } else {
+            // Si el primer token falló, intentar con estrategias alternativas
+            addLog('info', `Primer token "${firstMoveToken}" falló, probando estrategias alternativas...`);
+            
+            // Estrategia alternativa 1: Intentar con los siguientes tokens por si hay error de parsing
+            for (let i = 1; i < Math.min(tokens.length, 3); i++) {
+                const alternativeToken = tokens[i];
+                const altMoveResult = tempChess.move(alternativeToken, { sloppy: true });
+                
+                if (altMoveResult) {
+                    const altUciMove = altMoveResult.from + altMoveResult.to + (altMoveResult.promotion || '');
+                    addLog('adaptation', `Movimiento alternativo encontrado: ${alternativeToken} → ${altUciMove}`);
+                    return altUciMove;
+                }
+            }
+            
+            // Estrategia alternativa 2: Intentar parsing manual de notación
+            const manualUci = attemptManualNotationParsing(firstMoveToken, tempChess);
+            if (manualUci) {
+                addLog('adaptation', `Parsing manual exitoso: ${firstMoveToken} → ${manualUci}`);
+                return manualUci;
+            }
+            
+            addLog('warning', `No se pudo convertir "${firstMoveToken}" a movimiento válido`);
+            return null;
+        }
+        
+    } catch (error) {
+        addLog('warning', `Error procesando línea PV "${pvLine}": ${error.message}`);
+        console.warn('Error detallado en extractFirstMoveFromPVLine:', error);
+        return null;
+    }
+}
+
+/**
+ * Intenta parsing manual de notación cuando el método automático falla
+ * 
+ * Esta función de respaldo maneja casos especiales de notación que podrían
+ * no ser reconocidos automáticamente por la biblioteca chess.js.
+ * 
+ * @param {string} moveNotation - Movimiento en notación algebraica
+ * @param {Chess} chessInstance - Instancia de Chess.js para validación
+ * @returns {string|null} - Movimiento UCI o null si falla
+ */
+function attemptManualNotationParsing(moveNotation, chessInstance) {
+    try {
+        // Casos especiales comunes que requieren parsing manual
+        
+        // Enroque corto
+        if (moveNotation === 'O-O' || moveNotation === '0-0') {
+            const color = chessInstance.turn();
+            if (color === 'w') {
+                return 'e1g1'; // Enroque corto blancas
+            } else {
+                return 'e8g8'; // Enroque corto negras
+            }
+        }
+        
+        // Enroque largo
+        if (moveNotation === 'O-O-O' || moveNotation === '0-0-0') {
+            const color = chessInstance.turn();
+            if (color === 'w') {
+                return 'e1c1'; // Enroque largo blancas
+            } else {
+                return 'e8c8'; // Enroque largo negras
+            }
+        }
+        
+        // Intentar interpretación directa si parece formato UCI
+        if (moveNotation.length === 4 && moveNotation.match(/^[a-h][1-8][a-h][1-8]$/)) {
+            // Verificar que sea un movimiento legal
+            const testMove = chessInstance.move({
+                from: moveNotation.substring(0, 2),
+                to: moveNotation.substring(2, 4)
+            });
+            
+            if (testMove) {
+                // Revertir el movimiento de prueba
+                chessInstance.undo();
+                return moveNotation;
+            }
+        }
+        
+        // Intentar con promoción si tiene 5 caracteres
+        if (moveNotation.length === 5 && moveNotation.match(/^[a-h][1-8][a-h][1-8][qrbn]$/i)) {
+            const testMove = chessInstance.move({
+                from: moveNotation.substring(0, 2),
+                to: moveNotation.substring(2, 4),
+                promotion: moveNotation[4].toLowerCase()
+            });
+            
+            if (testMove) {
+                chessInstance.undo();
+                return moveNotation;
+            }
+        }
+        
+    } catch (error) {
+        // El parsing manual falló, no hacer nada
+        console.warn('Parsing manual falló:', error);
+    }
+    
+    return null;
+}
+
+/**
+ * Función de utilidad para validar un movimiento UCI contra la posición actual
+ * 
+ * Esta función puede ser útil para verificar movimientos antes de ejecutarlos,
+ * proporcionando una capa adicional de seguridad en el sistema adaptativo.
+ * 
+ * @param {string} uciMove - Movimiento en formato UCI (ej: "e2e4")
+ * @returns {boolean} - true si el movimiento es válido en la posición actual
+ */
+function validateUCIMove(uciMove) {
+    if (!uciMove || !chess) {
+        return false;
+    }
+    
+    try {
+        const tempChess = new Chess(chess.fen());
+        
+        if (uciMove.length === 4) {
+            const move = tempChess.move({
+                from: uciMove.substring(0, 2),
+                to: uciMove.substring(2, 4)
+            });
+            return move !== null;
+        } else if (uciMove.length === 5) {
+            const move = tempChess.move({
+                from: uciMove.substring(0, 2),
+                to: uciMove.substring(2, 4),
+                promotion: uciMove[4].toLowerCase()
+            });
+            return move !== null;
+        }
+        
+        return false;
+        
+    } catch (error) {
+        return false;
+    }
+}
+
+/**
+ * Función de diagnóstico para analizar el contenido de una línea PV
+ * 
+ * Útil para debugging cuando las líneas PV no se procesan correctamente.
+ * Proporciona información detallada sobre cómo se está interpretando la línea.
+ * 
+ * @param {string} pvLine - Línea PV para analizar
+ * @returns {Object} - Información de diagnóstico
+ */
+function diagnosePVLine(pvLine) {
+    if (!pvLine) {
+        return { error: 'Línea PV vacía' };
+    }
+    
+    const tokens = pvLine.trim().split(/\s+/);
+    const moveTokens = tokens.filter(token => 
+        token.match(/^[a-h1-8KQRBNOX+#=\-]+$/) && !token.match(/^\d+\.+$/)
+    );
+    
+    return {
+        originalLine: pvLine,
+        totalTokens: tokens.length,
+        moveTokens: moveTokens,
+        firstMoveCandidate: moveTokens[0] || 'N/A',
+        tokenBreakdown: tokens.map((token, index) => ({
+            index,
+            token,
+            isMove: moveTokens.includes(token),
+            isMoveNumber: token.match(/^\d+\.+$/) !== null
+        }))
+    };
+}
     
     // ===================== PROCESAMIENTO DE LÍNEAS PRINCIPALES (PV) =====================
     
