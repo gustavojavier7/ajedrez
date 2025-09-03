@@ -1554,6 +1554,44 @@
             addLog('info', 'Análisis estándar iniciado');
         }
 
+        function selectBestBalancedMove() {
+    if (!lastStats.pvs || Object.keys(lastStats.pvs).length === 0) {
+        return null;
+    }
+
+    let bestPV = null;
+    let closestToZero = Infinity;
+    let bestEvaluation = null;
+
+    // Recorrer todas las variantes analizadas
+    Object.keys(lastStats.pvs).forEach(pvNumber => {
+        const pvLine = lastStats.pvs[pvNumber];
+        
+        // Obtener la evaluación de esta variante
+        // (Aquí necesitarías acceso a las evaluaciones específicas de cada PV)
+        const evaluation = getPVEvaluation(pvNumber);
+        
+        if (evaluation !== null) {
+            const distance = Math.abs(evaluation);
+            if (distance < closestToZero) {
+                closestToZero = distance;
+                bestPV = pvNumber;
+                bestEvaluation = evaluation;
+            }
+        }
+    });
+
+    if (bestPV) {
+        addLog('adaptation', `Seleccionada variante ${bestPV} con eval ${(bestEvaluation/100).toFixed(2)} (distancia: ${closestToZero}cp)`);
+        return {
+            pvNumber: bestPV,
+            evaluation: bestEvaluation,
+            line: lastStats.pvs[bestPV]
+        };
+    }
+
+    return null;
+}
         function forceBestMove() {
             if (!chess) return;
             addLog('warning', 'Forzando movimiento de CPU...');
