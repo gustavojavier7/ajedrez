@@ -2890,27 +2890,6 @@ function trackAdaptationCompletion(finalDistance, maxDepth, wasAcceptable) {
  * @param {number|string} pvNumber - Número de la variante principal (1-based)
  * @returns {number|null} - Valor de evaluación en centipawns, o null si no existe
  */
-function getPVEvaluation(pvNumber) {
-    // Verificar que tenemos la estructura de datos necesaria
-    if (!lastStats.pvEvaluations) {
-        return null;
-    }
-    
-    // Convertir pvNumber a string para consistencia con las claves del objeto
-    const pvKey = pvNumber.toString();
-    
-    // Verificar que existe la evaluación para esta variante específica
-    if (!lastStats.pvEvaluations[pvKey]) {
-        return null;
-    }
-    
-    const evaluationData = lastStats.pvEvaluations[pvKey];
-    
-    // Retornar el valor numérico que ya fue procesado y ajustado por parseInfoLine
-    // Este valor está en centipawns y ya tiene el signo correcto según el turno
-    return evaluationData.value;
-}
-
 /**
  * Función auxiliar para obtener información detallada de una evaluación PV
  * 
@@ -2920,43 +2899,7 @@ function getPVEvaluation(pvNumber) {
  * @param {number|string} pvNumber - Número de la variante principal
  * @returns {Object|null} - Objeto con información completa o null si no existe
  */
-function getPVEvaluationDetails(pvNumber) {
-    if (!lastStats.pvEvaluations) {
-        return null;
-    }
-    
-    const pvKey = pvNumber.toString();
-    
-    if (!lastStats.pvEvaluations[pvKey]) {
-        return null;
-    }
-    
-    // Retornar una copia del objeto para evitar modificaciones accidentales
-    return { ...lastStats.pvEvaluations[pvKey] };
-}
 
-/**
- * Función de utilidad para verificar si tenemos evaluaciones válidas
- * 
- * Esta función es particularmente útil antes de iniciar procesos de selección
- * de movimientos equilibrados, ya que nos permite verificar que tenemos
- * suficientes datos para tomar decisiones informadas.
- * 
- * @returns {boolean} - true si tenemos al menos una evaluación válida
- */
-function hasValidPVEvaluations() {
-    if (!lastStats.pvEvaluations) {
-        return false;
-    }
-    
-    // Contar cuántas evaluaciones válidas tenemos
-    const validEvaluations = Object.keys(lastStats.pvEvaluations).filter(pvKey => {
-        const evalData = lastStats.pvEvaluations[pvKey];
-        return evalData && typeof evalData.value === 'number';
-    });
-    
-    return validEvaluations.length > 0;
-}
 
 /**
  * Función para obtener el número total de evaluaciones disponibles
