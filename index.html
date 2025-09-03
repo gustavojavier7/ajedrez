@@ -3,9 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Analizador de ajedrez interactivo con soporte para Stockfish y logs adaptativos.">
+    <meta name="keywords" content="ajedrez, analizador, Stockfish, JavaScript">
     <title>Analizador de Ajedrez con Logs Adaptativos</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" async>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script>
+        // Fallback para chess.js en caso de que el CDN falle
+        window.Chess || document.write('<script src="local/chess.min.js"><\/script>');
+    </script>
     <style>
         * {
             margin: 0;
@@ -180,9 +186,9 @@
             display: flex;
             flex-direction: column;
             gap: 8px;
-            width: 560px; /* Ancho fijo para evitar expansión dinámica */
-            min-width: 560px; /* Asegurar ancho mínimo consistente */
-            flex-shrink: 0; /* Evitar que se comprima */
+            width: 560px;
+            min-width: 560px;
+            flex-shrink: 0;
         }
 
         .board-section {
@@ -231,7 +237,6 @@
             color: #721c24;
         }
 
-        /* Nueva sección principal para línea de juego debajo del tablero */
         .pv-section-main {
             background: #f8f9fa;
             padding: 12px;
@@ -239,9 +244,9 @@
             border: 1px solid #dee2e6;
             margin-top: 8px;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-            width: 100%; /* Ocupar todo el ancho del contenedor padre */
-            max-width: 536px; /* Restricción máxima para evitar expansión (560px - 24px padding) */
-            overflow: hidden; /* Evitar que el contenido se desborde */
+            width: 100%;
+            max-width: 536px;
+            overflow: hidden;
         }
 
         .pv-section-main .pv-title {
@@ -388,7 +393,6 @@
             border-radius: 4px;
         }
 
-        /* LOGS SECTION - Nueva sección de logs con más espacio */
         .logs-section {
             background: #ffffff;
             border: 1px solid #dee2e6;
@@ -441,7 +445,7 @@
             font-family: 'Courier New', monospace;
             font-size: 0.75rem;
             line-height: 1.4;
-            height: 180px; /* Aumentado de 120px a 180px */
+            height: 180px;
             overflow-y: auto;
             background: #ffffff;
             color: #000000;
@@ -580,7 +584,6 @@
             color: #007bff;
         }
 
-        /* Scrollbar personalizado para logs y línea principal */
         .logs-container::-webkit-scrollbar,
         .pv-line-main::-webkit-scrollbar {
             width: 6px;
@@ -602,7 +605,6 @@
             background: #adb5bd;
         }
 
-        /* Destacado de casillas */
         .square-highlight {
             animation: blink-light 0.2s ease-in-out 8;
         }
@@ -621,7 +623,27 @@
             50.1%, 100% { fill: #C19A6B; }
         }
 
-        /* Responsive */
+        .adaptive-config {
+            margin-top: 8px;
+        }
+
+        .adaptive-config label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.75rem;
+            transition: opacity 0.2s ease-in-out;
+        }
+
+        .adaptive-config label.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .adaptive-config input[type="checkbox"]:disabled {
+            cursor: not-allowed;
+        }
+
         @media (max-width: 1200px) {
             .main-layout {
                 flex-direction: column;
@@ -629,7 +651,7 @@
 
             .board-container-wrapper {
                 align-self: center;
-                width: 560px; /* Mantener ancho fijo incluso en responsivo */
+                width: 560px;
                 min-width: 560px;
             }
 
@@ -661,14 +683,14 @@
             }
 
             .board-container-wrapper {
-                width: 100% !important; /* Permitir ancho completo en móvil */
+                width: 100% !important;
                 min-width: unset !important;
-                max-width: 560px; /* Pero con límite máximo */
+                max-width: 560px;
                 align-self: center;
             }
 
             .pv-section-main {
-                max-width: 100%; /* Adaptar al contenedor en móvil */
+                max-width: 100%;
             }
 
             .input-row {
@@ -703,9 +725,7 @@
 </head>
 <body>
     <div class="container">
-        <!-- Layout principal -->
         <div class="main-layout">
-            <!-- Sección del tablero -->
             <div class="board-container-wrapper">
                 <div class="board-section">
                     <div id="chessboard">
@@ -716,13 +736,11 @@
                     </div>
                 </div>
                 
-                <!-- Estado del juego -->
                 <div id="gameStatus" class="game-status-compact">
                     <i class="fas fa-info-circle"></i>
                     <span>Cargando...</span>
                 </div>
 
-                <!-- Mejor línea de juego debajo del tablero -->
                 <div class="pv-section-main">
                     <div class="pv-title">
                         <i class="fas fa-route"></i>
@@ -732,9 +750,7 @@
                 </div>
             </div>
 
-            <!-- Panel derecho -->
             <div class="right-panel">
-                <!-- Input FEN y controles principales -->
                 <div class="input-section">
                     <div class="input-row">
                         <div class="input-group">
@@ -752,7 +768,7 @@
                                 <i class="fas fa-gamepad"></i> Modo:
                             </label>
                             <select id="modeSelect">
-                                <option value="edit">Edición</option>
+                                <option value="edit">Edición y análisis</option>
                                 <option value="human">Humano vs Humano</option>
                                 <option value="cpu">Versus CPU</option>
                             </select>
@@ -768,7 +784,6 @@
                     </div>
                 </div>
 
-                <!-- Logs de Adaptación -->
                 <div class="logs-section">
                     <div class="logs-header">
                         <div class="logs-title">
@@ -784,14 +799,10 @@
                             </button>
                         </div>
                     </div>
-                    <div class="logs-container" id="logsContainer">
-                        <!-- Los logs aparecerán aquí dinámicamente -->
-                    </div>
+                    <div class="logs-container" id="logsContainer"></div>
                 </div>
 
-                <!-- Panel de análisis -->
                 <div class="analysis-panel">
-                    <!-- Sección de Motor -->
                     <div class="analysis-section">
                         <div class="section-title">
                             <i class="fas fa-microchip"></i>
@@ -810,16 +821,14 @@
                         </div>
                         <div id="engineStatus" class="engine-status">Motor no conectado</div>
                         
-                        <!-- Configuración adaptativa -->
-                        <div style="margin-top: 8px;">
-                            <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem;">
+                        <div class="adaptive-config">
+                            <label id="adaptiveLabel">
                                 <input type="checkbox" id="adaptiveToggle" checked>
                                 <span>Modo adaptativo</span>
                             </label>
                         </div>
                     </div>
 
-                    <!-- Sección de Evaluación -->
                     <div class="analysis-section">
                         <div class="section-title">
                             <i class="fas fa-balance-scale"></i>
@@ -836,7 +845,6 @@
                     </div>
                 </div>
 
-                <!-- Panel de movimientos legales -->
                 <div id="legalMoves" class="moves-panel" style="display: none;">
                     <div class="moves-header">
                         <h3 id="legalMovesHeader">
@@ -855,7 +863,6 @@
 
     <script>
         // ===================== VARIABLES GLOBALES =====================
-        
         const pieceSymbols = {
             'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
             'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
@@ -863,8 +870,8 @@
 
         const squareSize = 65;
         const boardSize = 8 * squareSize;
-        let board = [];
-        let chess = new Chess();
+        let board = Array(8).fill().map(() => Array(8).fill(null));
+        let chess = null;
         let lastMove = null;
         let stockfish = null;
         let blobURL = null;
@@ -875,16 +882,13 @@
         let selectedSquare = null;
         let possibleMoves = [];
         
-        // Sistema de logs con más capacidad
         let logs = [];
         let logsPaused = false;
-        const MAX_LOGS = 8; // Aumentado de 5 a 8 para aprovechar el espacio adicional
+        const MAX_LOGS = 8;
         
-        // Variables para destacar casillas
         let previousHighlightedSquares = [];
         let pvObserver = null;
         
-        // Estadísticas del motor
         let lastStats = {
             nps: 0,
             pv: '',
@@ -897,7 +901,6 @@
             time: 0
         };
 
-        // Adaptación progresiva
         let currentPVAnalysis = {
             pvCount: 3,
             depth: 6,
@@ -907,7 +910,6 @@
         };
 
         // ===================== SISTEMA DE LOGS =====================
-        
         function addLog(type, message) {
             if (logsPaused) return;
             
@@ -927,7 +929,6 @@
             
             logs.unshift(logEntry);
             
-            // Mantener solo los últimos MAX_LOGS
             if (logs.length > MAX_LOGS) {
                 logs = logs.slice(0, MAX_LOGS);
             }
@@ -953,7 +954,6 @@
                 container.appendChild(logDiv);
             });
             
-            // Auto-scroll si no está en pausa
             if (!logsPaused) {
                 container.scrollTop = 0;
             }
@@ -980,8 +980,51 @@
             }
         }
 
-        // ===================== FUNCIONES PRINCIPALES =====================
+        // ===================== SISTEMA DE REPORTE ADAPTATIVO =====================
+        function reportAdaptiveModeStatus() {
+            const adaptiveToggle = document.getElementById('adaptiveToggle');
+            const adaptiveEnabled = adaptiveToggle ? adaptiveToggle.checked : true;
+            
+            switch (gameMode) {
+                case 'edit':
+                    if (adaptiveEnabled) {
+                        addLog('info', `Modo: Edición y análisis | Adaptativo: ACTIVADO (disponible para análisis manual)`);
+                    } else {
+                        addLog('info', `Modo: Edición y análisis | Adaptativo: DESACTIVADO (análisis objetivo estándar)`);
+                    }
+                    break;
+                    
+                case 'human':
+                    addLog('info', `Modo: Humano vs Humano | Adaptativo: NO APLICABLE (análisis objetivo para ambos jugadores)`);
+                    break;
+                    
+                case 'cpu':
+                    if (adaptiveEnabled) {
+                        addLog('info', `Modo: Versus CPU | Adaptativo: ACTIVADO (la CPU ajustará su fuerza dinámicamente)`);
+                    } else {
+                        addLog('info', `Modo: Versus CPU | Adaptativo: DESACTIVADO (la CPU jugará con máxima fuerza)`);
+                    }
+                    break;
+            }
+        }
 
+        // ===================== GESTIÓN DE CONTROLES ADAPTATIVOS =====================
+        function updateAdaptiveControlState() {
+            const adaptiveToggle = document.getElementById('adaptiveToggle');
+            const adaptiveLabel = document.getElementById('adaptiveLabel');
+            
+            if (gameMode === 'human') {
+                adaptiveToggle.disabled = true;
+                adaptiveLabel.classList.add('disabled');
+                adaptiveLabel.title = 'El modo adaptativo no se aplica en partidas humano vs humano';
+            } else {
+                adaptiveToggle.disabled = false;
+                adaptiveLabel.classList.remove('disabled');
+                adaptiveLabel.title = '';
+            }
+        }
+
+        // ===================== FUNCIONES PRINCIPALES DE INTERFAZ =====================
         function updateButtonStates() {
             const engineToggleBtn = document.getElementById('engineToggleBtn');
             const analysisToggleBtn = document.getElementById('analysisToggleBtn');
@@ -1003,20 +1046,21 @@
             } else {
                 analysisToggleBtn.innerHTML = '<i class="fas fa-play"></i> Analizar';
                 analysisToggleBtn.className = 'btn btn-success';
-                analysisToggleBtn.disabled = !isEngineConnected || chess.game_over();
+                analysisToggleBtn.disabled = !isEngineConnected || chess?.game_over();
             }
 
             if (showMovesBtn) {
-                showMovesBtn.disabled = chess.game_over();
+                showMovesBtn.disabled = chess?.game_over();
             }
 
-            // Mostrar botón de forzar solo en modo CPU cuando está analizando
             if (forceMoveBtn) {
-                const cpuTurn = gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b');
+                const cpuTurn = gameMode === 'cpu' && chess && chess.turn() !== (playerColor === 'white' ? 'w' : 'b');
                 const shouldShow = gameMode === 'cpu' && (isAnalyzing || cpuTurn);
                 forceMoveBtn.style.display = shouldShow ? 'inline-flex' : 'none';
                 forceMoveBtn.disabled = !isAnalyzing && !lastStats.bestMoveSan;
             }
+
+            updateAdaptiveControlState();
         }
 
         function parseFEN(fen) {
@@ -1071,7 +1115,6 @@
         function generateChessboardSVG() {
             let svg = `<svg width="${boardSize + 40}" height="${boardSize + 40}" xmlns="http://www.w3.org/2000/svg">`;
 
-            // Dibujar casillas
             for (let row = 0; row < 8; row++) {
                 for (let col = 0; col < 8; col++) {
                     const x = col * squareSize + 20;
@@ -1084,8 +1127,7 @@
                 }
             }
 
-            // Resaltar último movimiento
-            if (lastMove) {
+            if (lastMove && chess) {
                 const history = chess.history({ verbose: true });
                 if (history.length > 0) {
                     const move = history[history.length - 1];
@@ -1104,7 +1146,6 @@
                 }
             }
 
-            // Destacar casilla seleccionada
             if (selectedSquare) {
                 const col = selectedSquare.charCodeAt(0) - 97;
                 const row = 8 - parseInt(selectedSquare[1]);
@@ -1113,7 +1154,6 @@
                 svg += `<rect x="${x}" y="${y}" width="${squareSize}" height="${squareSize}" fill="rgba(0, 123, 255, 0.3)" />`;
             }
 
-            // Mostrar movimientos posibles
             possibleMoves.forEach(move => {
                 const col = move.to.charCodeAt(0) - 97;
                 const row = 8 - parseInt(move.to[1]);
@@ -1129,7 +1169,6 @@
                 }
             });
 
-            // Flecha del mejor movimiento
             if (lastStats.bestMove && lastStats.bestMove.length >= 4) {
                 const from = lastStats.bestMove.substring(0, 2);
                 const to = lastStats.bestMove.substring(2, 4);
@@ -1153,7 +1192,6 @@
                     stroke-width="3" opacity="0.8" marker-end="url(#arrowhead)" />`;
             }
 
-            // Dibujar piezas
             for (let row = 0; row < 8; row++) {
                 for (let col = 0; col < 8; col++) {
                     const piece = board[7 - row][col];
@@ -1168,7 +1206,6 @@
                 }
             }
 
-            // Coordenadas
             for (let i = 0; i < 8; i++) {
                 svg += `<text x="10" y="${i * squareSize + squareSize / 1.5 + 20}" font-size="14" text-anchor="middle" fill="#666">${8 - i}</text>`;
                 svg += `<text x="${i * squareSize + squareSize / 2 + 20}" y="${boardSize + 35}" font-size="14" text-anchor="middle" fill="#666">${String.fromCharCode(97 + i)}</text>`;
@@ -1180,6 +1217,8 @@
 
         function showGameStatus() {
             const statusElement = document.getElementById('gameStatus');
+            if (!chess) return;
+
             let status = "";
             let iconClass = "fas fa-info-circle";
             let statusClass = "status-info";
@@ -1219,10 +1258,9 @@
             `;
         }
 
-        // ===================== FUNCIONES DE INTERACCIÓN =====================
-
+        // ===================== FUNCIONES DE INTERACCIÓN CON EL TABLERO =====================
         function handleSquareClick(square) {
-            if (gameMode === 'edit') return;
+            if (gameMode === 'edit' || !chess) return;
 
             if (!selectedSquare) {
                 const piece = chess.get(square);
@@ -1251,7 +1289,7 @@
         }
 
         function canSelectPiece(piece) {
-            if (!piece) return false;
+            if (!piece || !chess) return false;
             if (gameMode === 'human') {
                 return piece.color === chess.turn();
             }
@@ -1269,17 +1307,27 @@
             possibleMoves = [];
             updateButtonStates();
             
-            addLog('info', `Modo cambiado a: ${mode}`);
+            addLog('info', `Modo cambiado a: ${mode === 'edit' ? 'Edición y análisis' : mode}`);
+            
+            reportAdaptiveModeStatus();
         }
 
         function updateBoard() {
-            document.getElementById('chessboard').innerHTML = generateChessboardSVG();
+            const chessboard = document.getElementById('chessboard');
+            if (chessboard) {
+                chessboard.innerHTML = generateChessboardSVG();
+            }
         }
 
         function drawBoard() {
-            const fen = document.getElementById('fenInput').value.trim();
+            const fen = document.getElementById('fenInput')?.value.trim();
             if (!fen) {
                 alert('Por favor, ingresa una posición FEN válida.');
+                return;
+            }
+
+            if (!window.Chess) {
+                alert('Error: No se pudo cargar la biblioteca de ajedrez.');
                 return;
             }
 
@@ -1329,9 +1377,12 @@
             setupPVObserver();
             
             addLog('success', 'Posición cargada correctamente');
+            reportAdaptiveModeStatus();
         }
 
         function makeMove(move) {
+            if (!chess) return;
+
             try {
                 const moveResult = chess.move(move);
                 if (!moveResult) {
@@ -1400,7 +1451,6 @@
         }
 
         // ===================== MOTOR DE ANÁLISIS CON ADAPTACIÓN =====================
-
         function toggleEngine() {
             if (isEngineConnected) {
                 disconnectEngine();
@@ -1422,6 +1472,7 @@
         }
 
         function startEngineTurnIfNeeded() {
+            if (!chess) return;
             const cpuTurn = gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b');
             if (!cpuTurn || chess.game_over()) return;
 
@@ -1433,16 +1484,14 @@
         }
 
         function startAdaptiveAnalysis() {
-            if (!isEngineConnected || isAnalyzing || chess.game_over()) return;
+            if (!isEngineConnected || isAnalyzing || !chess || chess.game_over()) return;
             
             const adaptiveToggle = document.getElementById('adaptiveToggle');
             const adaptiveEnabled = adaptiveToggle ? adaptiveToggle.checked : true;
             
-            if (adaptiveEnabled && gameMode === 'cpu') {
-                // Iniciar búsqueda progresiva de PV
+            if (adaptiveEnabled && (gameMode === 'cpu' || gameMode === 'edit')) {
                 startProgressivePVSearch();
             } else {
-                // Análisis estándar
                 startStandardAnalysis();
             }
         }
@@ -1453,7 +1502,6 @@
             currentPVAnalysis.pvCount = 3;
             currentPVAnalysis.depth = 6;
 
-            // Calcular evaluación objetivo (simplificado para demo)
             const currentEval = lastStats.evaluation ? lastStats.evaluation.value : 0;
             currentPVAnalysis.targetEvaluation = calculateTargetEvaluation(currentEval);
 
@@ -1463,7 +1511,7 @@
         }
 
         function executeProgressiveStep() {
-            if (!currentPVAnalysis.searchInProgress) return;
+            if (!currentPVAnalysis.searchInProgress || !chess) return;
             
             const fen = chess.fen();
             lastStats.pvs = {};
@@ -1483,19 +1531,18 @@
         }
 
         function calculateTargetEvaluation(currentEval) {
-            // Lógica simplificada para demo
             if (Math.abs(currentEval) < 50) {
-                return 0; // Mantener igualdad
+                return 0;
             } else if (currentEval > 200) {
-                return currentEval * 0.3; // Reducir ventaja
+                return currentEval * 0.3;
             } else if (currentEval < -200) {
-                return currentEval * 0.7; // Mejorar desventaja
+                return currentEval * 0.7;
             }
             return currentEval * 0.5;
         }
 
         function startStandardAnalysis() {
-            if (!isEngineConnected || isAnalyzing || chess.game_over()) return;
+            if (!isEngineConnected || isAnalyzing || !chess || chess.game_over()) return;
 
             const fen = chess.fen();
             lastStats.pvs = {};
@@ -1519,6 +1566,7 @@
         }
 
         function forceBestMove() {
+            if (!chess) return;
             addLog('warning', 'Forzando movimiento de CPU...');
             
             if (stockfish) {
@@ -1575,7 +1623,7 @@
                 
                 addLog('success', 'Motor Stockfish conectado');
                 
-                if (gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b') && !chess.game_over()) {
+                if (chess && gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b') && !chess.game_over()) {
                     setTimeout(() => {
                         startAdaptiveAnalysis();
                     }, 500);
@@ -1639,8 +1687,7 @@
         function handleEngineMessage(message) {
             if (message.startsWith('bestmove')) {
                 processBestMove(message);
-            } 
-            else if (message.startsWith('info')) {
+            } else if (message.startsWith('info')) {
                 parseInfoLine(message);
             }
         }
@@ -1723,7 +1770,6 @@
         function parseInfoLine(message) {
             const parts = message.split(' ');
             
-            // Nodos y tiempo
             const nodesIndex = parts.indexOf('nodes');
             const timeIndex = parts.indexOf('time');
             if (nodesIndex !== -1 && timeIndex !== -1) {
@@ -1737,19 +1783,16 @@
                 }
             }
             
-            // Profundidad
             const depthIndex = parts.indexOf('depth');
             if (depthIndex !== -1) {
                 lastStats.depth = parseInt(parts[depthIndex + 1]);
             }
             
-            // Evaluación
             const scoreIndex = parts.indexOf('score');
             if (scoreIndex !== -1) {
                 parseScore(parts, scoreIndex);
             }
             
-            // Línea principal y MultiPV
             const pvIndex = parts.indexOf('pv');
             if (pvIndex !== -1 && parts.length > pvIndex + 1) {
                 const pvMoves = parts.slice(pvIndex + 1);
@@ -1842,7 +1885,6 @@
         }
 
         function updateEngineDisplay() {
-            // Actualizar evaluación
             const evalEl = document.getElementById('evaluation');
             if (lastStats.evaluation && evalEl) {
                 const evalData = lastStats.evaluation;
@@ -1865,7 +1907,6 @@
                 }
             }
 
-            // Actualizar líneas principales
             const pvLineEl = document.getElementById('pvLine');
             if (pvLineEl) {
                 if (lastStats.pvs && Object.keys(lastStats.pvs).length > 0) {
@@ -1878,22 +1919,19 @@
                 }
             }
 
-            // Actualizar estadísticas del motor
             const engineStatsEl = document.getElementById('engineStats');
             if (engineStatsEl) {
                 const depthText = `Prof: ${lastStats.depth}`;
                 const npsText = lastStats.nps > 0 ? ` | ${(lastStats.nps / 1000).toFixed(0)}k n/s` : '';
                 engineStatsEl.textContent = depthText + npsText;
                 
-                // Log periódico de estadísticas
-                if (lastStats.nps > 0 && Math.random() < 0.1) { // 10% probabilidad por update
+                if (lastStats.nps > 0 && Math.random() < 0.1) {
                     addLog('info', `Prof: ${lastStats.depth} | ${(lastStats.nps / 1000).toFixed(0)}k n/s | Score: ${lastStats.evaluation ? (lastStats.evaluation.value/100).toFixed(2) : '--'}`);
                 }
             }
         }
 
-        // ===================== FUNCIONES DE DESTACADO =====================
-
+        // ===================== SISTEMA DE DESTACADO VISUAL =====================
         function highlightBestLine() {
             resetHighlights();
             
@@ -1978,10 +2016,9 @@
             }
         }
 
-        // ===================== FUNCIONES DE MOVIMIENTOS =====================
-
+        // ===================== GESTIÓN DE MOVIMIENTOS LEGALES =====================
         function showLegalMoves() {
-            if (chess.game_over()) return;
+            if (!chess || chess.game_over()) return;
 
             const moves = chess.moves({ verbose: true });
             const movesList = document.getElementById('legalMovesList');
@@ -2017,26 +2054,28 @@
         }
 
         // ===================== FUNCIONES UTILITARIAS =====================
-
         function updateMemoryStats() {
+            const memoryStats = document.getElementById('memoryStats');
             if (window.performance && window.performance.memory) {
                 const memory = window.performance.memory;
-                document.getElementById('memoryStats').textContent = 
-                    `Mem: ${Math.round(memory.usedJSHeapSize / (1024 * 1024))}MB`;
+                memoryStats.textContent = `Mem: ${Math.round(memory.usedJSHeapSize / (1024 * 1024))}MB`;
             } else {
-                document.getElementById('memoryStats').textContent = 'Mem: N/A';
+                memoryStats.textContent = 'Mem: N/A';
             }
         }
 
-        // ===================== EVENTOS E INICIALIZACIÓN =====================
-
+        // ===================== EVENTOS E INICIALIZACIÓN DEL SISTEMA =====================
         window.addEventListener('load', function() {
+            if (!window.Chess) {
+                alert('Error: No se pudo cargar la biblioteca de ajedrez.');
+                return;
+            }
+            chess = new Chess();
             drawBoard();
             updateMemoryStats();
             updateButtonStates();
             setupPVObserver();
             
-            // Configurar evento de cambio de modo
             const modeSelect = document.getElementById('modeSelect');
             if (modeSelect) {
                 modeSelect.addEventListener('change', function(e) {
@@ -2044,17 +2083,16 @@
                 });
             }
             
-            // Configurar toggle adaptativo
             const adaptiveToggle = document.getElementById('adaptiveToggle');
             if (adaptiveToggle) {
                 adaptiveToggle.addEventListener('change', function(e) {
                     const status = e.target.checked ? 'activado' : 'desactivado';
                     addLog('info', `Modo adaptativo ${status}`);
+                    setTimeout(reportAdaptiveModeStatus, 100);
                 });
             }
             
-            // Log inicial
-            addLog('success', 'Sistema de ajedrez inicializado');
+            addLog('success', 'Sistema de ajedrez inicializado correctamente');
         });
         
         window.addEventListener('beforeunload', function() {
@@ -2069,7 +2107,6 @@
             }
         });
 
-        // Exponer funciones globalmente para onclick
         window.drawBoard = drawBoard;
         window.showLegalMoves = showLegalMoves;
         window.hideLegalMoves = hideLegalMoves;
