@@ -1499,8 +1499,8 @@
         function startProgressivePVSearch() {
             currentPVAnalysis.searchInProgress = true;
             currentPVAnalysis.adaptationActive = true;
-            currentPVAnalysis.pvCount = 3;
-            currentPVAnalysis.depth = 6;
+            currentPVAnalysis.pvCount = 10;
+            currentPVAnalysis.depth = 1;
 
             const currentEval = lastStats.evaluation ? lastStats.evaluation.value : 0;
             currentPVAnalysis.targetEvaluation = calculateTargetEvaluation(currentEval);
