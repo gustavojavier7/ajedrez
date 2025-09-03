@@ -1840,7 +1840,534 @@ function resetCompleteSystemState() {
  * 
  * @param {string} message - Mensaje del motor en formato "bestmove e2e4 ponder d7d5"
  */
-function processBestMove(message) {
+
+// ===================== FUNCIONES DE ANÁLISIS DE EVALUACIONES =====================
+
+/**
+ * Obtiene la evaluación numérica para una variante principal específica
+ * 
+ * Esta función sirve como interfaz de acceso a las evaluaciones almacenadas
+ * por parseInfoLine(), proporcionando un punto centralizado para recuperar
+ * valores de evaluación que serán utilizados por el algoritmo de selección
+ * de movimientos equilibrados.
+ * 
+ * @param {number|string} pvNumber - Número de la variante principal (1-based)
+ * @returns {number|null} - Valor de evaluación en centipawns, o null si no existe
+ */
+function getPVEvaluation(pvNumber) {
+    // Verificar que tenemos la estructura de datos necesaria
+    if (!lastStats.pvEvaluations) {
+        return null;
+    }
+    
+    // Convertir pvNumber a string para consistencia con las claves del objeto
+    const pvKey = pvNumber.toString();
+    
+    // Verificar que existe la evaluación para esta variante específica
+    if (!lastStats.pvEvaluations[pvKey]) {
+        return null;
+    }
+    
+    const evaluationData = lastStats.pvEvaluations[pvKey];
+    
+    // Retornar el valor numérico que ya fue procesado y ajustado por parseInfoLine
+    // Este valor está en centipawns y ya tiene el signo correcto según el turno
+    return evaluationData.value;
+}
+
+/**
+ * Función auxiliar para obtener información detallada de una evaluación PV
+ * 
+ * Útil para debugging y logging detallado del proceso adaptativo.
+ * Retorna toda la información disponible sobre la evaluación de una variante.
+ * 
+ * @param {number|string} pvNumber - Número de la variante principal
+ * @returns {Object|null} - Objeto con información completa o null si no existe
+ */
+function getPVEvaluationDetails(pvNumber) {
+    if (!lastStats.pvEvaluations) {
+        return null;
+    }
+    
+    const pvKey = pvNumber.toString();
+    
+    if (!lastStats.pvEvaluations[pvKey]) {
+        return null;
+    }
+    
+    // Retornar una copia del objeto para evitar modificaciones accidentales
+    return { ...lastStats.pvEvaluations[pvKey] };
+}
+
+/**
+ * Función de utilidad para verificar si tenemos evaluaciones válidas
+ * 
+ * Esta función es particularmente útil antes de iniciar procesos de selección
+ * de movimientos equilibrados, ya que nos permite verificar que tenemos
+ * suficientes datos para tomar decisiones informadas.
+ * 
+ * @returns {boolean} - true si tenemos al menos una evaluación válida
+ */
+function hasValidPVEvaluations() {
+    if (!lastStats.pvEvaluations) {
+        return false;
+    }
+    
+    // Contar cuántas evaluaciones válidas tenemos
+    const validEvaluations = Object.keys(lastStats.pvEvaluations).filter(pvKey => {
+        const evalData = lastStats.pvEvaluations[pvKey];
+        return evalData && typeof evalData.value === 'number';
+    });
+    
+    return validEvaluations.length > 0;
+}
+
+/**
+ * Función para obtener el número total de evaluaciones disponibles
+ * 
+ * Útil para determinar si hemos recibido suficientes variantes para
+ * realizar un análisis adaptativo completo.
+ * 
+ * @returns {number} - Número de evaluaciones PV disponibles
+ */
+function getAvailablePVCount() {
+    if (!lastStats.pvEvaluations) {
+        return 0;
+    }
+    
+    return Object.keys(lastStats.pvEvaluations).length;
+}
+
+/**
+ * Evalúa la calidad de una jugada basada en su distancia del equilibrio perfecto
+ * 
+ * Esta función proporciona una clasificación cualitativa que ayuda tanto al sistema
+ * como al usuario a entender qué tan exitoso ha sido el proceso de búsqueda de equilibrio.
+ * Los umbrales están diseñados para reflejar niveles prácticos de equilibrio en ajedrez.
+ * 
+ * @param {number} distanceFromZero - Distancia en centipawns del equilibrio perfecto (valor absoluto)
+ * @returns {string} - Clasificación cualitativa del nivel de equilibrio
+ */
+function assessMoveQuality(distanceFromZero) {
+    // Verificar que el parámetro sea válido
+    if (typeof distanceFromZero !== 'number' || distanceFromZero < 0) {
+        return 'Evaluación inválida';
+    }
+    
+    // Clasificar según umbrales cuidadosamente calibrados
+    if (distanceFromZero <= 10) {
+        return 'EQUILIBRIO PERFECTO';      // Prácticamente igual, excelente resultado
+    } else if (distanceFromZero <= 25) {
+        return 'Muy equilibrada';          // Diferencia mínima, muy buen resultado
+    } else if (distanceFromZero <= 50) {
+        return 'Razonablemente equilibrada'; // Diferencia pequeña, resultado aceptable
+    } else if (distanceFromZero <= 100) {
+        return 'Moderadamente desequilibrada'; // Diferencia notable pero no crítica
+    } else if (distanceFromZero <= 200) {
+        return 'Significativamente desequilibrada'; // Diferencia considerable
+    } else if (distanceFromZero <= 400) {
+        return 'Altamente desequilibrada'; // Gran diferencia, resultado subóptimo
+    } else {
+        return 'Extremadamente desequilibrada'; // Diferencia muy grande
+    }
+}
+
+/**
+ * Selecciona la variante principal que produce la evaluación más cercana al equilibrio
+ * 
+ * Esta función implementa el núcleo del algoritmo adaptativo equilibrado,
+ * analizando todas las variantes disponibles para encontrar la que mejor
+ * mantiene el balance de la posición. El objetivo es siempre alcanzar
+ * una evaluación de 0.00 (equilibrio perfecto).
+ * 
+ * @returns {Object|null} - Información de la mejor variante equilibrada o null
+ */
+function selectBestBalancedMove() {
+    // Verificación básica de datos requeridos
+    if (!lastStats.pvs || Object.keys(lastStats.pvs).length === 0) {
+        addLog('warning', 'No hay variantes PV disponibles para selección equilibrada');
+        return null;
+    }
+    
+    if (!hasValidPVEvaluations()) {
+        addLog('warning', 'No hay evaluaciones PV válidas para análisis de equilibrio');
+        return null;
+    }
+
+    // Variables para rastrear la mejor opción encontrada
+    let bestPV = null;
+    let closestToZero = Infinity;
+    let bestEvaluation = null;
+    let candidatesAnalyzed = 0;
+    let equilibriumCandidates = []; // Para logging detallado
+    
+    addLog('info', `Analizando ${getAvailablePVCount()} variantes para selección equilibrada...`);
+
+    // Recorrer todas las variantes analizadas por el motor
+    Object.keys(lastStats.pvs).forEach(pvNumber => {
+        const pvLine = lastStats.pvs[pvNumber];
+        
+        // Verificar que la línea PV no esté vacía
+        if (!pvLine || pvLine.trim().length === 0) {
+            return; // Continuar con la siguiente iteración
+        }
+        
+        // Obtener la evaluación numérica para esta variante
+        const evaluation = getPVEvaluation(pvNumber);
+        
+        if (evaluation !== null && typeof evaluation === 'number') {
+            candidatesAnalyzed++;
+            
+            // Calcular distancia absoluta del equilibrio perfecto (0 centipawns)
+            const distance = Math.abs(evaluation);
+            
+            // Agregar a candidatos para análisis estadístico
+            equilibriumCandidates.push({
+                pv: pvNumber,
+                eval: evaluation,
+                distance: distance,
+                line: pvLine.substring(0, 25) + (pvLine.length > 25 ? '...' : '')
+            });
+            
+            // Verificar si esta variante está más cerca del equilibrio
+            if (distance < closestToZero) {
+                closestToZero = distance;
+                bestPV = pvNumber;
+                bestEvaluation = evaluation;
+                
+                // Logging para variantes prometedoras
+                if (distance <= 25) {
+                    addLog('adaptation', `Nueva mejor opción: PV${pvNumber} eval ${(evaluation/100).toFixed(2)} (Δ${distance}cp)`);
+                }
+            }
+        }
+    });
+    
+    // Análisis estadístico de candidatos para logging informativo
+    if (equilibriumCandidates.length > 0) {
+        // Ordenar candidatos por proximidad al equilibrio
+        equilibriumCandidates.sort((a, b) => a.distance - b.distance);
+        
+        // Calcular estadísticas básicas
+        const avgDistance = equilibriumCandidates.reduce((sum, c) => sum + c.distance, 0) / equilibriumCandidates.length;
+        const medianDistance = equilibriumCandidates[Math.floor(equilibriumCandidates.length / 2)].distance;
+        
+        // Reportar análisis estadístico ocasionalmente
+        if (Math.random() < 0.3) {
+            addLog('info', `Análisis de ${candidatesAnalyzed} candidatos: avg Δ${avgDistance.toFixed(0)}cp, med Δ${medianDistance}cp`);
+        }
+        
+        // Mostrar top 3 candidatos más equilibrados
+        const topCandidates = equilibriumCandidates.slice(0, 3);
+        topCandidates.forEach((candidate, index) => {
+            if (Math.random() < 0.4 && index < 2) { // Reportar ocasionalmente top 2
+                addLog('adaptation', `Top ${index + 1}: PV${candidate.pv} = ${(candidate.eval/100).toFixed(2)} (Δ${candidate.distance}cp)`);
+            }
+        });
+    }
+
+    // Verificar si encontramos una solución válida
+    if (bestPV !== null) {
+        const qualityAssessment = assessMoveQuality(closestToZero);
+        
+        addLog('adaptation', `Seleccionada PV${bestPV}: ${(bestEvaluation/100).toFixed(2)} - ${qualityAssessment} (de ${candidatesAnalyzed} opciones)`);
+        
+        return {
+            pvNumber: bestPV,
+            evaluation: bestEvaluation,
+            line: lastStats.pvs[bestPV],
+            distanceFromEquilibrium: closestToZero,
+            qualityRating: qualityAssessment,
+            totalCandidates: candidatesAnalyzed,
+            statisticalContext: {
+                avgDistance: equilibriumCandidates.length > 0 ? 
+                    equilibriumCandidates.reduce((sum, c) => sum + c.distance, 0) / equilibriumCandidates.length : 0,
+                bestDistance: closestToZero
+            }
+        };
+    }
+
+    // No se encontró ninguna variante válida
+    addLog('warning', `No se encontró variante equilibrada válida entre ${candidatesAnalyzed} candidatos analizados`);
+    return null;
+}
+
+/**
+ * Analiza la distribución estadística de las evaluaciones disponibles
+ * 
+ * Esta función proporciona métricas importantes sobre qué tan diversas son
+ * las opciones que el motor de ajedrez está proporcionando. Una buena
+ * distribución con múltiples opciones equilibradas indica que el sistema
+ * adaptativo tiene mejores posibilidades de encontrar jugadas balanceadas.
+ * 
+ * @returns {Object|null} - Estadísticas detalladas o null si no hay datos suficientes
+ */
+function analyzeEvaluationDistribution() {
+    // Verificar que tenemos evaluaciones válidas para analizar
+    if (!hasValidPVEvaluations()) {
+        return null;
+    }
+    
+    // Extraer todos los valores de evaluación disponibles
+    const evaluations = Object.keys(lastStats.pvEvaluations).map(pvNum => {
+        return getPVEvaluation(pvNum);
+    }).filter(eval => eval !== null && typeof eval === 'number');
+    
+    // Verificar que tenemos suficientes datos para análisis estadístico
+    if (evaluations.length === 0) {
+        return null;
+    }
+    
+    // Calcular estadísticas descriptivas básicas
+    const min = Math.min(...evaluations);
+    const max = Math.max(...evaluations);
+    const avg = evaluations.reduce((sum, eval) => sum + eval, 0) / evaluations.length;
+    const range = max - min;
+    
+    // Calcular mediana para entender la distribución central
+    const sortedEvaluations = [...evaluations].sort((a, b) => a - b);
+    const median = evaluations.length % 2 === 0 
+        ? (sortedEvaluations[evaluations.length / 2 - 1] + sortedEvaluations[evaluations.length / 2]) / 2
+        : sortedEvaluations[Math.floor(evaluations.length / 2)];
+    
+    // Contar evaluaciones por categorías de equilibrio
+    const veryBalanced = evaluations.filter(eval => Math.abs(eval) <= 25).length;
+    const reasonablyBalanced = evaluations.filter(eval => Math.abs(eval) <= 50).length;
+    const moderatelyBalanced = evaluations.filter(eval => Math.abs(eval) <= 100).length;
+    
+    // Calcular desviación estándar para medir dispersión
+    const variance = evaluations.reduce((sum, eval) => sum + Math.pow(eval - avg, 2), 0) / evaluations.length;
+    const standardDeviation = Math.sqrt(variance);
+    
+    // Identificar evaluaciones extremas (outliers)
+    const outlierThreshold = 2 * standardDeviation;
+    const outliers = evaluations.filter(eval => Math.abs(eval - avg) > outlierThreshold);
+    
+    return {
+        // Estadísticas básicas
+        totalEvaluations: evaluations.length,
+        minEval: min,
+        maxEval: max,
+        averageEval: avg,
+        medianEval: median,
+        range: range,
+        standardDeviation: standardDeviation,
+        
+        // Análisis de equilibrio por categorías
+        veryBalancedCount: veryBalanced,
+        reasonablyBalancedCount: reasonablyBalanced,
+        moderatelyBalancedCount: moderatelyBalanced,
+        
+        // Porcentajes para interpretación fácil
+        veryBalancedPercentage: (veryBalanced / evaluations.length) * 100,
+        reasonablyBalancedPercentage: (reasonablyBalanced / evaluations.length) * 100,
+        moderatelyBalancedPercentage: (moderatelyBalanced / evaluations.length) * 100,
+        
+        // Información sobre outliers
+        outliersCount: outliers.length,
+        outliersPercentage: (outliers.length / evaluations.length) * 100,
+        
+        // Evaluación cualitativa general
+        distributionQuality: assessDistributionQuality(veryBalanced, reasonablyBalanced, evaluations.length)
+    };
+}
+
+/**
+ * Función auxiliar para evaluar la calidad general de la distribución
+ */
+function assessDistributionQuality(veryBalanced, reasonablyBalanced, total) {
+    const reasonablePercentage = (reasonablyBalanced / total) * 100;
+    
+    if (reasonablePercentage >= 60) {
+        return 'Excelente diversidad de opciones equilibradas';
+    } else if (reasonablePercentage >= 40) {
+        return 'Buena diversidad de opciones';
+    } else if (reasonablePercentage >= 20) {
+        return 'Diversidad moderada';
+    } else {
+        return 'Opciones limitadas para equilibrio';
+    }
+}
+
+/**
+ * Extrae el primer movimiento de una línea de variante principal (PV) en formato UCI
+ * 
+ * Esta función es crucial para el sistema adaptativo porque permite convertir
+ * la línea de análisis seleccionada en un movimiento ejecutable. Maneja la
+ * conversión de notación algebraica estándar (SAN) a notación UCI y valida
+ * que el movimiento sea legal en la posición actual.
+ * 
+ * @param {string} pvLine - Línea PV en formato SAN (ej: "1. Nf3 d5 2. g3 Nf6...")
+ * @returns {string|null} - Movimiento en formato UCI (ej: "g1f3") o null si error
+ */
+function extractFirstMoveFromPVLine(pvLine) {
+    // Validación básica de parámetros de entrada
+    if (!pvLine || typeof pvLine !== 'string' || pvLine.trim().length === 0) {
+        addLog('warning', 'Línea PV vacía o inválida para extracción de movimiento');
+        return null;
+    }
+    
+    if (!chess) {
+        addLog('warning', 'Objeto chess no inicializado para extracción de movimiento');
+        return null;
+    }
+    
+    try {
+        // Crear una copia temporal del estado del juego para no afectar el original
+        const tempChess = new Chess(chess.fen());
+        
+        // Limpiar y tokenizar la línea PV
+        const cleanLine = pvLine.trim();
+        
+        // Dividir en tokens y filtrar elementos irrelevantes
+        const tokens = cleanLine.split(/\s+/).filter(token => {
+            // Eliminar números de movimiento (ej: "1.", "2.", "1...", etc.)
+            if (token.match(/^\d+\.+$/)) {
+                return false;
+            }
+            
+            // Mantener solo tokens que parezcan movimientos de ajedrez válidos
+            return token.match(/^[a-h1-8KQRBNOX+#=\-]+$/) && token.length >= 2;
+        });
+        
+        if (tokens.length === 0) {
+            addLog('warning', `No se encontraron movimientos válidos en línea PV: "${cleanLine}"`);
+            return null;
+        }
+        
+        // El primer token debería ser nuestro movimiento objetivo
+        const firstMoveToken = tokens[0];
+        
+        addLog('info', `Intentando extraer movimiento: "${firstMoveToken}" de línea: "${cleanLine.substring(0, 30)}${cleanLine.length > 30 ? '...' : ''}"`);
+        
+        // Intentar ejecutar el movimiento en el tablero temporal
+        const moveResult = tempChess.move(firstMoveToken, { sloppy: true });
+        
+        if (moveResult) {
+            // Construir el movimiento en formato UCI
+            const uciMove = moveResult.from + moveResult.to + (moveResult.promotion || '');
+            
+            // Validación adicional: verificar que el movimiento es realmente legal
+            const validationChess = new Chess(chess.fen());
+            const validationMove = validationChess.move(firstMoveToken, { sloppy: true });
+            
+            if (!validationMove) {
+                addLog('warning', `Movimiento "${firstMoveToken}" no es válido en posición actual`);
+                return null;
+            }
+            
+            // Verificación de consistencia entre tableros temporal y de validación
+            if (validationMove.from !== moveResult.from || validationMove.to !== moveResult.to) {
+                addLog('warning', `Inconsistencia en movimiento: temp=${moveResult.from}${moveResult.to}, valid=${validationMove.from}${validationMove.to}`);
+                return null;
+            }
+            
+            addLog('success', `Movimiento extraído exitosamente: ${firstMoveToken} → ${uciMove}`);
+            return uciMove;
+            
+        } else {
+            // Si el primer token falló, intentar con estrategias alternativas
+            addLog('info', `Primer token "${firstMoveToken}" falló, probando estrategias alternativas...`);
+            
+            // Estrategia alternativa: Intentar parsing manual de notación
+            const manualUci = attemptManualNotationParsing(firstMoveToken, tempChess);
+            if (manualUci) {
+                addLog('adaptation', `Parsing manual exitoso: ${firstMoveToken} → ${manualUci}`);
+                return manualUci;
+            }
+            
+            addLog('warning', `No se pudo convertir "${firstMoveToken}" a movimiento válido`);
+            return null;
+        }
+        
+    } catch (error) {
+        addLog('warning', `Error procesando línea PV "${pvLine}": ${error.message}`);
+        console.warn('Error detallado en extractFirstMoveFromPVLine:', error);
+        return null;
+    }
+}
+
+/**
+ * Intenta parsing manual de notación cuando el método automático falla
+ */
+function attemptManualNotationParsing(moveNotation, chessInstance) {
+    try {
+        // Enroque corto
+        if (moveNotation === 'O-O' || moveNotation === '0-0') {
+            const color = chessInstance.turn();
+            if (color === 'w') {
+                return 'e1g1';
+            } else {
+                return 'e8g8';
+            }
+        }
+        
+        // Enroque largo
+        if (moveNotation === 'O-O-O' || moveNotation === '0-0-0') {
+            const color = chessInstance.turn();
+            if (color === 'w') {
+                return 'e1c1';
+            } else {
+                return 'e8c8';
+            }
+        }
+        
+        // Intentar interpretación directa si parece formato UCI
+        if (moveNotation.length === 4 && moveNotation.match(/^[a-h][1-8][a-h][1-8]$/)) {
+            const testMove = chessInstance.move({
+                from: moveNotation.substring(0, 2),
+                to: moveNotation.substring(2, 4)
+            });
+            
+            if (testMove) {
+                chessInstance.undo();
+                return moveNotation;
+            }
+        }
+        
+    } catch (error) {
+        console.warn('Parsing manual falló:', error);
+    }
+    
+    return null;
+}
+
+/**
+ * Función de utilidad para validar un movimiento UCI contra la posición actual
+ */
+function validateUCIMove(uciMove) {
+    if (!uciMove || !chess) {
+        return false;
+    }
+    
+    try {
+        const tempChess = new Chess(chess.fen());
+        
+        if (uciMove.length === 4) {
+            const move = tempChess.move({
+                from: uciMove.substring(0, 2),
+                to: uciMove.substring(2, 4)
+            });
+            return move !== null;
+        } else if (uciMove.length === 5) {
+            const move = tempChess.move({
+                from: uciMove.substring(0, 2),
+                to: uciMove.substring(2, 4),
+                promotion: uciMove[4].toLowerCase()
+            });
+            return move !== null;
+        }
+        
+        return false;
+        
+    } catch (error) {
+        return false;
+    }
+}
+
+// ===================== FIN DE FUNCIONES DE ANÁLISIS DE EVALUACIONES =====================
+        
+    function processBestMove(message) {
     const parts = message.split(' ');
     const engineBestMove = parts[1];
     
