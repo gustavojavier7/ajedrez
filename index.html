@@ -2694,39 +2694,101 @@ function assessMoveQuality(distanceFromZero) {
  * 
  * @returns {Object} - Estadísticas sobre la distribución de evaluaciones
  */
+/**
+ * Analiza la distribución estadística de las evaluaciones disponibles
+ * 
+ * Esta función proporciona métricas importantes sobre qué tan diversas son
+ * las opciones que el motor de ajedrez está proporcionando. Una buena
+ * distribución con múltiples opciones equilibradas indica que el sistema
+ * adaptativo tiene mejores posibilidades de encontrar jugadas balanceadas.
+ * 
+ * @returns {Object|null} - Estadísticas detalladas o null si no hay datos suficientes
+ */
 function analyzeEvaluationDistribution() {
+    // Verificar que tenemos evaluaciones válidas para analizar
     if (!hasValidPVEvaluations()) {
         return null;
     }
     
+    // Extraer todos los valores de evaluación disponibles
     const evaluations = Object.keys(lastStats.pvEvaluations).map(pvNum => {
         return getPVEvaluation(pvNum);
-    }).filter(eval => eval !== null);
+    }).filter(eval => eval !== null && typeof eval === 'number');
     
+    // Verificar que tenemos suficientes datos para análisis estadístico
     if (evaluations.length === 0) {
         return null;
     }
     
-    // Calcular estadísticas básicas
+    // Calcular estadísticas descriptivas básicas
     const min = Math.min(...evaluations);
     const max = Math.max(...evaluations);
     const avg = evaluations.reduce((sum, eval) => sum + eval, 0) / evaluations.length;
     const range = max - min;
     
-    // Contar cuántas evaluaciones están cerca del equilibrio
+    // Calcular mediana para entender la distribución central
+    const sortedEvaluations = [...evaluations].sort((a, b) => a - b);
+    const median = evaluations.length % 2 === 0 
+        ? (sortedEvaluations[evaluations.length / 2 - 1] + sortedEvaluations[evaluations.length / 2]) / 2
+        : sortedEvaluations[Math.floor(evaluations.length / 2)];
+    
+    // Contar evaluaciones por categorías de equilibrio
     const veryBalanced = evaluations.filter(eval => Math.abs(eval) <= 25).length;
     const reasonablyBalanced = evaluations.filter(eval => Math.abs(eval) <= 50).length;
+    const moderatelyBalanced = evaluations.filter(eval => Math.abs(eval) <= 100).length;
+    
+    // Calcular desviación estándar para medir dispersión
+    const variance = evaluations.reduce((sum, eval) => sum + Math.pow(eval - avg, 2), 0) / evaluations.length;
+    const standardDeviation = Math.sqrt(variance);
+    
+    // Identificar evaluaciones extremas (outliers)
+    const outlierThreshold = 2 * standardDeviation;
+    const outliers = evaluations.filter(eval => Math.abs(eval - avg) > outlierThreshold);
     
     return {
+        // Estadísticas básicas
         totalEvaluations: evaluations.length,
         minEval: min,
         maxEval: max,
         averageEval: avg,
+        medianEval: median,
         range: range,
+        standardDeviation: standardDeviation,
+        
+        // Análisis de equilibrio por categorías
         veryBalancedCount: veryBalanced,
         reasonablyBalancedCount: reasonablyBalanced,
-        balancePercentage: (reasonablyBalanced / evaluations.length) * 100
+        moderatelyBalancedCount: moderatelyBalanced,
+        
+        // Porcentajes para interpretación fácil
+        veryBalancedPercentage: (veryBalanced / evaluations.length) * 100,
+        reasonablyBalancedPercentage: (reasonablyBalanced / evaluations.length) * 100,
+        moderatelyBalancedPercentage: (moderatelyBalanced / evaluations.length) * 100,
+        
+        // Información sobre outliers
+        outliersCount: outliers.length,
+        outliersPercentage: (outliers.length / evaluations.length) * 100,
+        
+        // Evaluación cualitativa general
+        distributionQuality: assessDistributionQuality(veryBalanced, reasonablyBalanced, evaluations.length)
     };
+}
+
+/**
+ * Función auxiliar para evaluar la calidad general de la distribución
+ */
+function assessDistributionQuality(veryBalanced, reasonablyBalanced, total) {
+    const reasonablePercentage = (reasonablyBalanced / total) * 100;
+    
+    if (reasonablePercentage >= 60) {
+        return 'Excelente diversidad de opciones equilibradas';
+    } else if (reasonablePercentage >= 40) {
+        return 'Buena diversidad de opciones';
+    } else if (reasonablePercentage >= 20) {
+        return 'Diversidad moderada';
+    } else {
+        return 'Opciones limitadas para equilibrio';
+    }
 }
 
             /**
