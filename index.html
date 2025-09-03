@@ -1429,19 +1429,124 @@
             }
         }
 
-        function resetStats() {
-            lastStats = {
-                nps: 0,
-                pv: '',
-                pvs: {},
-                evaluation: null,
-                depth: 0,
-                bestMove: '',
-                bestMoveSan: '',
-                nodes: 0,
-                time: 0
-            };
+        /**
+ * Reinicia todas las estadísticas y estructuras de datos del sistema de análisis
+ * 
+ * Esta función actualizada incluye la inicialización de las nuevas estructuras
+ * de datos requeridas por el sistema adaptativo de búsqueda de equilibrio.
+ */
+function resetStats() {
+    lastStats = {
+        // ===================== ESTADÍSTICAS BÁSICAS DEL MOTOR =====================
+        nps: 0,                    // Nodos por segundo
+        nodes: 0,                  // Total de nodos analizados
+        time: 0,                   // Tiempo de análisis en milisegundos
+        depth: 0,                  // Profundidad de búsqueda actual
+        
+        // ===================== DATOS DE VARIANTES PRINCIPALES =====================
+        pv: '',                    // Línea principal por defecto (PV 1)
+        pvs: {},                   // Todas las líneas PV: {1: "e2e4 e7e5...", 2: "d2d4..."}
+        pvEvaluations: {},         // Evaluaciones por PV: {1: {value: 23, type: "cp"}, 2: {...}}
+        
+        // ===================== EVALUACIÓN PRINCIPAL Y MEJOR MOVIMIENTO =====================
+        evaluation: null,          // Evaluación principal (del PV 1)
+        bestMove: '',              // Mejor movimiento en formato UCI (ej: "e2e4")
+        bestMoveSan: '',           // Mejor movimiento en notación algebraica (ej: "e4")
+        
+        // ===================== METADATOS Y DIAGNÓSTICO =====================
+        lastUpdateTimestamp: Date.now(),    // Momento de la última actualización
+        analysisMode: 'standard',           // 'standard' o 'adaptive'
+        totalPVsReceived: 0,                // Contador total de PVs recibidos
+        
+        // ===================== MÉTRICAS DEL SISTEMA ADAPTATIVO =====================
+        adaptiveMetrics: {
+            iterationsCompleted: 0,          // Número de iteraciones del proceso adaptativo
+            bestEquilibriumFound: Infinity,  // Mejor equilibrio encontrado hasta ahora
+            searchStartTime: null,           // Momento de inicio de la búsqueda actual
+            totalVariantsAnalyzed: 0,        // Total de variantes analizadas
+            fallbacksUsed: 0                 // Número de veces que se usaron fallbacks
         }
+    };
+    
+    // ===================== REINICIO DEL ESTADO DE ANÁLISIS PROGRESIVO =====================
+    currentPVAnalysis = {
+        pvCount: 10,                    // Número de variantes principales a analizar (actualizado)
+        depth: 1,                       // Profundidad inicial (actualizada)
+        targetEvaluation: 0,            // Objetivo siempre es equilibrio perfecto
+        searchInProgress: false,        // Estado de búsqueda
+        adaptationActive: false,        // Estado del modo adaptativo
+        
+        // Nuevos campos para mejor control del proceso
+        iterationCount: 0,              // Número de iteración actual
+        lastIterationTime: null,        // Tiempo de la última iteración
+        bestResultSoFar: null,          // Mejor resultado encontrado hasta ahora
+        convergenceHistory: []          // Historial de convergencia hacia equilibrio
+    };
+    
+    addLog('info', 'Estadísticas y estado adaptativo reiniciados');
+}
+
+/**
+ * Función auxiliar para reiniciar solo las métricas adaptativas
+ * 
+ * Útil cuando se quiere mantener las estadísticas básicas del motor
+ * pero reiniciar el proceso adaptativo específicamente.
+ */
+function resetAdaptiveMetrics() {
+    if (lastStats && lastStats.adaptiveMetrics) {
+        lastStats.adaptiveMetrics = {
+            iterationsCompleted: 0,
+            bestEquilibriumFound: Infinity,
+            searchStartTime: Date.now(),
+            totalVariantsAnalyzed: 0,
+            fallbacksUsed: 0
+        };
+    }
+    
+    currentPVAnalysis.iterationCount = 0;
+    currentPVAnalysis.lastIterationTime = null;
+    currentPVAnalysis.bestResultSoFar = null;
+    currentPVAnalysis.convergenceHistory = [];
+    
+    addLog('adaptation', 'Métricas adaptativas reiniciadas');
+}
+
+/**
+ * Función para limpiar completamente el estado del sistema
+ * 
+ * Esta función es más agresiva que resetStats() y limpia también
+ * elementos de la interfaz de usuario relacionados.
+ */
+function resetCompleteSystemState() {
+    // Reiniciar estadísticas
+    resetStats();
+    
+    // Limpiar visualización de análisis
+    resetAnalysisDisplay();
+    
+    // Reiniciar destacado visual
+    resetHighlights();
+    
+    // Limpiar estado de PV observer
+    if (pvObserver) {
+        pvObserver.disconnect();
+        pvObserver = null;
+    }
+    
+    // Reiniciar variables de estado de juego relacionadas
+    selectedSquare = null;
+    possibleMoves = [];
+    lastMove = null;
+    
+    // Limpiar logs específicos del sistema adaptativo (opcional)
+    const adaptiveLogs = logs.filter(log => log.type !== 'adaptation');
+    if (adaptiveLogs.length !== logs.length) {
+        addLog('info', `Eliminados ${logs.length - adaptiveLogs.length} logs adaptativos anteriores`);
+        // logs = adaptiveLogs; // Descomenta si quieres limpiar logs adaptativos
+    }
+    
+    addLog('success', 'Estado completo del sistema reiniciado');
+}
 
         function resetAnalysisDisplay() {
             document.getElementById('evaluation').textContent = '--';
