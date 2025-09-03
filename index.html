@@ -1497,18 +1497,18 @@
         }
 
         function startProgressivePVSearch() {
-            currentPVAnalysis.searchInProgress = true;
-            currentPVAnalysis.adaptationActive = true;
-            currentPVAnalysis.pvCount = 10;
-            currentPVAnalysis.depth = 1;
+    currentPVAnalysis.searchInProgress = true;
+    currentPVAnalysis.adaptationActive = true;
+    currentPVAnalysis.pvCount = 10; // Cambiado de 3 a 10
+    currentPVAnalysis.depth = 1;    // Cambiado de 6 a 1
 
-            const currentEval = lastStats.evaluation ? lastStats.evaluation.value : 0;
-            currentPVAnalysis.targetEvaluation = calculateTargetEvaluation(currentEval);
+    // El objetivo siempre es cero (equilibrio perfecto)
+    currentPVAnalysis.targetEvaluation = 0;
 
-            addLog('adaptation', `Iniciando búsqueda progresiva PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth} objetivo=${(currentPVAnalysis.targetEvaluation/100).toFixed(2)}`);
-            
-            executeProgressiveStep();
-        }
+    addLog('adaptation', `Iniciando búsqueda de equilibrio PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth} objetivo=0.00`);
+    
+    executeProgressiveStep();
+}
 
         function executeProgressiveStep() {
             if (!currentPVAnalysis.searchInProgress || !chess) return;
