@@ -1,1259 +1,4 @@
-const timestamp = new Date().toLocaleTimeString('es-ES', { 
-                hour12: false, 
-                hour: '2-digit', 
-                minute: '2-digit', 
-                second: '2-digit' 
-            });
-            
-            const logEntry = {
-                id: Date.now(),
-                timestamp: timestamp,
-                type: type,
-                message: message
-            };
-            
-            logs.unshift(logEntry);
-            
-            // Mantener solo los últimos MAX_LOGS para optimización de memoria
-            if (logs.length > MAX_LOGS) {
-                logs = logs.slice(0, MAX_LOGS);
-            }
-            
-            updateLogsDisplay();
-        }
-        
-        function updateLogsDisplay() {
-            const container = document.getElementById('logsContainer');
-            if (!container) return;
-            
-            container.innerHTML = '';
-            
-            logs.forEach(log => {
-                const logDiv = document.createElement('div');
-                logDiv.className = `log-entry ${log.type}`;
-                
-                logDiv.innerHTML = `
-                    <span class="log-timestamp">${log.timestamp}</span>
-                    <span class="log-message">${log.message}</span>
-                `;
-                
-                container.appendChild(logDiv);
-            });
-            
-            // Auto-scroll si no está en pausa para mantener visibilidad de logs recientes
-            if (!logsPaused) {
-                container.scrollTop = 0;
-            }
-        }
-        
-        function clearLogs() {
-            logs = [];
-            updateLogsDisplay();
-            addLog('info', 'Logs limpiados');
-        }
-        
-        function toggleLogsPause() {
-            logsPaused = !logsPaused;
-            const btn = document.getElementById('pauseLogsBtn');
-            
-            if (logsPaused) {
-                btn.innerHTML = '<i class="fas fa-play"></i>';
-                btn.title = 'Reanudar logs';
-                addLog('info', 'Logs pausados');
-            } else {
-                btn.innerHTML = '<i class="fas fa-pause"></i>';
-                btn.title = 'Pausar logs';
-                addLog('info', 'Logs reanudados');
-            }
-        }
-
-        // ===================== SISTEMA DE REPORTE DE ESTADO ADAPTATIVO =====================
-        
-        function reportAdaptiveModeStatus() {
-            const adaptiveToggle = document.getElementById('adaptiveToggle');
-            const adaptiveEnabled = adaptiveToggle ? adaptiveToggle.checked : true;
-            
-            switch (gameMode) {
-                case 'edit':
-                    if (adaptiveEnabled) {
-                        addLog('info', `Modo: Edición y análisis | Adaptativo: ACTIVADO (disponible para análisis manual)`);
-                    } else {
-                        addLog('info', `Modo: Edición y análisis | Adaptativo: DESACTIVADO (análisis objetivo estándar)`);
-                    }
-                    break;
-                    
-                case 'human':
-                    addLog('info', `Modo: Humano vs Humano | Adaptativo: NO APLICABLE (análisis objetivo para ambos jugadores)`);
-                    break;
-                    
-                case 'cpu':
-                    if (adaptiveEnabled) {
-                        addLog('info', `Modo: Versus CPU | Adaptativo: ACTIVADO (la CPU ajustará su fuerza dinámicamente)`);
-                    } else {
-                        addLog('info', `Modo: Versus CPU | Adaptativo: DESACTIVADO (la CPU jugará con máxima fuerza)`);
-                    }
-                    break;
-            }
-        }
-
-        // ===================== GESTIÓN DE ESTADO DE CONTROLES ADAPTATIVOS =====================
-        
-        function updateAdaptiveControlState() {
-            const adaptiveToggle = document.getElementById('adaptiveToggle');
-            const adaptiveLabel = document.getElementById('adaptiveLabel');
-            
-            if (gameMode === 'human') {
-                // En modo humano vs humano, deshabilitar el control adaptativo
-                adaptiveToggle.disabled = true;
-                adaptiveLabel.classList.add('disabled');
-                adaptiveLabel.title = 'El modo adaptativo no se aplica en partidas humano vs humano';
-            } else {
-                // En otros modos, habilitar el control
-                adaptiveToggle.disabled = false;
-                adaptiveLabel.classList.remove('disabled');
-                adaptiveLabel.title = '';
-            }
-        }
-
-        // ===================== FUNCIONES PRINCIPALES DE INTERFAZ =====================
-
-        function updateButtonStates() {
-            const engineToggleBtn = document.getElementById('engineToggleBtn');
-            const analysisToggleBtn = document.getElementById('analysisToggleBtn');
-            const showMovesBtn = document.getElementById('showMovesBtn');
-            const forceMoveBtn = document.getElementById('forceMoveBtn');
-
-            // Estado del botón de conexión del motor
-            if (isEngineConnected) {
-                engineToggleBtn.innerHTML = '<i class="fas fa-power-off"></i> Desconectar';
-                engineToggleBtn.className = 'btn btn-warning';
-            } else {
-                engineToggleBtn.innerHTML = '<i class="fas fa-plug"></i> Conectar Motor';
-                engineToggleBtn.className = 'btn btn-secondary';
-            }
-
-            // Estado del botón de análisis
-            if (isAnalyzing) {
-                analysisToggleBtn.innerHTML = '<i class="fas fa-stop"></i> Detener';
-                analysisToggleBtn.className = 'btn btn-danger';
-                analysisToggleBtn.disabled = false;
-            } else {
-                analysisToggleBtn.innerHTML = '<i class="fas fa-play"></i> Analizar';
-                analysisToggleBtn.className = 'btn btn-success';
-                analysisToggleBtn.disabled = !isEngineConnected || chess.game_over();
-            }
-
-            // Estado del botón de movimientos
-            if (showMovesBtn) {
-                showMovesBtn.disabled = chess.game_over();
-            }
-
-            // Mostrar botón de forzar solo en modo CPU cuando está analizando
-            if (forceMoveBtn) {
-                const cpuTurn = gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b');
-                const shouldShow = gameMode === 'cpu' && (isAnalyzing || cpuTurn);
-                forceMoveBtn.style.display = shouldShow ? 'inline-flex' : 'none';
-                forceMoveBtn.disabled = !isAnalyzing && !lastStats.bestMoveSan;
-            }
-
-            // Actualizar estado del control adaptativo
-            updateAdaptiveControlState();
-        }
-
-        function parseFEN(fen) {
-            const [position] = fen.split(' ');
-            const rows = position.split('/');
-            board = Array(8).fill().map(() => Array(8).fill(null));
-
-            for (let row = 0; row < 8; row++) {
-                let col = 0;
-                const actualRow = 7 - row;
-                for (let char of rows[row]) {
-                    if (/\d/.test(char)) {
-                        col += parseInt(char);
-                    } else {
-                        board[actualRow][col] = char;
-                        col++;
-                    }
-                }
-            }
-        }
-
-        function uciToSan(uciMove) {
-            if (!uciMove || uciMove.length < 4) return uciMove;
-            
-            const from = uciMove.substring(0, 2);
-            const to = uciMove.substring(2, 4);
-            const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
-            
-            const tempChess = new Chess(chess.fen());
-            
-            try {
-                const move = tempChess.move({
-                    from: from,
-                    to: to,
-                    promotion: promotion
-                });
-                return move ? move.san : uciMove;
-            } catch (e) {
-                return uciMove;
-            }
-        }
-
-        function formatEvaluation(score, isMate) {
-            if (isMate) {
-                return score > 0 ? `+M${score}` : `-M${Math.abs(score)}`;
-            }
-            
-            const pawns = score / 100;
-            return pawns > 0 ? `+${pawns.toFixed(2)}` : pawns.toFixed(2);
-        }
-
-        function generateChessboardSVG() {
-            let svg = `<svg width="${boardSize + 40}" height="${boardSize + 40}" xmlns="http://www.w3.org/2000/svg">`;
-
-            // Dibujar casillas con patrón alternado
-            for (let row = 0; row < 8; row++) {
-                for (let col = 0; col < 8; col++) {
-                    const x = col * squareSize + 20;
-                    const y = row * squareSize + 20;
-                    const fill = (row + col) % 2 === 0 ? '#F5F5DC' : '#C19A6B';
-                    const squareName = String.fromCharCode(97 + col) + (8 - row);
-                    svg += `<rect x="${x}" y="${y}" width="${squareSize}" height="${squareSize}" fill="${fill}" 
-                            data-square="${squareName}" onclick="handleSquareClick('${squareName}')" 
-                            style="cursor: pointer;" />`;
-                }
-            }
-
-            // Resaltar último movimiento jugado
-            if (lastMove) {
-                const history = chess.history({ verbose: true });
-                if (history.length > 0) {
-                    const move = history[history.length - 1];
-                    const fromCol = move.from.charCodeAt(0) - 97;
-                    const fromRow = 8 - parseInt(move.from[1]);
-                    const toCol = move.to.charCodeAt(0) - 97;
-                    const toRow = 8 - parseInt(move.to[1]);
-
-                    const fromX = fromCol * squareSize + 20;
-                    const fromY = fromRow * squareSize + 20;
-                    const toX = toCol * squareSize + 20;
-                    const toY = toRow * squareSize + 20;
-
-                    svg += `<rect x="${fromX}" y="${fromY}" width="${squareSize}" height="${squareSize}" fill="rgba(255, 255, 0, 0.4)" />`;
-                    svg += `<rect x="${toX}" y="${toY}" width="${squareSize}" height="${squareSize}" fill="rgba(255, 255, 0, 0.4)" />`;
-                }
-            }
-
-            // Destacar casilla seleccionada para movimiento
-            if (selectedSquare) {
-                const col = selectedSquare.charCodeAt(0) - 97;
-                const row = 8 - parseInt(selectedSquare[1]);
-                const x = col * squareSize + 20;
-                const y = row * squareSize + 20;
-                svg += `<rect x="${x}" y="${y}" width="${squareSize}" height="${squareSize}" fill="rgba(0, 123, 255, 0.3)" />`;
-            }
-
-            // Mostrar movimientos posibles con indicadores visuales
-            possibleMoves.forEach(move => {
-                const col = move.to.charCodeAt(0) - 97;
-                const row = 8 - parseInt(move.to[1]);
-                const x = col * squareSize + 20;
-                const y = row * squareSize + 20;
-                const centerX = x + squareSize / 2;
-                const centerY = y + squareSize / 2;
-                
-                // Círculo rojo para capturas, verde para movimientos normales
-                if (chess.get(move.to)) {
-                    svg += `<circle cx="${centerX}" cy="${centerY}" r="8" fill="rgba(220, 53, 69, 0.7)" />`;
-                } else {
-                    svg += `<circle cx="${centerX}" cy="${centerY}" r="6" fill="rgba(40, 167, 69, 0.7)" />`;
-                }
-            });
-
-            // Flecha del mejor movimiento sugerido por el motor
-            if (lastStats.bestMove && lastStats.bestMove.length >= 4) {
-                const from = lastStats.bestMove.substring(0, 2);
-                const to = lastStats.bestMove.substring(2, 4);
-                
-                const fromCol = from.charCodeAt(0) - 97;
-                const fromRow = 8 - parseInt(from[1]);
-                const toCol = to.charCodeAt(0) - 97;
-                const toRow = 8 - parseInt(to[1]);
-                
-                const fromX = (fromCol * squareSize) + squareSize/2 + 20;
-                const fromY = (fromRow * squareSize) + squareSize/2 + 20;
-                const toX = (toCol * squareSize) + squareSize/2 + 20;
-                const toY = (toRow * squareSize) + squareSize/2 + 20;
-                
-                svg += `<defs>
-                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                        <polygon points="0 0, 10 3.5, 0 7" fill="#007bff" />
-                    </marker>
-                </defs>
-                <line x1="${fromX}" y1="${fromY}" x2="${toX}" y2="${toY}" stroke="#007bff" 
-                    stroke-width="3" opacity="0.8" marker-end="url(#arrowhead)" />`;
-            }
-
-            // Dibujar piezas usando símbolos Unicode
-            for (let row = 0; row < 8; row++) {
-                for (let col = 0; col < 8; col++) {
-                    const piece = board[7 - row][col];
-                    if (piece) {
-                        const x = col * squareSize + squareSize / 2 + 20;
-                        const y = row * squareSize + squareSize / 2 + 42;
-                        const symbol = pieceSymbols[piece] || '';
-                        const squareName = String.fromCharCode(97 + col) + (8 - row);
-                        svg += `<text x="${x}" y="${y}" font-size="48" text-anchor="middle" fill="#000" 
-                                onclick="handleSquareClick('${squareName}')" style="cursor: pointer;">${symbol}</text>`;
-                    }
-                }
-            }
-
-            // Coordenadas del tablero (a-h, 1-8)
-            for (let i = 0; i < 8; i++) {
-                svg += `<text x="10" y="${i * squareSize + squareSize / 1.5 + 20}" font-size="14" text-anchor="middle" fill="#666">${8 - i}</text>`;
-                svg += `<text x="${i * squareSize + squareSize / 2 + 20}" y="${boardSize + 35}" font-size="14" text-anchor="middle" fill="#666">${String.fromCharCode(97 + i)}</text>`;
-            }
-
-            svg += '</svg>';
-            return svg;
-        }
-
-        function showGameStatus() {
-            const statusElement = document.getElementById('gameStatus');
-            let status = "";
-            let iconClass = "fas fa-info-circle";
-            let statusClass = "status-info";
-
-            // Determinar el estado actual de la partida
-            if (chess.in_checkmate()) {
-                status = "¡Jaque mate!";
-                iconClass = "fas fa-crown";
-                statusClass = "status-danger";
-            } else if (chess.in_stalemate()) {
-                status = "Tablas por ahogado";
-                iconClass = "fas fa-handshake";
-                statusClass = "status-warning";
-            } else if (chess.in_draw()) {
-                if (chess.in_threefold_repetition()) {
-                    status = "Tablas por repetición";
-                } else if (chess.insufficient_material()) {
-                    status = "Tablas por material";
-                } else {
-                    status = "Tablas por 50 movimientos";
-                }
-                iconClass = "fas fa-handshake";
-                statusClass = "status-warning";
-            } else if (chess.in_check()) {
-                status = "¡Jaque!";
-                iconClass = "fas fa-exclamation-triangle";
-                statusClass = "status-warning";
-            } else {
-                status = chess.turn() === 'w' ? "Turno: Blancas" : "Turno: Negras";
-                iconClass = "fas fa-chess";
-                statusClass = "status-success";
-            }
-
-            statusElement.className = `game-status-compact ${statusClass}`;
-            statusElement.innerHTML = `
-                <i class="${iconClass}"></i>
-                <span>${status}</span>
-            `;
-        }
-
-        // ===================== FUNCIONES DE INTERACCIÓN CON EL TABLERO =====================
-
-        function handleSquareClick(square) {
-            // El modo 'edit' ahora permite interacción para análisis, pero no movimientos de juego
-            if (gameMode === 'edit') {
-                // En modo "Edición y análisis", las piezas no se mueven por click
-                // pero sí se pueden analizar posiciones mediante los botones de análisis
-                return;
-            }
-
-            if (!selectedSquare) {
-                const piece = chess.get(square);
-                if (piece && canSelectPiece(piece)) {
-                    selectedSquare = square;
-                    possibleMoves = chess.moves({ square, verbose: true });
-                    updateBoard();
-                }
-            } else {
-                const moveObj = possibleMoves.find(m => m.to === square);
-                if (moveObj) {
-                    makeMove(moveObj.san);
-                    return;
-                }
-                
-                const piece = chess.get(square);
-                if (piece && canSelectPiece(piece)) {
-                    selectedSquare = square;
-                    possibleMoves = chess.moves({ square, verbose: true });
-                } else {
-                    selectedSquare = null;
-                    possibleMoves = [];
-                }
-                updateBoard();
-            }
-        }
-
-        function canSelectPiece(piece) {
-            if (!piece) return false;
-            if (gameMode === 'human') {
-                return piece.color === chess.turn();
-            }
-            if (gameMode === 'cpu') {
-                return piece.color === (playerColor === 'white' ? 'w' : 'b') && piece.color === chess.turn();
-            }
-            return false;
-        }
-
-        function setGameMode(mode) {
-            gameMode = mode;
-            const select = document.getElementById('modeSelect');
-            if (select && select.value !== mode) select.value = mode;
-            selectedSquare = null;
-            possibleMoves = [];
-            updateButtonStates();
-            
-            addLog('info', `Modo cambiado a: ${mode === 'edit' ? 'Edición y análisis' : mode}`);
-            
-            // Reportar estado del modo adaptativo después del cambio
-            reportAdaptiveModeStatus();
-        }
-
-        function updateBoard() {
-            document.getElementById('chessboard').innerHTML = generateChessboardSVG();
-        }
-
-        function drawBoard() {
-            const fen = document.getElementById('fenInput').value.trim();
-            if (!fen) {
-                alert('Por favor, ingresa una posición FEN válida.');
-                return;
-            }
-
-            chess = new Chess();
-            const validation = chess.validate_fen(fen);
-            if (!validation.valid) {
-                alert(`Posición FEN inválida: ${validation.error}`);
-                return;
-            }
-
-            chess.load(fen);
-            parseFEN(fen);
-            
-            // Reiniciar estadísticas del motor para análisis fresco
-            lastStats = {
-                nps: 0,
-                pv: '',
-                pvs: {},
-                evaluation: null,
-                depth: 0,
-                bestMove: '',
-                bestMoveSan: '',
-                nodes: 0,
-                time: 0
-            };
-            
-            selectedSquare = null;
-            possibleMoves = [];
-            updateBoard();
-            
-            document.getElementById('legalMoves').style.display = 'none';
-            lastMove = null;
-            showGameStatus();
-            updateButtonStates();
-            
-            document.getElementById('evaluation').textContent = '--';
-            document.getElementById('bestMove').textContent = '--';
-            document.getElementById('engineStats').textContent = '--';
-            document.getElementById('pvLine').textContent = 'Inicia el análisis para ver la mejor línea';
-            
-            resetHighlights();
-            
-            if (isAnalyzing) {
-                stopAnalysis();
-            }
-            
-            updateMemoryStats();
-            setupPVObserver();
-            
-            addLog('success', 'Posición cargada correctamente');
-            
-            // Reportar estado del modo adaptativo según el modo de juego
-            reportAdaptiveModeStatus();
-        }
-
-        function makeMove(move) {
-            try {
-                const moveResult = chess.move(move);
-                if (!moveResult) {
-                    console.warn('Movimiento inválido:', move);
-                    return;
-                }
-                
-                lastMove = moveResult;
-                document.getElementById('fenInput').value = chess.fen();
-                parseFEN(chess.fen());
-                
-                selectedSquare = null;
-                possibleMoves = [];
-                updateBoard();
-                
-                showLegalMoves();
-                showGameStatus();
-                updateButtonStates();
-                
-                if (isAnalyzing) {
-                    stopAnalysis();
-                }
-                
-                resetStats();
-                resetAnalysisDisplay();
-                
-                addLog('success', `Movimiento: ${moveResult.san}`);
-                
-                // Auto-iniciar análisis para CPU si es su turno
-                if (isEngineConnected && !chess.game_over()) {
-                    setTimeout(() => {
-                        const cpuTurn = gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b');
-                        if (cpuTurn) {
-                            startAdaptiveAnalysis();
-                        }
-                    }, 500);
-                }
-                
-                updateMemoryStats();
-                setTimeout(setupPVObserver, 100);
-                
-            } catch (error) {
-                console.error('Error al hacer movimiento:', error);
-                addLog('warning', `Error en movimiento: ${error.message}`);
-            }
-        }
-
-        function resetStats() {
-            lastStats = {
-                nps: 0,
-                pv: '',
-                pvs: {},
-                evaluation: null,
-                depth: 0,
-                bestMove: '',
-                bestMoveSan: '',
-                nodes: 0,
-                time: 0
-            };
-        }
-
-        function resetAnalysisDisplay() {
-            document.getElementById('evaluation').textContent = '--';
-            document.getElementById('bestMove').textContent = '--';
-            document.getElementById('engineStats').textContent = '--';
-            document.getElementById('pvLine').textContent = 'Inicia el análisis para ver la mejor línea';
-        }
-
-        // ===================== MOTOR DE ANÁLISIS CON ADAPTACIÓN EXTENDIDA =====================
-
-        function toggleEngine() {
-            if (isEngineConnected) {
-                disconnectEngine();
-            } else {
-                connectEngine();
-            }
-        }
-
-        function toggleAnalysis() {
-            if (isAnalyzing) {
-                stopAnalysis();
-            } else {
-                if (gameMode === 'cpu') {
-                    startEngineTurnIfNeeded();
-                } else {
-                    startAdaptiveAnalysis();
-                }
-            }
-        }
-
-        function startEngineTurnIfNeeded() {
-            const cpuTurn = gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b');
-            if (!cpuTurn || chess.game_over()) return;
-
-            if (isEngineConnected) {
-                startAdaptiveAnalysis();
-            } else {
-                connectEngine();
-            }
-        }
-
-        function startAdaptiveAnalysis() {
-            if (!isEngineConnected || isAnalyzing || chess.game_over()) return;
-            
-            const adaptiveToggle = document.getElementById('adaptiveToggle');
-            const adaptiveEnabled = adaptiveToggle ? adaptiveToggle.checked : true;
-            
-            // El análisis adaptativo ahora está disponible en modo 'edit' y 'cpu'
-            if (adaptiveEnabled && (gameMode === 'cpu' || gameMode === 'edit')) {
-                // Iniciar búsqueda progresiva de PV
-                startProgressivePVSearch();
-            } else {
-                // Análisis estándar para modo 'human' o cuando adaptativo está deshabilitado
-                startStandardAnalysis();
-            }
-        }
-
-        function startProgressivePVSearch() {
-            currentPVAnalysis.searchInProgress = true;
-            currentPVAnalysis.adaptationActive = true;
-            currentPVAnalysis.pvCount = 3;
-            currentPVAnalysis.depth = 6;
-
-            // Calcular evaluación objetivo (algoritmo simplificado para demostración)
-            const currentEval = lastStats.evaluation ? lastStats.evaluation.value : 0;
-            currentPVAnalysis.targetEvaluation = calculateTargetEvaluation(currentEval);
-
-            addLog('adaptation', `Iniciando búsqueda progresiva PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth} objetivo=${(currentPVAnalysis.targetEvaluation/100).toFixed(2)}`);
-            
-            executeProgressiveStep();
-        }
-
-        function executeProgressiveStep() {
-            if (!currentPVAnalysis.searchInProgress) return;
-            
-            const fen = chess.fen();
-            lastStats.pvs = {};
-            stockfish.postMessage(`setoption name MultiPV value ${currentPVAnalysis.pvCount}`);
-            stockfish.postMessage(`position fen ${fen}`);
-            stockfish.postMessage(`go depth ${currentPVAnalysis.depth}`);
-            
-            isAnalyzing = true;
-            updateButtonStates();
-            
-            const engineStatus = document.getElementById('engineStatus');
-            if (engineStatus) {
-                engineStatus.textContent = `Búsqueda progresiva PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth}...`;
-            }
-
-            addLog('info', `Analizando ${currentPVAnalysis.pvCount} líneas a profundidad ${currentPVAnalysis.depth}...`);
-        }
-
-        function calculateTargetEvaluation(currentEval) {
-            // Algoritmo de balanceado adaptativo
-            if (Math.abs(currentEval) < 50) {
-                return 0; // Mantener igualdad en posiciones equilibradas
-            } else if (currentEval > 200) {
-                return currentEval * 0.3; // Reducir ventajas excesivas
-            } else if (currentEval < -200) {
-                return currentEval * 0.7; // Mejorar posiciones muy desventajosas
-            }
-            return currentEval * 0.5; // Balanceado general
-        }
-
-        function startStandardAnalysis() {
-            if (!isEngineConnected || isAnalyzing || chess.game_over()) return;
-
-            const fen = chess.fen();
-            lastStats.pvs = {};
-            stockfish.postMessage('setoption name MultiPV value 1');
-            stockfish.postMessage(`position fen ${fen}`);
-            stockfish.postMessage('go infinite');
-            
-            isAnalyzing = true;
-            
-            const engineStatus = document.getElementById('engineStatus');
-            if (engineStatus) {
-                engineStatus.textContent = 'Análisis estándar en progreso...';
-            }
-            
-            updateButtonStates();
-            
-            const pvLine = document.getElementById('pvLine');
-            if (pvLine) pvLine.textContent = 'Analizando...';
-            
-            addLog('info', 'Análisis estándar iniciado');
-        }
-
-        function forceBestMove() {
-            addLog('warning', 'Forzando movimiento de CPU...');
-            
-            if (stockfish) {
-                stockfish.postMessage('stop');
-            }
-            
-            setTimeout(() => {
-                if (lastStats.bestMoveSan) {
-                    makeMove(lastStats.bestMoveSan);
-                } else {
-                    const legalMoves = chess.moves();
-                    if (legalMoves.length > 0) {
-                        const randomMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
-                        makeMove(randomMove);
-                        addLog('warning', `Movimiento aleatorio: ${randomMove}`);
-                    }
-                }
-                
-                isAnalyzing = false;
-                currentPVAnalysis.searchInProgress = false;
-                updateButtonStates();
-            }, 200);
-        }
-
-        async function connectEngine() {
-            if (isEngineConnected) return;
-
-            try {
-                document.getElementById('engineStatus').textContent = 'Conectando motor...';
-                addLog('info', 'Conectando motor Stockfish...');
-                
-                const response = await fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
-                if (!response.ok) {
-                    throw new Error('Error al descargar Stockfish');
-                }
-                const workerScript = await response.text();
-
-                const blob = new Blob([workerScript], { type: 'application/javascript' });
-                blobURL = URL.createObjectURL(blob);
-
-                stockfish = new Worker(blobURL);
-                stockfish.onmessage = function(event) {
-                    handleEngineMessage(event.data);
-                };
-                
-                stockfish.postMessage('uci');
-                stockfish.postMessage('setoption name MultiPV value 1');
-                stockfish.postMessage('setoption name Hash value 128');
-                stockfish.postMessage('isready');
-                
-                isEngineConnected = true;
-                document.getElementById('engineStatus').textContent = 'Motor conectado y listo';
-                updateButtonStates();
-                
-                addLog('success', 'Motor Stockfish conectado');
-                
-                // Auto-iniciar análisis si es turno de CPU
-                if (gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b') && !chess.game_over()) {
-                    setTimeout(() => {
-                        startAdaptiveAnalysis();
-                    }, 500);
-                }
-            } catch (error) {
-                document.getElementById('engineStatus').textContent = 'Error: ' + error.message;
-                isEngineConnected = false;
-                updateButtonStates();
-                addLog('warning', `Error conectando motor: ${error.message}`);
-            }
-        }
-        
-        function disconnectEngine() {
-            if (!isEngineConnected) return;
-            
-            if (isAnalyzing) {
-                stopAnalysis();
-            }
-            
-            if (stockfish) {
-                stockfish.terminate();
-                stockfish = null;
-            }
-            
-            if (blobURL) {
-                URL.revokeObjectURL(blobURL);
-                blobURL = null;
-            }
-            
-            if (pvObserver) {
-                pvObserver.disconnect();
-                pvObserver = null;
-            }
-            
-            isEngineConnected = false;
-            currentPVAnalysis.searchInProgress = false;
-            document.getElementById('engineStatus').textContent = 'Motor desconectado';
-            resetAnalysisDisplay();
-            resetHighlights();
-            updateButtonStates();
-            updateMemoryStats();
-            
-            addLog('info', 'Motor desconectado');
-        }
-
-        function stopAnalysis() {
-            if (!isEngineConnected || !isAnalyzing) return;
-
-            if (stockfish) {
-                stockfish.postMessage('stop');
-            }
-            
-            isAnalyzing = false;
-            currentPVAnalysis.searchInProgress = false;
-            document.getElementById('engineStatus').textContent = 'Motor conectado - Análisis detenido';
-            updateButtonStates();
-            
-            addLog('info', 'Análisis detenido');
-        }
-
-        function handleEngineMessage(message) {
-            if (message.startsWith('bestmove')) {
-                processBestMove(message);
-            } 
-            else if (message.startsWith('info')) {
-                parseInfoLine(message);
-            }
-        }
-
-        function processBestMove(message) {
-            const parts = message.split(' ');
-            const bestMove = parts[1];
-            
-            if (bestMove && bestMove !== '(none)') {
-                lastStats.bestMove = bestMove;
-                lastStats.bestMoveSan = uciToSan(bestMove);
-                
-                document.getElementById('bestMove').textContent = 
-                    `Mejor: ${lastStats.bestMoveSan}`;
-                
-                updateBoard();
-                
-                addLog('success', `Mejor línea encontrada: ${lastStats.bestMoveSan} (${(lastStats.evaluation?.value/100 || 0).toFixed(2)})`);
-                
-                if (currentPVAnalysis.adaptationActive) {
-                    evaluateAdaptationResult();
-                }
-                
-                if (gameMode === 'cpu') {
-                    stopAnalysis();
-                    if (lastStats.bestMoveSan) {
-                        setTimeout(() => {
-                            makeMove(lastStats.bestMoveSan);
-                        }, 300);
-                    }
-                }
-            }
-        }
-
-        function evaluateAdaptationResult() {
-            if (!currentPVAnalysis.adaptationActive || !lastStats.evaluation) return;
-
-            const currentEval = lastStats.evaluation.value;
-            const targetEval = currentPVAnalysis.targetEvaluation;
-            const distance = Math.abs(currentEval - targetEval);
-            const maxDepth = 20;
-            const minDepth = 6;
-            const step = 2;
-
-            if (distance <= 25) {
-                if (currentPVAnalysis.depth < maxDepth) {
-                    currentPVAnalysis.depth += step;
-                    addLog('adaptation', `Aumentando profundidad a ${currentPVAnalysis.depth} (Δ${distance}cp)`);
-                    setTimeout(() => {
-                        if (currentPVAnalysis.searchInProgress) {
-                            executeProgressiveStep();
-                        }
-                    }, 500);
-                } else {
-                    addLog('adaptation', `Balance alcanzado: ${(currentEval/100).toFixed(2)} ≈ ${(targetEval/100).toFixed(2)} (Δ${distance}cp)`);
-                    currentPVAnalysis.adaptationActive = false;
-                }
-            } else if (currentPVAnalysis.depth > minDepth) {
-                currentPVAnalysis.depth = Math.max(minDepth, currentPVAnalysis.depth - step);
-                addLog('adaptation', `Reduciendo profundidad a ${currentPVAnalysis.depth} (Δ${distance}cp)`);
-                setTimeout(() => {
-                    if (currentPVAnalysis.searchInProgress) {
-                        executeProgressiveStep();
-                    }
-                }, 500);
-            } else if (currentPVAnalysis.pvCount < 30) {
-                currentPVAnalysis.pvCount += 3;
-                addLog('adaptation', `Expandiendo búsqueda a PV=${currentPVAnalysis.pvCount} (Δ${distance}cp)`);
-                setTimeout(() => {
-                    if (currentPVAnalysis.searchInProgress) {
-                        executeProgressiveStep();
-                    }
-                }, 500);
-            } else {
-                addLog('adaptation', `Límite PV alcanzado. Mejor balance: ${(currentEval/100).toFixed(2)} (Δ${distance}cp)`);
-                currentPVAnalysis.adaptationActive = false;
-            }
-        }
-
-        function parseInfoLine(message) {
-            const parts = message.split(' ');
-            
-            // Extraer nodos y tiempo para calcular rendimiento
-            const nodesIndex = parts.indexOf('nodes');
-            const timeIndex = parts.indexOf('time');
-            if (nodesIndex !== -1 && timeIndex !== -1) {
-                const nodes = parseInt(parts[nodesIndex + 1]);
-                const time = parseInt(parts[timeIndex + 1]);
-                lastStats.nodes = nodes;
-                lastStats.time = time;
-                
-                if (time > 0) {
-                    lastStats.nps = Math.round(nodes / (time / 1000));
-                }
-            }
-            
-            // Extraer profundidad de búsqueda actual
-            const depthIndex = parts.indexOf('depth');
-            if (depthIndex !== -1) {
-                lastStats.depth = parseInt(parts[depthIndex + 1]);
-            }
-            
-            // Procesar evaluación posicional
-            const scoreIndex = parts.indexOf('score');
-            if (scoreIndex !== -1) {
-                parseScore(parts, scoreIndex);
-            }
-            
-            // Procesar línea principal y MultiPV
-            const pvIndex = parts.indexOf('pv');
-            if (pvIndex !== -1 && parts.length > pvIndex + 1) {
-                const pvMoves = parts.slice(pvIndex + 1);
-                const multipvIndex = parts.indexOf('multipv');
-                const pvNumber = multipvIndex !== -1 ? parseInt(parts[multipvIndex + 1]) : 1;
-
-                const pvText = convertPVToSAN(pvMoves);
-                if (!lastStats.pvs) lastStats.pvs = {};
-                lastStats.pvs[pvNumber] = pvText;
-
-                if (pvNumber === 1) {
-                    lastStats.pv = pvText;
-                }
-            }
-            
-            updateEngineDisplay();
-        }
-
-        function parseScore(parts, scoreIndex) {
-            const scoreType = parts[scoreIndex + 1];
-            const scoreValue = parseInt(parts[scoreIndex + 2]);
-            
-            if (scoreType === 'cp') {
-                // Centipawns - ajustar según el turno
-                const adjustedEval = chess.turn() === 'w' ? scoreValue : -scoreValue;
-                lastStats.evaluation = {
-                    value: adjustedEval,
-                    type: 'cp'
-                };
-            } else if (scoreType === 'mate') {
-                // Mate en X movimientos
-                const adjustedMate = chess.turn() === 'w' ? scoreValue : -scoreValue;
-                lastStats.evaluation = {
-                    value: adjustedMate,
-                    type: 'mate'
-                };
-            }
-        }
-
-        function convertPVToSAN(pvMoves) {
-            try {
-                const tempChess = new Chess(chess.fen());
-                const sanMoves = [];
-                
-                // Convertir cada movimiento UCI a notación algebraica
-                for (const uciMove of pvMoves) {
-                    if (uciMove.length >= 4) {
-                        const from = uciMove.substring(0, 2);
-                        const to = uciMove.substring(2, 4);
-                        const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
-                        
-                        const move = tempChess.move({
-                            from: from,
-                            to: to,
-                            promotion: promotion
-                        });
-                        
-                        if (move) {
-                            sanMoves.push(move.san);
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                
-                // Formatear con numeración de movimientos
-                if (sanMoves.length > 0) {
-                    let pvText = '';
-                    let fullMoveNumber = parseInt(chess.fen().split(' ')[5]);
-                    let isWhiteTurn = chess.turn() === 'w';
-                    
-                    for (let i = 0; i < sanMoves.length; i++) {
-                        if (i === 0 && !isWhiteTurn) {
-                            pvText += `${fullMoveNumber}... ${sanMoves[i]} `;
-                        } else if (i === 0 && isWhiteTurn) {
-                            pvText += `${fullMoveNumber}. ${sanMoves[i]} `;
-                        } else if ((i + (isWhiteTurn ? 1 : 0)) % 2 === 0) {
-                            if (!isWhiteTurn || i > 0) {
-                                fullMoveNumber++;
-                            }
-                            pvText += `${fullMoveNumber}. ${sanMoves[i]} `;
-                        } else {
-                            pvText += `${sanMoves[i]} `;
-                        }
-                    }
-                    
-                    return pvText.trim();
-                }
-            } catch (error) {
-                console.warn('Error convirtiendo PV a SAN:', error);
-            }
-            
-            return pvMoves.join(' ');
-        }
-
-        function updateEngineDisplay() {
-            // Actualizar indicador de evaluación
-            const evalEl = document.getElementById('evaluation');
-            if (lastStats.evaluation && evalEl) {
-                const evalData = lastStats.evaluation;
-                const isMate = evalData.type === 'mate';
-                const score = evalData.value;
-                
-                evalEl.textContent = formatEvaluation(score, isMate);
-                evalEl.className = 'evaluation';
-                
-                if (isMate) {
-                    evalEl.classList.add(score > 0 ? 'eval-positive' : 'eval-negative');
-                } else {
-                    if (score > 50) {
-                        evalEl.classList.add('eval-positive');
-                    } else if (score < -50) {
-                        evalEl.classList.add('eval-negative');
-                    } else {
-                        evalEl.classList.add('eval-neutral');
-                    }
-                }
-            }
-
-            // Actualizar display de líneas principales
-            const pvLineEl = document.getElementById('pvLine');
-            if (pvLineEl) {
-                if (lastStats.pvs && Object.keys(lastStats.pvs).length > 0) {
-                    const lines = Object.keys(lastStats.pvs)
-                        .sort((a, b) => parseInt(a) - parseInt(b))
-                        .map(num => `[${num}] ${lastStats.pvs[num]}`);
-                    pvLineEl.textContent = lines.join('\n');
-                } else if (lastStats.pv) {
-                    pvLineEl.textContent = lastStats.pv;
-                }
-            }
-
-            // Actualizar estadísticas de rendimiento
-            const engineStatsEl = document.getElementById('engineStats');
-            if (engineStatsEl) {
-                const depthText = `Prof: ${lastStats.depth}`;
-                const npsText = lastStats.nps > 0 ? ` | ${(lastStats.nps / 1000).toFixed(0)}k n/s` : '';
-                engineStatsEl.textContent = depthText + npsText;
-                
-                // Log periódico de estadísticas (10% probabilidad por actualización)
-                if (lastStats.nps > 0 && Math.random() < 0.1) {
-                    addLog('info', `Prof: ${lastStats.depth} | ${(lastStats.nps / 1000).toFixed(0)}k n/s | Score: ${lastStats.evaluation ? (lastStats.evaluation.value/100).toFixed(2) : '--'}`);
-                }
-            }
-        }
-
-        // ===================== SISTEMA DE DESTACADO VISUAL MEJORADO =====================
-
-        function highlightBestLine() {
-            resetHighlights();
-            
-            const bestLineElement = document.getElementById('pvLine');
-            const bestLine = bestLineElement.textContent.split('\n')[0].trim();
-
-            // Verificar si hay contenido válido para destacar
-            if (bestLine === "Inicia el análisis para ver la mejor línea" || 
-                bestLine === "Analizando..." || 
-                !bestLine || 
-                bestLine.length < 3) {
-                return;
-            }
-
-            try {
-                // Extraer movimientos de la línea principal
-                const moves = bestLine.split(/\s+/).filter(move => 
-                    move.match(/^[a-h1-8KQRBNOX+#=\-]+$/) && 
-                    !move.match(/^\d+\.+$/)
-                );
-
-                if (moves.length === 0) return;
-
-                const tempChess = new Chess(chess.fen());
-                const squares = [];
-                const movesToProcess = moves.slice(0, 3); // Destacar primeros 3 movimientos
-
-                // Procesar cada movimiento para obtener casillas
-                movesToProcess.forEach(move => {
-                    try {
-                        const moveObj = tempChess.move(move, { sloppy: true });
-                        if (moveObj) {
-                            squares.push(moveObj.from);
-                            squares.push(moveObj.to);
-                        }
-                    } catch (e) {
-                        console.warn(`Movimiento inválido en línea principal: ${move}`);
-                    }
-                });
-
-                // Aplicar destacado visual a las casillas
-                squares.forEach(square => {
-                    const squareElements = document.querySelectorAll(`[data-square="${square}"]`);
-                    squareElements.forEach(squareElement => {
-                        if (squareElement && squareElement.tagName === 'rect') {
-                            const file = square.charCodeAt(0) - 97;
-                            const rank = parseInt(square[1]) - 1;
-                            const isDark = (file + rank) % 2 === 1;
-                            
-                            squareElement.classList.add('square-highlight');
-                            if (isDark) {
-                                squareElement.classList.add('dark');
-                            }
-                            previousHighlightedSquares.push(squareElement);
-                        }
-                    });
-                });
-            } catch (error) {
-                console.warn('Error al destacar la mejor línea:', error);
-            }
-        }
-
-        function resetHighlights() {
-            previousHighlightedSquares.forEach(square => {
-                square.classList.remove('square-highlight', 'dark');
-            });
-            previousHighlightedSquares = [];
-        }
-
-        function setupPVObserver() {
-            if (pvObserver) {
-                pvObserver.disconnect();
-            }
-            
-            const pvLineElement = document.getElementById('pvLine');
-            if (pvLineElement) {
-                pvObserver = new MutationObserver(() => {
-                    setTimeout(highlightBestLine, 100);
-                });
-                
-                pvObserver.observe(pvLineElement, {
-                    childList: true,
-                    characterData: true,
-                    subtree: true
-                });
-            }
-        }
-
-        // ===================== GESTIÓN DE MOVIMIENTOS LEGALES =====================
-
-        function showLegalMoves() {
-            if (chess.game_over()) return;
-
-            const moves = chess.moves({ verbose: true });
-            const movesList = document.getElementById('legalMovesList');
-            const movesHeader = document.getElementById('legalMovesHeader');
-            movesList.innerHTML = '';
-
-            movesHeader.innerHTML = `<i class="fas fa-chess-knight"></i> Movimientos Legales (${moves.length})`;
-
-            if (moves.length === 0) {
-                movesList.innerHTML = '<div style="text-align: center; padding: 20px; color: #6c757d;">No hay movimientos legales</div>';
-            } else {
-                moves.forEach(move => {
-                    const div = document.createElement('div');
-                    div.className = 'move-item';
-                    
-                    div.innerHTML = `
-                        <span class="move-notation">${move.san}</span>
-                        <span class="move-coords">${move.from}-${move.to}</span>
-                    `;
-                    
-                    div.addEventListener('click', () => {
-                        makeMove(move.san);
-                    });
-                    movesList.appendChild(div);
-                });
-            }
-
-            document.getElementById('legalMoves').style.display = 'block';
-        }
-
-        function hideLegalMoves() {
-            document.getElementById('legalMoves').style.display = 'none';
-        }
-
-        // ===================== FUNCIONES UTILITARIAS =====================
-
-        function updateMemoryStats() {
-            if (window.performance && window.performance.memory) {
-                const memory = window.performance.memory;
-                document.getElementById('memoryStats').textContent = 
-                    `Mem: ${Math.round(memory.usedJSHeapSize / (1024 * 1024))}MB`;
-            } else {
-                document.getElementById('memoryStats').textContent = 'Mem: N/A';
-            }
-        }
-
-        // ===================== EVENTOS E INICIALIZACIÓN DEL SISTEMA =====================
-
-        window.addEventListener('load', function() {
-            drawBoard();
-            updateMemoryStats();
-            updateButtonStates();
-            setupPVObserver();
-            
-            // Configurar evento de cambio de modo
-            const modeSelect = document.getElementById('modeSelect');
-            if (modeSelect) {
-                modeSelect.addEventListener('change', function(e) {
-                    setGameMode(e.target.value);
-                });
-            }
-            
-            // Configurar toggle adaptativo con reporte de estado
-            const adaptiveToggle = document.getElementById('adaptiveToggle');
-            if (adaptiveToggle) {
-                adaptiveToggle.addEventListener('change', function(e) {
-                    const status = e.target.checked ? 'activado' : 'desactivado';
-                    addLog('info', `Modo adaptativo ${status}`);
-                    
-                    // Reportar estado completo después del cambio
-                    setTimeout(() => {
-                        reportAdaptiveModeStatus();
-                    }, 100);
-                });
-            }
-            
-            // Log inicial del sistema
-            addLog('success', 'Sistema de ajedrez inicializado correctamente');
-        });
-        
-        // Cleanup al cerrar la página
-        window.addEventListener('beforeunload', function() {
-            if (stockfish) {
-                stockfish.terminate();
-            }
-            if (blobURL) {
-                URL.revokeObjectURL(blobURL);
-            }
-            if (pvObserver) {
-                pvObserver.disconnect();
-            }
-        });
-
-        // Exponer funciones globalmente para manejadores onclick
-        window.drawBoard = drawBoard;
-        window.showLegalMoves = showLegalMoves;
-        window.hideLegalMoves = hideLegalMoves;
-        window.toggleEngine = toggleEngine;
-        window.toggleAnalysis = toggleAnalysis;
-        window.forceBestMove = forceBestMove;
-        window.handleSquareClick = handleSquareClick;
-        window.clearLogs = clearLogs;
-        window.toggleLogsPause = toggleLogsPause;
-    </script>
-</body>
-</html><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -1876,28 +621,6 @@ const timestamp = new Date().toLocaleTimeString('es-ES', {
             50.1%, 100% { fill: #C19A6B; }
         }
 
-        /* Configuración adaptativa con estado condicional */
-        .adaptive-config {
-            margin-top: 8px;
-        }
-
-        .adaptive-config label {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 0.75rem;
-            transition: opacity 0.2s ease-in-out;
-        }
-
-        .adaptive-config label.disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .adaptive-config input[type="checkbox"]:disabled {
-            cursor: not-allowed;
-        }
-
         /* Responsive */
         @media (max-width: 1200px) {
             .main-layout {
@@ -2029,7 +752,7 @@ const timestamp = new Date().toLocaleTimeString('es-ES', {
                                 <i class="fas fa-gamepad"></i> Modo:
                             </label>
                             <select id="modeSelect">
-                                <option value="edit">Edición y análisis</option>
+                                <option value="edit">Edición</option>
                                 <option value="human">Humano vs Humano</option>
                                 <option value="cpu">Versus CPU</option>
                             </select>
@@ -2087,9 +810,9 @@ const timestamp = new Date().toLocaleTimeString('es-ES', {
                         </div>
                         <div id="engineStatus" class="engine-status">Motor no conectado</div>
                         
-                        <!-- Configuración adaptativa con estado condicional -->
-                        <div class="adaptive-config">
-                            <label id="adaptiveLabel">
+                        <!-- Configuración adaptativa -->
+                        <div style="margin-top: 8px;">
+                            <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem;">
                                 <input type="checkbox" id="adaptiveToggle" checked>
                                 <span>Modo adaptativo</span>
                             </label>
@@ -2152,16 +875,16 @@ const timestamp = new Date().toLocaleTimeString('es-ES', {
         let selectedSquare = null;
         let possibleMoves = [];
         
-        // Sistema de logs con más capacidad - expandido para mejor seguimiento del análisis adaptativo
+        // Sistema de logs con más capacidad
         let logs = [];
         let logsPaused = false;
         const MAX_LOGS = 8; // Aumentado de 5 a 8 para aprovechar el espacio adicional
         
-        // Variables para destacar casillas - mecanismo de retroalimentación visual
+        // Variables para destacar casillas
         let previousHighlightedSquares = [];
         let pvObserver = null;
         
-        // Estadísticas del motor - sistema de monitoreo del rendimiento analítico
+        // Estadísticas del motor
         let lastStats = {
             nps: 0,
             pv: '',
@@ -2174,7 +897,7 @@ const timestamp = new Date().toLocaleTimeString('es-ES', {
             time: 0
         };
 
-        // Adaptación progresiva - núcleo del sistema de análisis inteligente
+        // Adaptación progresiva
         let currentPVAnalysis = {
             pvCount: 3,
             depth: 6,
@@ -2183,7 +906,7 @@ const timestamp = new Date().toLocaleTimeString('es-ES', {
             adaptationActive: false
         };
 
-        // ===================== SISTEMA DE LOGS EXPANDIDO =====================
+        // ===================== SISTEMA DE LOGS =====================
         
         function addLog(type, message) {
             if (logsPaused) return;
@@ -2192,4 +915,1170 @@ const timestamp = new Date().toLocaleTimeString('es-ES', {
                 hour12: false, 
                 hour: '2-digit', 
                 minute: '2-digit', 
-                second: '2-digit'
+                second: '2-digit' 
+            });
+            
+            const logEntry = {
+                id: Date.now(),
+                timestamp: timestamp,
+                type: type,
+                message: message
+            };
+            
+            logs.unshift(logEntry);
+            
+            // Mantener solo los últimos MAX_LOGS
+            if (logs.length > MAX_LOGS) {
+                logs = logs.slice(0, MAX_LOGS);
+            }
+            
+            updateLogsDisplay();
+        }
+        
+        function updateLogsDisplay() {
+            const container = document.getElementById('logsContainer');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            logs.forEach(log => {
+                const logDiv = document.createElement('div');
+                logDiv.className = `log-entry ${log.type}`;
+                
+                logDiv.innerHTML = `
+                    <span class="log-timestamp">${log.timestamp}</span>
+                    <span class="log-message">${log.message}</span>
+                `;
+                
+                container.appendChild(logDiv);
+            });
+            
+            // Auto-scroll si no está en pausa
+            if (!logsPaused) {
+                container.scrollTop = 0;
+            }
+        }
+        
+        function clearLogs() {
+            logs = [];
+            updateLogsDisplay();
+            addLog('info', 'Logs limpiados');
+        }
+        
+        function toggleLogsPause() {
+            logsPaused = !logsPaused;
+            const btn = document.getElementById('pauseLogsBtn');
+            
+            if (logsPaused) {
+                btn.innerHTML = '<i class="fas fa-play"></i>';
+                btn.title = 'Reanudar logs';
+                addLog('info', 'Logs pausados');
+            } else {
+                btn.innerHTML = '<i class="fas fa-pause"></i>';
+                btn.title = 'Pausar logs';
+                addLog('info', 'Logs reanudados');
+            }
+        }
+
+        // ===================== FUNCIONES PRINCIPALES =====================
+
+        function updateButtonStates() {
+            const engineToggleBtn = document.getElementById('engineToggleBtn');
+            const analysisToggleBtn = document.getElementById('analysisToggleBtn');
+            const showMovesBtn = document.getElementById('showMovesBtn');
+            const forceMoveBtn = document.getElementById('forceMoveBtn');
+
+            if (isEngineConnected) {
+                engineToggleBtn.innerHTML = '<i class="fas fa-power-off"></i> Desconectar';
+                engineToggleBtn.className = 'btn btn-warning';
+            } else {
+                engineToggleBtn.innerHTML = '<i class="fas fa-plug"></i> Conectar Motor';
+                engineToggleBtn.className = 'btn btn-secondary';
+            }
+
+            if (isAnalyzing) {
+                analysisToggleBtn.innerHTML = '<i class="fas fa-stop"></i> Detener';
+                analysisToggleBtn.className = 'btn btn-danger';
+                analysisToggleBtn.disabled = false;
+            } else {
+                analysisToggleBtn.innerHTML = '<i class="fas fa-play"></i> Analizar';
+                analysisToggleBtn.className = 'btn btn-success';
+                analysisToggleBtn.disabled = !isEngineConnected || chess.game_over();
+            }
+
+            if (showMovesBtn) {
+                showMovesBtn.disabled = chess.game_over();
+            }
+
+            // Mostrar botón de forzar solo en modo CPU cuando está analizando
+            if (forceMoveBtn) {
+                const cpuTurn = gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b');
+                const shouldShow = gameMode === 'cpu' && (isAnalyzing || cpuTurn);
+                forceMoveBtn.style.display = shouldShow ? 'inline-flex' : 'none';
+                forceMoveBtn.disabled = !isAnalyzing && !lastStats.bestMoveSan;
+            }
+        }
+
+        function parseFEN(fen) {
+            const [position] = fen.split(' ');
+            const rows = position.split('/');
+            board = Array(8).fill().map(() => Array(8).fill(null));
+
+            for (let row = 0; row < 8; row++) {
+                let col = 0;
+                const actualRow = 7 - row;
+                for (let char of rows[row]) {
+                    if (/\d/.test(char)) {
+                        col += parseInt(char);
+                    } else {
+                        board[actualRow][col] = char;
+                        col++;
+                    }
+                }
+            }
+        }
+
+        function uciToSan(uciMove) {
+            if (!uciMove || uciMove.length < 4) return uciMove;
+            
+            const from = uciMove.substring(0, 2);
+            const to = uciMove.substring(2, 4);
+            const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
+            
+            const tempChess = new Chess(chess.fen());
+            
+            try {
+                const move = tempChess.move({
+                    from: from,
+                    to: to,
+                    promotion: promotion
+                });
+                return move ? move.san : uciMove;
+            } catch (e) {
+                return uciMove;
+            }
+        }
+
+        function formatEvaluation(score, isMate) {
+            if (isMate) {
+                return score > 0 ? `+M${score}` : `-M${Math.abs(score)}`;
+            }
+            
+            const pawns = score / 100;
+            return pawns > 0 ? `+${pawns.toFixed(2)}` : pawns.toFixed(2);
+        }
+
+        function generateChessboardSVG() {
+            let svg = `<svg width="${boardSize + 40}" height="${boardSize + 40}" xmlns="http://www.w3.org/2000/svg">`;
+
+            // Dibujar casillas
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const x = col * squareSize + 20;
+                    const y = row * squareSize + 20;
+                    const fill = (row + col) % 2 === 0 ? '#F5F5DC' : '#C19A6B';
+                    const squareName = String.fromCharCode(97 + col) + (8 - row);
+                    svg += `<rect x="${x}" y="${y}" width="${squareSize}" height="${squareSize}" fill="${fill}" 
+                            data-square="${squareName}" onclick="handleSquareClick('${squareName}')" 
+                            style="cursor: pointer;" />`;
+                }
+            }
+
+            // Resaltar último movimiento
+            if (lastMove) {
+                const history = chess.history({ verbose: true });
+                if (history.length > 0) {
+                    const move = history[history.length - 1];
+                    const fromCol = move.from.charCodeAt(0) - 97;
+                    const fromRow = 8 - parseInt(move.from[1]);
+                    const toCol = move.to.charCodeAt(0) - 97;
+                    const toRow = 8 - parseInt(move.to[1]);
+
+                    const fromX = fromCol * squareSize + 20;
+                    const fromY = fromRow * squareSize + 20;
+                    const toX = toCol * squareSize + 20;
+                    const toY = toRow * squareSize + 20;
+
+                    svg += `<rect x="${fromX}" y="${fromY}" width="${squareSize}" height="${squareSize}" fill="rgba(255, 255, 0, 0.4)" />`;
+                    svg += `<rect x="${toX}" y="${toY}" width="${squareSize}" height="${squareSize}" fill="rgba(255, 255, 0, 0.4)" />`;
+                }
+            }
+
+            // Destacar casilla seleccionada
+            if (selectedSquare) {
+                const col = selectedSquare.charCodeAt(0) - 97;
+                const row = 8 - parseInt(selectedSquare[1]);
+                const x = col * squareSize + 20;
+                const y = row * squareSize + 20;
+                svg += `<rect x="${x}" y="${y}" width="${squareSize}" height="${squareSize}" fill="rgba(0, 123, 255, 0.3)" />`;
+            }
+
+            // Mostrar movimientos posibles
+            possibleMoves.forEach(move => {
+                const col = move.to.charCodeAt(0) - 97;
+                const row = 8 - parseInt(move.to[1]);
+                const x = col * squareSize + 20;
+                const y = row * squareSize + 20;
+                const centerX = x + squareSize / 2;
+                const centerY = y + squareSize / 2;
+                
+                if (chess.get(move.to)) {
+                    svg += `<circle cx="${centerX}" cy="${centerY}" r="8" fill="rgba(220, 53, 69, 0.7)" />`;
+                } else {
+                    svg += `<circle cx="${centerX}" cy="${centerY}" r="6" fill="rgba(40, 167, 69, 0.7)" />`;
+                }
+            });
+
+            // Flecha del mejor movimiento
+            if (lastStats.bestMove && lastStats.bestMove.length >= 4) {
+                const from = lastStats.bestMove.substring(0, 2);
+                const to = lastStats.bestMove.substring(2, 4);
+                
+                const fromCol = from.charCodeAt(0) - 97;
+                const fromRow = 8 - parseInt(from[1]);
+                const toCol = to.charCodeAt(0) - 97;
+                const toRow = 8 - parseInt(to[1]);
+                
+                const fromX = (fromCol * squareSize) + squareSize/2 + 20;
+                const fromY = (fromRow * squareSize) + squareSize/2 + 20;
+                const toX = (toCol * squareSize) + squareSize/2 + 20;
+                const toY = (toRow * squareSize) + squareSize/2 + 20;
+                
+                svg += `<defs>
+                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#007bff" />
+                    </marker>
+                </defs>
+                <line x1="${fromX}" y1="${fromY}" x2="${toX}" y2="${toY}" stroke="#007bff" 
+                    stroke-width="3" opacity="0.8" marker-end="url(#arrowhead)" />`;
+            }
+
+            // Dibujar piezas
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const piece = board[7 - row][col];
+                    if (piece) {
+                        const x = col * squareSize + squareSize / 2 + 20;
+                        const y = row * squareSize + squareSize / 2 + 42;
+                        const symbol = pieceSymbols[piece] || '';
+                        const squareName = String.fromCharCode(97 + col) + (8 - row);
+                        svg += `<text x="${x}" y="${y}" font-size="48" text-anchor="middle" fill="#000" 
+                                onclick="handleSquareClick('${squareName}')" style="cursor: pointer;">${symbol}</text>`;
+                    }
+                }
+            }
+
+            // Coordenadas
+            for (let i = 0; i < 8; i++) {
+                svg += `<text x="10" y="${i * squareSize + squareSize / 1.5 + 20}" font-size="14" text-anchor="middle" fill="#666">${8 - i}</text>`;
+                svg += `<text x="${i * squareSize + squareSize / 2 + 20}" y="${boardSize + 35}" font-size="14" text-anchor="middle" fill="#666">${String.fromCharCode(97 + i)}</text>`;
+            }
+
+            svg += '</svg>';
+            return svg;
+        }
+
+        function showGameStatus() {
+            const statusElement = document.getElementById('gameStatus');
+            let status = "";
+            let iconClass = "fas fa-info-circle";
+            let statusClass = "status-info";
+
+            if (chess.in_checkmate()) {
+                status = "¡Jaque mate!";
+                iconClass = "fas fa-crown";
+                statusClass = "status-danger";
+            } else if (chess.in_stalemate()) {
+                status = "Tablas por ahogado";
+                iconClass = "fas fa-handshake";
+                statusClass = "status-warning";
+            } else if (chess.in_draw()) {
+                if (chess.in_threefold_repetition()) {
+                    status = "Tablas por repetición";
+                } else if (chess.insufficient_material()) {
+                    status = "Tablas por material";
+                } else {
+                    status = "Tablas por 50 movimientos";
+                }
+                iconClass = "fas fa-handshake";
+                statusClass = "status-warning";
+            } else if (chess.in_check()) {
+                status = "¡Jaque!";
+                iconClass = "fas fa-exclamation-triangle";
+                statusClass = "status-warning";
+            } else {
+                status = chess.turn() === 'w' ? "Turno: Blancas" : "Turno: Negras";
+                iconClass = "fas fa-chess";
+                statusClass = "status-success";
+            }
+
+            statusElement.className = `game-status-compact ${statusClass}`;
+            statusElement.innerHTML = `
+                <i class="${iconClass}"></i>
+                <span>${status}</span>
+            `;
+        }
+
+        // ===================== FUNCIONES DE INTERACCIÓN =====================
+
+        function handleSquareClick(square) {
+            if (gameMode === 'edit') return;
+
+            if (!selectedSquare) {
+                const piece = chess.get(square);
+                if (piece && canSelectPiece(piece)) {
+                    selectedSquare = square;
+                    possibleMoves = chess.moves({ square, verbose: true });
+                    updateBoard();
+                }
+            } else {
+                const moveObj = possibleMoves.find(m => m.to === square);
+                if (moveObj) {
+                    makeMove(moveObj.san);
+                    return;
+                }
+                
+                const piece = chess.get(square);
+                if (piece && canSelectPiece(piece)) {
+                    selectedSquare = square;
+                    possibleMoves = chess.moves({ square, verbose: true });
+                } else {
+                    selectedSquare = null;
+                    possibleMoves = [];
+                }
+                updateBoard();
+            }
+        }
+
+        function canSelectPiece(piece) {
+            if (!piece) return false;
+            if (gameMode === 'human') {
+                return piece.color === chess.turn();
+            }
+            if (gameMode === 'cpu') {
+                return piece.color === (playerColor === 'white' ? 'w' : 'b') && piece.color === chess.turn();
+            }
+            return false;
+        }
+
+        function setGameMode(mode) {
+            gameMode = mode;
+            const select = document.getElementById('modeSelect');
+            if (select && select.value !== mode) select.value = mode;
+            selectedSquare = null;
+            possibleMoves = [];
+            updateButtonStates();
+            
+            addLog('info', `Modo cambiado a: ${mode}`);
+        }
+
+        function updateBoard() {
+            document.getElementById('chessboard').innerHTML = generateChessboardSVG();
+        }
+
+        function drawBoard() {
+            const fen = document.getElementById('fenInput').value.trim();
+            if (!fen) {
+                alert('Por favor, ingresa una posición FEN válida.');
+                return;
+            }
+
+            chess = new Chess();
+            const validation = chess.validate_fen(fen);
+            if (!validation.valid) {
+                alert(`Posición FEN inválida: ${validation.error}`);
+                return;
+            }
+
+            chess.load(fen);
+            parseFEN(fen);
+            
+            lastStats = {
+                nps: 0,
+                pv: '',
+                pvs: {},
+                evaluation: null,
+                depth: 0,
+                bestMove: '',
+                bestMoveSan: '',
+                nodes: 0,
+                time: 0
+            };
+            
+            selectedSquare = null;
+            possibleMoves = [];
+            updateBoard();
+            
+            document.getElementById('legalMoves').style.display = 'none';
+            lastMove = null;
+            showGameStatus();
+            updateButtonStates();
+            
+            document.getElementById('evaluation').textContent = '--';
+            document.getElementById('bestMove').textContent = '--';
+            document.getElementById('engineStats').textContent = '--';
+            document.getElementById('pvLine').textContent = 'Inicia el análisis para ver la mejor línea';
+            
+            resetHighlights();
+            
+            if (isAnalyzing) {
+                stopAnalysis();
+            }
+            
+            updateMemoryStats();
+            setupPVObserver();
+            
+            addLog('success', 'Posición cargada correctamente');
+        }
+
+        function makeMove(move) {
+            try {
+                const moveResult = chess.move(move);
+                if (!moveResult) {
+                    console.warn('Movimiento inválido:', move);
+                    return;
+                }
+                
+                lastMove = moveResult;
+                document.getElementById('fenInput').value = chess.fen();
+                parseFEN(chess.fen());
+                
+                selectedSquare = null;
+                possibleMoves = [];
+                updateBoard();
+                
+                showLegalMoves();
+                showGameStatus();
+                updateButtonStates();
+                
+                if (isAnalyzing) {
+                    stopAnalysis();
+                }
+                
+                resetStats();
+                resetAnalysisDisplay();
+                
+                addLog('success', `Movimiento: ${moveResult.san}`);
+                
+                if (isEngineConnected && !chess.game_over()) {
+                    setTimeout(() => {
+                        const cpuTurn = gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b');
+                        if (cpuTurn) {
+                            startAdaptiveAnalysis();
+                        }
+                    }, 500);
+                }
+                
+                updateMemoryStats();
+                setTimeout(setupPVObserver, 100);
+                
+            } catch (error) {
+                console.error('Error al hacer movimiento:', error);
+                addLog('warning', `Error en movimiento: ${error.message}`);
+            }
+        }
+
+        function resetStats() {
+            lastStats = {
+                nps: 0,
+                pv: '',
+                pvs: {},
+                evaluation: null,
+                depth: 0,
+                bestMove: '',
+                bestMoveSan: '',
+                nodes: 0,
+                time: 0
+            };
+        }
+
+        function resetAnalysisDisplay() {
+            document.getElementById('evaluation').textContent = '--';
+            document.getElementById('bestMove').textContent = '--';
+            document.getElementById('engineStats').textContent = '--';
+            document.getElementById('pvLine').textContent = 'Inicia el análisis para ver la mejor línea';
+        }
+
+        // ===================== MOTOR DE ANÁLISIS CON ADAPTACIÓN =====================
+
+        function toggleEngine() {
+            if (isEngineConnected) {
+                disconnectEngine();
+            } else {
+                connectEngine();
+            }
+        }
+
+        function toggleAnalysis() {
+            if (isAnalyzing) {
+                stopAnalysis();
+            } else {
+                if (gameMode === 'cpu') {
+                    startEngineTurnIfNeeded();
+                } else {
+                    startAdaptiveAnalysis();
+                }
+            }
+        }
+
+        function startEngineTurnIfNeeded() {
+            const cpuTurn = gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b');
+            if (!cpuTurn || chess.game_over()) return;
+
+            if (isEngineConnected) {
+                startAdaptiveAnalysis();
+            } else {
+                connectEngine();
+            }
+        }
+
+        function startAdaptiveAnalysis() {
+            if (!isEngineConnected || isAnalyzing || chess.game_over()) return;
+            
+            const adaptiveToggle = document.getElementById('adaptiveToggle');
+            const adaptiveEnabled = adaptiveToggle ? adaptiveToggle.checked : true;
+            
+            if (adaptiveEnabled && gameMode === 'cpu') {
+                // Iniciar búsqueda progresiva de PV
+                startProgressivePVSearch();
+            } else {
+                // Análisis estándar
+                startStandardAnalysis();
+            }
+        }
+
+        function startProgressivePVSearch() {
+            currentPVAnalysis.searchInProgress = true;
+            currentPVAnalysis.adaptationActive = true;
+            currentPVAnalysis.pvCount = 3;
+            currentPVAnalysis.depth = 6;
+
+            // Calcular evaluación objetivo (simplificado para demo)
+            const currentEval = lastStats.evaluation ? lastStats.evaluation.value : 0;
+            currentPVAnalysis.targetEvaluation = calculateTargetEvaluation(currentEval);
+
+            addLog('adaptation', `Iniciando búsqueda progresiva PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth} objetivo=${(currentPVAnalysis.targetEvaluation/100).toFixed(2)}`);
+            
+            executeProgressiveStep();
+        }
+
+        function executeProgressiveStep() {
+            if (!currentPVAnalysis.searchInProgress) return;
+            
+            const fen = chess.fen();
+            lastStats.pvs = {};
+            stockfish.postMessage(`setoption name MultiPV value ${currentPVAnalysis.pvCount}`);
+            stockfish.postMessage(`position fen ${fen}`);
+            stockfish.postMessage(`go depth ${currentPVAnalysis.depth}`);
+            
+            isAnalyzing = true;
+            updateButtonStates();
+            
+            const engineStatus = document.getElementById('engineStatus');
+            if (engineStatus) {
+                engineStatus.textContent = `Búsqueda progresiva PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth}...`;
+            }
+
+            addLog('info', `Analizando ${currentPVAnalysis.pvCount} líneas a profundidad ${currentPVAnalysis.depth}...`);
+        }
+
+        function calculateTargetEvaluation(currentEval) {
+            // Lógica simplificada para demo
+            if (Math.abs(currentEval) < 50) {
+                return 0; // Mantener igualdad
+            } else if (currentEval > 200) {
+                return currentEval * 0.3; // Reducir ventaja
+            } else if (currentEval < -200) {
+                return currentEval * 0.7; // Mejorar desventaja
+            }
+            return currentEval * 0.5;
+        }
+
+        function startStandardAnalysis() {
+            if (!isEngineConnected || isAnalyzing || chess.game_over()) return;
+
+            const fen = chess.fen();
+            lastStats.pvs = {};
+            stockfish.postMessage('setoption name MultiPV value 1');
+            stockfish.postMessage(`position fen ${fen}`);
+            stockfish.postMessage('go infinite');
+            
+            isAnalyzing = true;
+            
+            const engineStatus = document.getElementById('engineStatus');
+            if (engineStatus) {
+                engineStatus.textContent = 'Análisis estándar en progreso...';
+            }
+            
+            updateButtonStates();
+            
+            const pvLine = document.getElementById('pvLine');
+            if (pvLine) pvLine.textContent = 'Analizando...';
+            
+            addLog('info', 'Análisis estándar iniciado');
+        }
+
+        function forceBestMove() {
+            addLog('warning', 'Forzando movimiento de CPU...');
+            
+            if (stockfish) {
+                stockfish.postMessage('stop');
+            }
+            
+            setTimeout(() => {
+                if (lastStats.bestMoveSan) {
+                    makeMove(lastStats.bestMoveSan);
+                } else {
+                    const legalMoves = chess.moves();
+                    if (legalMoves.length > 0) {
+                        const randomMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
+                        makeMove(randomMove);
+                        addLog('warning', `Movimiento aleatorio: ${randomMove}`);
+                    }
+                }
+                
+                isAnalyzing = false;
+                currentPVAnalysis.searchInProgress = false;
+                updateButtonStates();
+            }, 200);
+        }
+
+        async function connectEngine() {
+            if (isEngineConnected) return;
+
+            try {
+                document.getElementById('engineStatus').textContent = 'Conectando motor...';
+                addLog('info', 'Conectando motor Stockfish...');
+                
+                const response = await fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
+                if (!response.ok) {
+                    throw new Error('Error al descargar Stockfish');
+                }
+                const workerScript = await response.text();
+
+                const blob = new Blob([workerScript], { type: 'application/javascript' });
+                blobURL = URL.createObjectURL(blob);
+
+                stockfish = new Worker(blobURL);
+                stockfish.onmessage = function(event) {
+                    handleEngineMessage(event.data);
+                };
+                
+                stockfish.postMessage('uci');
+                stockfish.postMessage('setoption name MultiPV value 1');
+                stockfish.postMessage('setoption name Hash value 128');
+                stockfish.postMessage('isready');
+                
+                isEngineConnected = true;
+                document.getElementById('engineStatus').textContent = 'Motor conectado y listo';
+                updateButtonStates();
+                
+                addLog('success', 'Motor Stockfish conectado');
+                
+                if (gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b') && !chess.game_over()) {
+                    setTimeout(() => {
+                        startAdaptiveAnalysis();
+                    }, 500);
+                }
+            } catch (error) {
+                document.getElementById('engineStatus').textContent = 'Error: ' + error.message;
+                isEngineConnected = false;
+                updateButtonStates();
+                addLog('warning', `Error conectando motor: ${error.message}`);
+            }
+        }
+        
+        function disconnectEngine() {
+            if (!isEngineConnected) return;
+            
+            if (isAnalyzing) {
+                stopAnalysis();
+            }
+            
+            if (stockfish) {
+                stockfish.terminate();
+                stockfish = null;
+            }
+            
+            if (blobURL) {
+                URL.revokeObjectURL(blobURL);
+                blobURL = null;
+            }
+            
+            if (pvObserver) {
+                pvObserver.disconnect();
+                pvObserver = null;
+            }
+            
+            isEngineConnected = false;
+            currentPVAnalysis.searchInProgress = false;
+            document.getElementById('engineStatus').textContent = 'Motor desconectado';
+            resetAnalysisDisplay();
+            resetHighlights();
+            updateButtonStates();
+            updateMemoryStats();
+            
+            addLog('info', 'Motor desconectado');
+        }
+
+        function stopAnalysis() {
+            if (!isEngineConnected || !isAnalyzing) return;
+
+            if (stockfish) {
+                stockfish.postMessage('stop');
+            }
+            
+            isAnalyzing = false;
+            currentPVAnalysis.searchInProgress = false;
+            document.getElementById('engineStatus').textContent = 'Motor conectado - Análisis detenido';
+            updateButtonStates();
+            
+            addLog('info', 'Análisis detenido');
+        }
+
+        function handleEngineMessage(message) {
+            if (message.startsWith('bestmove')) {
+                processBestMove(message);
+            } 
+            else if (message.startsWith('info')) {
+                parseInfoLine(message);
+            }
+        }
+
+        function processBestMove(message) {
+            const parts = message.split(' ');
+            const bestMove = parts[1];
+            
+            if (bestMove && bestMove !== '(none)') {
+                lastStats.bestMove = bestMove;
+                lastStats.bestMoveSan = uciToSan(bestMove);
+                
+                document.getElementById('bestMove').textContent = 
+                    `Mejor: ${lastStats.bestMoveSan}`;
+                
+                updateBoard();
+                
+                addLog('success', `Mejor línea encontrada: ${lastStats.bestMoveSan} (${(lastStats.evaluation?.value/100 || 0).toFixed(2)})`);
+                
+                if (currentPVAnalysis.adaptationActive) {
+                    evaluateAdaptationResult();
+                }
+                
+                if (gameMode === 'cpu') {
+                    stopAnalysis();
+                    if (lastStats.bestMoveSan) {
+                        setTimeout(() => {
+                            makeMove(lastStats.bestMoveSan);
+                        }, 300);
+                    }
+                }
+            }
+        }
+
+        function evaluateAdaptationResult() {
+            if (!currentPVAnalysis.adaptationActive || !lastStats.evaluation) return;
+
+            const currentEval = lastStats.evaluation.value;
+            const targetEval = currentPVAnalysis.targetEvaluation;
+            const distance = Math.abs(currentEval - targetEval);
+            const maxDepth = 20;
+            const minDepth = 6;
+            const step = 2;
+
+            if (distance <= 25) {
+                if (currentPVAnalysis.depth < maxDepth) {
+                    currentPVAnalysis.depth += step;
+                    addLog('adaptation', `Aumentando profundidad a ${currentPVAnalysis.depth} (Δ${distance}cp)`);
+                    setTimeout(() => {
+                        if (currentPVAnalysis.searchInProgress) {
+                            executeProgressiveStep();
+                        }
+                    }, 500);
+                } else {
+                    addLog('adaptation', `Balance alcanzado: ${(currentEval/100).toFixed(2)} ≈ ${(targetEval/100).toFixed(2)} (Δ${distance}cp)`);
+                    currentPVAnalysis.adaptationActive = false;
+                }
+            } else if (currentPVAnalysis.depth > minDepth) {
+                currentPVAnalysis.depth = Math.max(minDepth, currentPVAnalysis.depth - step);
+                addLog('adaptation', `Reduciendo profundidad a ${currentPVAnalysis.depth} (Δ${distance}cp)`);
+                setTimeout(() => {
+                    if (currentPVAnalysis.searchInProgress) {
+                        executeProgressiveStep();
+                    }
+                }, 500);
+            } else if (currentPVAnalysis.pvCount < 30) {
+                currentPVAnalysis.pvCount += 3;
+                addLog('adaptation', `Expandiendo búsqueda a PV=${currentPVAnalysis.pvCount} (Δ${distance}cp)`);
+                setTimeout(() => {
+                    if (currentPVAnalysis.searchInProgress) {
+                        executeProgressiveStep();
+                    }
+                }, 500);
+            } else {
+                addLog('adaptation', `Límite PV alcanzado. Mejor balance: ${(currentEval/100).toFixed(2)} (Δ${distance}cp)`);
+                currentPVAnalysis.adaptationActive = false;
+            }
+        }
+
+        function parseInfoLine(message) {
+            const parts = message.split(' ');
+            
+            // Nodos y tiempo
+            const nodesIndex = parts.indexOf('nodes');
+            const timeIndex = parts.indexOf('time');
+            if (nodesIndex !== -1 && timeIndex !== -1) {
+                const nodes = parseInt(parts[nodesIndex + 1]);
+                const time = parseInt(parts[timeIndex + 1]);
+                lastStats.nodes = nodes;
+                lastStats.time = time;
+                
+                if (time > 0) {
+                    lastStats.nps = Math.round(nodes / (time / 1000));
+                }
+            }
+            
+            // Profundidad
+            const depthIndex = parts.indexOf('depth');
+            if (depthIndex !== -1) {
+                lastStats.depth = parseInt(parts[depthIndex + 1]);
+            }
+            
+            // Evaluación
+            const scoreIndex = parts.indexOf('score');
+            if (scoreIndex !== -1) {
+                parseScore(parts, scoreIndex);
+            }
+            
+            // Línea principal y MultiPV
+            const pvIndex = parts.indexOf('pv');
+            if (pvIndex !== -1 && parts.length > pvIndex + 1) {
+                const pvMoves = parts.slice(pvIndex + 1);
+                const multipvIndex = parts.indexOf('multipv');
+                const pvNumber = multipvIndex !== -1 ? parseInt(parts[multipvIndex + 1]) : 1;
+
+                const pvText = convertPVToSAN(pvMoves);
+                if (!lastStats.pvs) lastStats.pvs = {};
+                lastStats.pvs[pvNumber] = pvText;
+
+                if (pvNumber === 1) {
+                    lastStats.pv = pvText;
+                }
+            }
+            
+            updateEngineDisplay();
+        }
+
+        function parseScore(parts, scoreIndex) {
+            const scoreType = parts[scoreIndex + 1];
+            const scoreValue = parseInt(parts[scoreIndex + 2]);
+            
+            if (scoreType === 'cp') {
+                const adjustedEval = chess.turn() === 'w' ? scoreValue : -scoreValue;
+                lastStats.evaluation = {
+                    value: adjustedEval,
+                    type: 'cp'
+                };
+            } else if (scoreType === 'mate') {
+                const adjustedMate = chess.turn() === 'w' ? scoreValue : -scoreValue;
+                lastStats.evaluation = {
+                    value: adjustedMate,
+                    type: 'mate'
+                };
+            }
+        }
+
+        function convertPVToSAN(pvMoves) {
+            try {
+                const tempChess = new Chess(chess.fen());
+                const sanMoves = [];
+                
+                for (const uciMove of pvMoves) {
+                    if (uciMove.length >= 4) {
+                        const from = uciMove.substring(0, 2);
+                        const to = uciMove.substring(2, 4);
+                        const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
+                        
+                        const move = tempChess.move({
+                            from: from,
+                            to: to,
+                            promotion: promotion
+                        });
+                        
+                        if (move) {
+                            sanMoves.push(move.san);
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                
+                if (sanMoves.length > 0) {
+                    let pvText = '';
+                    let fullMoveNumber = parseInt(chess.fen().split(' ')[5]);
+                    let isWhiteTurn = chess.turn() === 'w';
+                    
+                    for (let i = 0; i < sanMoves.length; i++) {
+                        if (i === 0 && !isWhiteTurn) {
+                            pvText += `${fullMoveNumber}... ${sanMoves[i]} `;
+                        } else if (i === 0 && isWhiteTurn) {
+                            pvText += `${fullMoveNumber}. ${sanMoves[i]} `;
+                        } else if ((i + (isWhiteTurn ? 1 : 0)) % 2 === 0) {
+                            if (!isWhiteTurn || i > 0) {
+                                fullMoveNumber++;
+                            }
+                            pvText += `${fullMoveNumber}. ${sanMoves[i]} `;
+                        } else {
+                            pvText += `${sanMoves[i]} `;
+                        }
+                    }
+                    
+                    return pvText.trim();
+                }
+            } catch (error) {
+                console.warn('Error convirtiendo PV a SAN:', error);
+            }
+            
+            return pvMoves.join(' ');
+        }
+
+        function updateEngineDisplay() {
+            // Actualizar evaluación
+            const evalEl = document.getElementById('evaluation');
+            if (lastStats.evaluation && evalEl) {
+                const evalData = lastStats.evaluation;
+                const isMate = evalData.type === 'mate';
+                const score = evalData.value;
+                
+                evalEl.textContent = formatEvaluation(score, isMate);
+                evalEl.className = 'evaluation';
+                
+                if (isMate) {
+                    evalEl.classList.add(score > 0 ? 'eval-positive' : 'eval-negative');
+                } else {
+                    if (score > 50) {
+                        evalEl.classList.add('eval-positive');
+                    } else if (score < -50) {
+                        evalEl.classList.add('eval-negative');
+                    } else {
+                        evalEl.classList.add('eval-neutral');
+                    }
+                }
+            }
+
+            // Actualizar líneas principales
+            const pvLineEl = document.getElementById('pvLine');
+            if (pvLineEl) {
+                if (lastStats.pvs && Object.keys(lastStats.pvs).length > 0) {
+                    const lines = Object.keys(lastStats.pvs)
+                        .sort((a, b) => parseInt(a) - parseInt(b))
+                        .map(num => `[${num}] ${lastStats.pvs[num]}`);
+                    pvLineEl.textContent = lines.join('\n');
+                } else if (lastStats.pv) {
+                    pvLineEl.textContent = lastStats.pv;
+                }
+            }
+
+            // Actualizar estadísticas del motor
+            const engineStatsEl = document.getElementById('engineStats');
+            if (engineStatsEl) {
+                const depthText = `Prof: ${lastStats.depth}`;
+                const npsText = lastStats.nps > 0 ? ` | ${(lastStats.nps / 1000).toFixed(0)}k n/s` : '';
+                engineStatsEl.textContent = depthText + npsText;
+                
+                // Log periódico de estadísticas
+                if (lastStats.nps > 0 && Math.random() < 0.1) { // 10% probabilidad por update
+                    addLog('info', `Prof: ${lastStats.depth} | ${(lastStats.nps / 1000).toFixed(0)}k n/s | Score: ${lastStats.evaluation ? (lastStats.evaluation.value/100).toFixed(2) : '--'}`);
+                }
+            }
+        }
+
+        // ===================== FUNCIONES DE DESTACADO =====================
+
+        function highlightBestLine() {
+            resetHighlights();
+            
+            const bestLineElement = document.getElementById('pvLine');
+            const bestLine = bestLineElement.textContent.split('\n')[0].trim();
+
+            if (bestLine === "Inicia el análisis para ver la mejor línea" || 
+                bestLine === "Analizando..." || 
+                !bestLine || 
+                bestLine.length < 3) {
+                return;
+            }
+
+            try {
+                const moves = bestLine.split(/\s+/).filter(move => 
+                    move.match(/^[a-h1-8KQRBNOX+#=\-]+$/) && 
+                    !move.match(/^\d+\.+$/)
+                );
+
+                if (moves.length === 0) return;
+
+                const tempChess = new Chess(chess.fen());
+                const squares = [];
+                const movesToProcess = moves.slice(0, 3);
+
+                movesToProcess.forEach(move => {
+                    try {
+                        const moveObj = tempChess.move(move, { sloppy: true });
+                        if (moveObj) {
+                            squares.push(moveObj.from);
+                            squares.push(moveObj.to);
+                        }
+                    } catch (e) {
+                        console.warn(`Movimiento inválido en línea principal: ${move}`);
+                    }
+                });
+
+                squares.forEach(square => {
+                    const squareElements = document.querySelectorAll(`[data-square="${square}"]`);
+                    squareElements.forEach(squareElement => {
+                        if (squareElement && squareElement.tagName === 'rect') {
+                            const file = square.charCodeAt(0) - 97;
+                            const rank = parseInt(square[1]) - 1;
+                            const isDark = (file + rank) % 2 === 1;
+                            
+                            squareElement.classList.add('square-highlight');
+                            if (isDark) {
+                                squareElement.classList.add('dark');
+                            }
+                            previousHighlightedSquares.push(squareElement);
+                        }
+                    });
+                });
+            } catch (error) {
+                console.warn('Error al destacar la mejor línea:', error);
+            }
+        }
+
+        function resetHighlights() {
+            previousHighlightedSquares.forEach(square => {
+                square.classList.remove('square-highlight', 'dark');
+            });
+            previousHighlightedSquares = [];
+        }
+
+        function setupPVObserver() {
+            if (pvObserver) {
+                pvObserver.disconnect();
+            }
+            
+            const pvLineElement = document.getElementById('pvLine');
+            if (pvLineElement) {
+                pvObserver = new MutationObserver(() => {
+                    setTimeout(highlightBestLine, 100);
+                });
+                
+                pvObserver.observe(pvLineElement, {
+                    childList: true,
+                    characterData: true,
+                    subtree: true
+                });
+            }
+        }
+
+        // ===================== FUNCIONES DE MOVIMIENTOS =====================
+
+        function showLegalMoves() {
+            if (chess.game_over()) return;
+
+            const moves = chess.moves({ verbose: true });
+            const movesList = document.getElementById('legalMovesList');
+            const movesHeader = document.getElementById('legalMovesHeader');
+            movesList.innerHTML = '';
+
+            movesHeader.innerHTML = `<i class="fas fa-chess-knight"></i> Movimientos Legales (${moves.length})`;
+
+            if (moves.length === 0) {
+                movesList.innerHTML = '<div style="text-align: center; padding: 20px; color: #6c757d;">No hay movimientos legales</div>';
+            } else {
+                moves.forEach(move => {
+                    const div = document.createElement('div');
+                    div.className = 'move-item';
+                    
+                    div.innerHTML = `
+                        <span class="move-notation">${move.san}</span>
+                        <span class="move-coords">${move.from}-${move.to}</span>
+                    `;
+                    
+                    div.addEventListener('click', () => {
+                        makeMove(move.san);
+                    });
+                    movesList.appendChild(div);
+                });
+            }
+
+            document.getElementById('legalMoves').style.display = 'block';
+        }
+
+        function hideLegalMoves() {
+            document.getElementById('legalMoves').style.display = 'none';
+        }
+
+        // ===================== FUNCIONES UTILITARIAS =====================
+
+        function updateMemoryStats() {
+            if (window.performance && window.performance.memory) {
+                const memory = window.performance.memory;
+                document.getElementById('memoryStats').textContent = 
+                    `Mem: ${Math.round(memory.usedJSHeapSize / (1024 * 1024))}MB`;
+            } else {
+                document.getElementById('memoryStats').textContent = 'Mem: N/A';
+            }
+        }
+
+        // ===================== EVENTOS E INICIALIZACIÓN =====================
+
+        window.addEventListener('load', function() {
+            drawBoard();
+            updateMemoryStats();
+            updateButtonStates();
+            setupPVObserver();
+            
+            // Configurar evento de cambio de modo
+            const modeSelect = document.getElementById('modeSelect');
+            if (modeSelect) {
+                modeSelect.addEventListener('change', function(e) {
+                    setGameMode(e.target.value);
+                });
+            }
+            
+            // Configurar toggle adaptativo
+            const adaptiveToggle = document.getElementById('adaptiveToggle');
+            if (adaptiveToggle) {
+                adaptiveToggle.addEventListener('change', function(e) {
+                    const status = e.target.checked ? 'activado' : 'desactivado';
+                    addLog('info', `Modo adaptativo ${status}`);
+                });
+            }
+            
+            // Log inicial
+            addLog('success', 'Sistema de ajedrez inicializado');
+        });
+        
+        window.addEventListener('beforeunload', function() {
+            if (stockfish) {
+                stockfish.terminate();
+            }
+            if (blobURL) {
+                URL.revokeObjectURL(blobURL);
+            }
+            if (pvObserver) {
+                pvObserver.disconnect();
+            }
+        });
+
+        // Exponer funciones globalmente para onclick
+        window.drawBoard = drawBoard;
+        window.showLegalMoves = showLegalMoves;
+        window.hideLegalMoves = hideLegalMoves;
+        window.toggleEngine = toggleEngine;
+        window.toggleAnalysis = toggleAnalysis;
+        window.forceBestMove = forceBestMove;
+        window.handleSquareClick = handleSquareClick;
+        window.clearLogs = clearLogs;
+        window.toggleLogsPause = toggleLogsPause;
+    </script>
+</body>
+</html>
