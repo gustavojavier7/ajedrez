@@ -1530,18 +1530,7 @@
             addLog('info', `Analizando ${currentPVAnalysis.pvCount} líneas a profundidad ${currentPVAnalysis.depth}...`);
         }
 
-        function calculateTargetEvaluation(currentEval) {
-            if (Math.abs(currentEval) < 50) {
-                return 0;
-            } else if (currentEval > 200) {
-                return currentEval * 0.3;
-            } else if (currentEval < -200) {
-                return currentEval * 0.7;
-            }
-            return currentEval * 0.5;
-        }
-
-        function startStandardAnalysis() {
+            function startStandardAnalysis() {
             if (!isEngineConnected || isAnalyzing || !chess || chess.game_over()) return;
 
             const fen = chess.fen();
