@@ -213,7 +213,6 @@
             margin-top: 8px;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
             width: 100%;
-            max-width: 536px;
             overflow: hidden;
         }
         .pv-section-main .pv-title {
@@ -231,8 +230,6 @@
             color: #000;
             line-height: 1.5;
             word-wrap: break-word;
-            max-height: 120px;
-            overflow-y: auto;
             background: white;
             padding: 8px;
             border-radius: 4px;
@@ -245,13 +242,37 @@
             display: flex;
             flex-direction: column;
             gap: 8px;
+            flex: 1;
+            min-height: 0;
         }
-        .analysis-panel {
-            background: white;
-            border: 1px solid #dee2e6;
-            border-radius: 6px;
-            padding: 16px;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        .fen-logs-row {
+            display: flex;
+            align-items: stretch;
+            gap: 8px;
+            margin-bottom: 0;
+            flex-wrap: wrap;
+            min-height: 0;
+            flex: 1;
+        }
+        .fen-logs-row .input-section {
+            flex: 1.25;
+            min-width: 300px;
+            margin-bottom: 0;
+        }
+        .logs-column {
+            flex: 1;
+            min-width: 280px;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .analysis-inline {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
         .analysis-section {
             margin-bottom: 16px;
@@ -347,9 +368,12 @@
             border: 1px solid #dee2e6;
             border-radius: 6px;
             padding: 12px;
-            margin-bottom: 8px;
             width: 100%;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
         }
         .logs-header {
             display: flex;
@@ -388,13 +412,15 @@
             font-family: 'Courier New', monospace;
             font-size: 0.75rem;
             line-height: 1.4;
-            height: 180px;
             overflow-y: auto;
             background: #ffffff;
             color: #000000;
             padding: 8px;
             border-radius: 4px;
             border: 1px solid #dee2e6;
+            flex: 1;
+            max-height: calc(100vh - 220px);
+            min-height: 0;
         }
         .log-entry {
             display: flex;
@@ -567,19 +593,6 @@
                 width: 100%;
                 min-width: unset;
             }
-            .analysis-panel {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 16px;
-            }
-            .analysis-section {
-                border-bottom: none;
-                padding-bottom: 0;
-                margin-bottom: 0;
-            }
-            .logs-section {
-                grid-column: 1 / -1;
-            }
         }
         @media (max-width: 768px) {
             .container {
@@ -602,9 +615,6 @@
             }
             .button-group {
                 flex-direction: column;
-            }
-            .analysis-panel {
-                grid-template-columns: 1fr;
             }
             .engine-controls {
                 flex-direction: column;
@@ -635,104 +645,108 @@
                     <i class="fas fa-info-circle"></i>
                     <span>Cargando...</span>
                 </div>
+            </div>
+            <div class="right-panel">
+                <div class="fen-logs-row">
+                    <div class="input-section">
+                        <div class="input-row">
+                            <div class="input-group">
+                                <label for="fenInput">
+                                    <i class="fas fa-code"></i> Posición FEN:
+                                </label>
+                                <input type="text"
+                                       id="fenInput"
+                                       value="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+                                       placeholder="Ingresa la posición FEN"
+                                       onclick="this.select()">
+                            </div>
+                            <div class="input-group" style="max-width: 200px;">
+                                <label for="modeSelect">
+                                    <i class="fas fa-gamepad"></i> Modo:
+                                </label>
+                                <select id="modeSelect">
+                                    <option value="edit">Edición y análisis</option>
+                                    <option value="human">Humano vs Humano</option>
+                                    <option value="cpu">Versus CPU</option>
+                                </select>
+                            </div>
+                            <div class="button-group">
+                                <button onclick="drawBoard()" class="btn btn-primary">
+                                    <i class="fas fa-chess-board"></i> Cargar Posición
+                                </button>
+                                <button onclick="showLegalMoves()" id="showMovesBtn" class="btn btn-success">
+                                    <i class="fas fa-list"></i> Movimientos
+                                </button>
+                            </div>
+                        </div>
+                        <div class="analysis-inline">
+                            <div class="analysis-section">
+                                <div class="section-title">
+                                    <i class="fas fa-microchip"></i>
+                                    Motor de Análisis
+                                </div>
+                                <div class="engine-controls">
+                                    <button onclick="toggleEngine()" id="engineToggleBtn" class="btn btn-secondary">
+                                        <i class="fas fa-plug"></i> Conectar Motor
+                                    </button>
+                                    <button onclick="toggleAnalysis()" id="analysisToggleBtn" class="btn btn-success">
+                                        <i class="fas fa-play"></i> Analizar
+                                    </button>
+                                    <button onclick="forceBestMove()" id="forceMoveBtn" class="btn btn-warning" style="display: none;">
+                                        <i class="fas fa-forward"></i> Forzar
+                                    </button>
+                                </div>
+                                <div id="engineStatus" class="engine-status">Motor no conectado</div>
+
+                                <div class="adaptive-config">
+                                    <label id="adaptiveLabel">
+                                        <input type="checkbox" id="adaptiveToggle" checked>
+                                        <span>Modo adaptativo</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="analysis-section">
+                                <div class="section-title">
+                                    <i class="fas fa-balance-scale"></i>
+                                    Evaluación
+                                </div>
+                                <div class="evaluation-display">
+                                    <span id="evaluation" class="evaluation">--</span>
+                                    <span id="bestMove" class="best-move">--</span>
+                                </div>
+                                <div class="stats-display">
+                                    <span id="engineStats">--</span>
+                                    <span id="memoryStats">--</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="logs-column">
+                        <div class="logs-section">
+                            <div class="logs-header">
+                                <div class="logs-title">
+                                    <i class="fas fa-terminal"></i>
+                                    Logs de Adaptación
+                                </div>
+                                <div class="logs-controls">
+                                    <button onclick="clearLogs()" title="Limpiar logs">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                    <button onclick="toggleLogsPause()" id="pauseLogsBtn" title="Pausar logs">
+                                        <i class="fas fa-pause"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="logs-container" id="logsContainer"></div>
+                        </div>
+                    </div>
+                </div>
                 <div class="pv-section-main">
                     <div class="pv-title">
                         <i class="fas fa-route"></i>
                         Mejor línea de juego:
                     </div>
                     <div id="pvLine" class="pv-line-main">Inicia el análisis para ver la mejor línea</div>
-                </div>
-            </div>
-            <div class="right-panel">
-                <div class="input-section">
-                    <div class="input-row">
-                        <div class="input-group">
-                            <label for="fenInput">
-                                <i class="fas fa-code"></i> Posición FEN:
-                            </label>
-                            <input type="text"
-                                   id="fenInput"
-                                   value="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-                                   placeholder="Ingresa la posición FEN"
-                                   onclick="this.select()">
-                        </div>
-                        <div class="input-group" style="max-width: 200px;">
-                            <label for="modeSelect">
-                                <i class="fas fa-gamepad"></i> Modo:
-                            </label>
-                            <select id="modeSelect">
-                                <option value="edit">Edición y análisis</option>
-                                <option value="human">Humano vs Humano</option>
-                                <option value="cpu">Versus CPU</option>
-                            </select>
-                        </div>
-                        <div class="button-group">
-                            <button onclick="drawBoard()" class="btn btn-primary">
-                                <i class="fas fa-chess-board"></i> Cargar Posición
-                            </button>
-                            <button onclick="showLegalMoves()" id="showMovesBtn" class="btn btn-success">
-                                <i class="fas fa-list"></i> Movimientos
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div class="logs-section">
-                    <div class="logs-header">
-                        <div class="logs-title">
-                            <i class="fas fa-terminal"></i>
-                            Logs de Adaptación
-                        </div>
-                        <div class="logs-controls">
-                            <button onclick="clearLogs()" title="Limpiar logs">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                            <button onclick="toggleLogsPause()" id="pauseLogsBtn" title="Pausar logs">
-                                <i class="fas fa-pause"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="logs-container" id="logsContainer"></div>
-                </div>
-                <div class="analysis-panel">
-                    <div class="analysis-section">
-                        <div class="section-title">
-                            <i class="fas fa-microchip"></i>
-                            Motor de Análisis
-                        </div>
-                        <div class="engine-controls">
-                            <button onclick="toggleEngine()" id="engineToggleBtn" class="btn btn-secondary">
-                                <i class="fas fa-plug"></i> Conectar Motor
-                            </button>
-                            <button onclick="toggleAnalysis()" id="analysisToggleBtn" class="btn btn-success">
-                                <i class="fas fa-play"></i> Analizar
-                            </button>
-                            <button onclick="forceBestMove()" id="forceMoveBtn" class="btn btn-warning" style="display: none;">
-                                <i class="fas fa-forward"></i> Forzar
-                            </button>
-                        </div>
-                        <div id="engineStatus" class="engine-status">Motor no conectado</div>
-                        
-                        <div class="adaptive-config">
-                            <label id="adaptiveLabel">
-                                <input type="checkbox" id="adaptiveToggle" checked>
-                                <span>Modo adaptativo</span>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="analysis-section">
-                        <div class="section-title">
-                            <i class="fas fa-balance-scale"></i>
-                            Evaluación
-                        </div>
-                        <div class="evaluation-display">
-                            <span id="evaluation" class="evaluation">--</span>
-                            <span id="bestMove" class="best-move">--</span>
-                        </div>
-                        <div class="stats-display">
-                            <span id="engineStats">--</span>
-                            <span id="memoryStats">--</span>
-                        </div>
-                    </div>
                 </div>
                 <div id="legalMoves" class="moves-panel" style="display: none;">
                     <div class="moves-header">
