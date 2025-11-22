@@ -213,7 +213,6 @@
             margin-top: 8px;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
             width: 100%;
-            max-width: 536px;
             overflow: hidden;
         }
         .pv-section-main .pv-title {
@@ -231,8 +230,6 @@
             color: #000;
             line-height: 1.5;
             word-wrap: break-word;
-            max-height: 120px;
-            overflow-y: auto;
             background: white;
             padding: 8px;
             border-radius: 4px;
@@ -269,12 +266,13 @@
             flex-direction: column;
             min-height: 0;
         }
-        .analysis-panel {
-            background: white;
-            border: 1px solid #dee2e6;
-            border-radius: 6px;
-            padding: 16px;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        .analysis-inline {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
         .analysis-section {
             margin-bottom: 16px;
@@ -595,19 +593,6 @@
                 width: 100%;
                 min-width: unset;
             }
-            .analysis-panel {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 16px;
-            }
-            .analysis-section {
-                border-bottom: none;
-                padding-bottom: 0;
-                margin-bottom: 0;
-            }
-            .logs-section {
-                grid-column: 1 / -1;
-            }
         }
         @media (max-width: 768px) {
             .container {
@@ -630,9 +615,6 @@
             }
             .button-group {
                 flex-direction: column;
-            }
-            .analysis-panel {
-                grid-template-columns: 1fr;
             }
             .engine-controls {
                 flex-direction: column;
@@ -662,13 +644,6 @@
                 <div id="gameStatus" class="game-status-compact">
                     <i class="fas fa-info-circle"></i>
                     <span>Cargando...</span>
-                </div>
-                <div class="pv-section-main">
-                    <div class="pv-title">
-                        <i class="fas fa-route"></i>
-                        Mejor línea de juego:
-                    </div>
-                    <div id="pvLine" class="pv-line-main">Inicia el análisis para ver la mejor línea</div>
                 </div>
             </div>
             <div class="right-panel">
@@ -704,6 +679,47 @@
                                 </button>
                             </div>
                         </div>
+                        <div class="analysis-inline">
+                            <div class="analysis-section">
+                                <div class="section-title">
+                                    <i class="fas fa-microchip"></i>
+                                    Motor de Análisis
+                                </div>
+                                <div class="engine-controls">
+                                    <button onclick="toggleEngine()" id="engineToggleBtn" class="btn btn-secondary">
+                                        <i class="fas fa-plug"></i> Conectar Motor
+                                    </button>
+                                    <button onclick="toggleAnalysis()" id="analysisToggleBtn" class="btn btn-success">
+                                        <i class="fas fa-play"></i> Analizar
+                                    </button>
+                                    <button onclick="forceBestMove()" id="forceMoveBtn" class="btn btn-warning" style="display: none;">
+                                        <i class="fas fa-forward"></i> Forzar
+                                    </button>
+                                </div>
+                                <div id="engineStatus" class="engine-status">Motor no conectado</div>
+
+                                <div class="adaptive-config">
+                                    <label id="adaptiveLabel">
+                                        <input type="checkbox" id="adaptiveToggle" checked>
+                                        <span>Modo adaptativo</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="analysis-section">
+                                <div class="section-title">
+                                    <i class="fas fa-balance-scale"></i>
+                                    Evaluación
+                                </div>
+                                <div class="evaluation-display">
+                                    <span id="evaluation" class="evaluation">--</span>
+                                    <span id="bestMove" class="best-move">--</span>
+                                </div>
+                                <div class="stats-display">
+                                    <span id="engineStats">--</span>
+                                    <span id="memoryStats">--</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="logs-column">
                         <div class="logs-section">
@@ -725,46 +741,12 @@
                         </div>
                     </div>
                 </div>
-                <div class="analysis-panel">
-                    <div class="analysis-section">
-                        <div class="section-title">
-                            <i class="fas fa-microchip"></i>
-                            Motor de Análisis
-                        </div>
-                        <div class="engine-controls">
-                            <button onclick="toggleEngine()" id="engineToggleBtn" class="btn btn-secondary">
-                                <i class="fas fa-plug"></i> Conectar Motor
-                            </button>
-                            <button onclick="toggleAnalysis()" id="analysisToggleBtn" class="btn btn-success">
-                                <i class="fas fa-play"></i> Analizar
-                            </button>
-                            <button onclick="forceBestMove()" id="forceMoveBtn" class="btn btn-warning" style="display: none;">
-                                <i class="fas fa-forward"></i> Forzar
-                            </button>
-                        </div>
-                        <div id="engineStatus" class="engine-status">Motor no conectado</div>
-                        
-                        <div class="adaptive-config">
-                            <label id="adaptiveLabel">
-                                <input type="checkbox" id="adaptiveToggle" checked>
-                                <span>Modo adaptativo</span>
-                            </label>
-                        </div>
+                <div class="pv-section-main">
+                    <div class="pv-title">
+                        <i class="fas fa-route"></i>
+                        Mejor línea de juego:
                     </div>
-                    <div class="analysis-section">
-                        <div class="section-title">
-                            <i class="fas fa-balance-scale"></i>
-                            Evaluación
-                        </div>
-                        <div class="evaluation-display">
-                            <span id="evaluation" class="evaluation">--</span>
-                            <span id="bestMove" class="best-move">--</span>
-                        </div>
-                        <div class="stats-display">
-                            <span id="engineStats">--</span>
-                            <span id="memoryStats">--</span>
-                        </div>
-                    </div>
+                    <div id="pvLine" class="pv-line-main">Inicia el análisis para ver la mejor línea</div>
                 </div>
                 <div id="legalMoves" class="moves-panel" style="display: none;">
                     <div class="moves-header">
