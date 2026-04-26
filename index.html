@@ -19,11 +19,11 @@
             color: #212529; font-size: 14px;
         }
         .container { max-width: 1600px; margin: 0 auto; padding: 8px; min-height: 100vh; display: flex; flex-direction: column; }
-        .header { text-align: center; margin-bottom: 16px; }
+        .header { text-align: center; margin-bottom: 8px; }
         .header h1 { font-size: 1.75rem; font-weight: 600; color: #343a40; margin-bottom: 4px; }
         .input-section {
             background: white; border: 1px solid #dee2e6; border-radius: 6px;
-            padding: 8px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.05);
+            padding: 4px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.05);
         }
         .input-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
         .input-group { flex: 1; min-width: 300px; }
@@ -63,9 +63,9 @@
         .game-status-compact.status-warning { background: #fff3cd; border-color: #ffeaa7; color: #856404; }
         .game-status-compact.status-danger { background: #f8d7da; border-color: #f5c6cb; color: #721c24; }
         .game-status-compact.status-ramsey { background: #fadbd8; border-color: #e74c3c; color: #922b21; }
-        .pv-section-main { background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #dee2e6; margin-top: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.05); width: 100%; overflow: hidden; }
+        .pv-section-main { background: #f8f9fa; padding: 6px; border-radius: 6px; border: 1px solid #dee2e6; margin-top: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.05); width: 100%; overflow: hidden; }
         .pv-section-main .pv-title { font-size: .875rem; color: #495057; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; font-weight: 600; }
-        .pv-line-main { font-family: 'Courier New', monospace; font-size: .875rem; color: #000; line-height: 1.5; word-wrap: break-word; background: white; padding: 8px; border-radius: 4px; border: 1px solid #ced4da; white-space: pre-wrap; }
+        .pv-line-main { font-family: 'Courier New', monospace; font-size: .8rem; color: #000; line-height: 1.5; word-wrap: break-word; background: white; padding: 6px; border-radius: 4px; border: 1px solid #ced4da; white-space: pre-wrap; }
         .right-panel { width: 450px; min-width: 450px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
         .fen-logs-row { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; min-height: 0; flex: 1; }
         .fen-logs-row .input-section { flex: 1.25; min-width: 300px; margin-bottom: 0; }
@@ -91,7 +91,7 @@
         .logs-controls { display: flex; gap: 6px; }
         .logs-controls button { background: #f8f9fa; border: 1px solid #ced4da; color: #000; padding: 4px 8px; border-radius: 4px; font-size: .75rem; cursor: pointer; transition: all .15s; }
         .logs-controls button:hover { background: #e2e6ea; }
-        .logs-container { font-family: 'Courier New', monospace; font-size: .75rem; line-height: 1.4; overflow-y: auto; background: #fff; color: #000; padding: 8px; border-radius: 4px; border: 1px solid #dee2e6; flex: 1; max-height: calc(100vh - 220px); min-height: 0; }
+        .logs-container { font-family: 'Courier New', monospace; font-size: .75rem; line-height: 1.4; overflow-y: auto; background: #fff; color: #000; padding: 8px; border-radius: 4px; border: 1px solid #dee2e6; flex: 1; max-height: 250px; min-height: 0; }
         .log-entry { display: flex; margin-bottom: 4px; padding: 2px 4px; border-radius: 2px; animation: fadeIn .3s; }
         .log-entry.info { color: #000; background: rgba(88,166,255,.1); }
         .log-entry.success { color: #000; background: rgba(63,185,80,.1); }
@@ -127,17 +127,80 @@
         .adaptive-config input[type="checkbox"]:disabled { cursor: not-allowed; }
 
         /* ====== ESTILOS RAMSEY INTEGRADOS ====== */
-        .ramsey-panel { background: #fdf6f6; border: 1px solid #e74c3c; border-radius: 6px; padding: 10px; }
-        .ramsey-title { color: #c0392b; font-weight: 700; font-size: .85rem; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; border-bottom: 2px solid #e74c3c; padding-bottom: 4px; }
-        .ramsey-status { font-size: .8125rem; color: #6c757d; margin-bottom: 8px; padding: 5px 8px; background: #f8f9fa; border-radius: 4px; border-left: 3px solid #c0392b; }
-        .ramsey-score-bar { height: 24px; border-radius: 12px; overflow: hidden; background: #ecf0f1; display: flex; margin: 6px 0; }
-        .ramsey-fill-white { background: #e74c3c; color: #fff; font-weight: 700; font-size: .75rem; display: flex; align-items: center; justify-content: center; transition: width .5s ease; }
-        .ramsey-fill-black { background: #2980b9; color: #fff; font-weight: 700; font-size: .75rem; display: flex; align-items: center; justify-content: center; transition: width .5s ease; }
-        .ramsey-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; font-size: .78rem; margin-top: 6px; }
-        .ramsey-metric { display: flex; justify-content: space-between; padding: 2px 4px; background: rgba(255,255,255,.7); border-radius: 3px; }
-        .ramsey-metric span:first-child { opacity: .65; }
-        .ramsey-metric span:last-child { font-weight: 700; color: #2c3e50; }
-        .ramsey-escape-info { margin-top: 6px; padding: 5px 8px; background: #fff3cd; border-radius: 4px; font-size: .78rem; color: #856404; border-left: 3px solid #f39c12; }
+        .ramsey-panel {
+            background: #fdf6f6;
+            border: 1px solid #e74c3c;
+            border-radius: 4px;
+            padding: 6px 8px;
+            font-size: 0.78rem;
+        }
+        .ramsey-title {
+            color: #c0392b;
+            font-weight: 700;
+            font-size: 0.8rem;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            border-bottom: 1px solid #e74c3c;
+            padding-bottom: 2px;
+        }
+        .ramsey-status {
+            font-size: 0.75rem;
+            color: #555;
+            margin-bottom: 4px;
+            padding: 3px 6px;
+            background: #f8f9fa;
+            border-radius: 3px;
+            border-left: 3px solid #c0392b;
+        }
+        .ramsey-score-bar {
+            height: 18px;
+            border-radius: 9px;
+            overflow: hidden;
+            background: #ecf0f1;
+            display: flex;
+            margin: 4px 0;
+        }
+        .ramsey-fill-white, .ramsey-fill-black {
+            height: 100%;
+            color: #fff;
+            font-weight: 700;
+            font-size: 0.7rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: width 0.5s ease;
+        }
+        .ramsey-fill-white { background: #e74c3c; }
+        .ramsey-fill-black { background: #2980b9; }
+        .ramsey-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 2px 6px;
+            font-size: 0.72rem;
+            margin-top: 4px;
+        }
+        .ramsey-metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 1px 3px;
+            background: rgba(255,255,255,0.7);
+            border-radius: 2px;
+        }
+        .ramsey-metric span:first-child { opacity: 0.6; font-size: 0.7rem; }
+        .ramsey-metric span:last-child { font-weight: 700; color: #2c3e50; font-size: 0.72rem; }
+        .ramsey-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            margin-top: 3px;
+        }
+        .ramsey-pills .status-pill {
+            padding: 1px 6px;
+            font-size: 0.68rem;
+            border-radius: 10px;
+        }
         .pill-ramsey-mate { background: #fadbd8; color: #c0392b; }
         .pill-ramsey-warning { background: #fdebd0; color: #d35400; }
         .pill-ramsey-safe { background: #d5f5e3; color: #27ae60; }
@@ -165,7 +228,6 @@
 <div class="container">
     <div class="header">
         <h1><i class="fas fa-chess"></i> Analizador de Ajedrez — Stockfish + Filtro Ramsey</h1>
-        <p>Análisis posicional con motor Stockfish y detección estructural de mates vía teoría de Ramsey</p>
     </div>
     <div class="main-layout">
         <div class="board-container-wrapper">
@@ -224,22 +286,20 @@
                         </div>
                         <div class="analysis-section">
                             <div class="ramsey-panel" id="ramseyPanel">
-                                <div class="ramsey-title"><i class="fas fa-project-diagram"></i> Filtro Estructural Ramsey</div>
-                                <div class="input-group" style="max-width:280px; margin-bottom:8px;">
-                                    <label for="ramseyMode"><i class="fas fa-layer-group"></i> Modo Ramsey:</label>
-                                    <select id="ramseyMode" onchange="setRamseyMode(this.value)">
-                                        <option value="global">Choque global (actual)</option>
-                                        <option value="heatmap">Ventanas deslizantes (heatmap)</option>
+                                <div class="ramsey-title">
+                                    <i class="fas fa-project-diagram"></i> Ramsey
+                                    <select id="ramseyMode" onchange="setRamseyMode(this.value)" style="margin-left:auto;font-size:0.7rem;padding:1px 4px;">
+                                        <option value="global">Choque</option>
+                                        <option value="heatmap">Heatmap</option>
                                     </select>
                                 </div>
-                                <div id="ramseyStatus" class="ramsey-status">Sin análisis estructural</div>
                                 <div class="ramsey-score-bar" id="ramseyBar">
-                                    <div class="ramsey-fill-white" id="ramseyFillW" style="width:50%">B —</div>
-                                    <div class="ramsey-fill-black" id="ramseyFillB" style="width:50%">N —</div>
+                                    <div class="ramsey-fill-white" id="ramseyFillW" style="width:50%">B --</div>
+                                    <div class="ramsey-fill-black" id="ramseyFillB" style="width:50%">N --</div>
                                 </div>
-                                <div id="ramseyEscapeInfo" style="display:none;" class="ramsey-escape-info"></div>
-                                <div id="ramseyPills"></div>
-                                <div class="ramsey-metrics" id="ramseyMetrics"></div>
+                                <div id="ramseyMetrics" class="ramsey-metrics"></div>
+                                <div id="ramseyEscapeRow"></div>
+                                <div id="ramseyPills" class="ramsey-pills"></div>
                             </div>
                         </div>
                     </div>
@@ -277,7 +337,7 @@ const pieceSymbols = {
     'K':'\u2654','Q':'\u2655','R':'\u2656','B':'\u2657','N':'\u2658','P':'\u2659',
     'k':'\u265A','q':'\u265B','r':'\u265C','b':'\u265D','n':'\u265E','p':'\u265F'
 };
-const squareSize = 65;
+const squareSize = 58;
 const boardSize = 8 * squareSize;
 let board = Array(8).fill().map(() => Array(8).fill(null));
 let chess = null;
@@ -440,23 +500,22 @@ function generateChessboardSVG() {
     }
     // Overlays Ramsey (opcionales)
     if (ramseyOverlays && lastEscapeAnalysis) {
-        const a = lastEscapeAnalysis;
-        // Escapes controlados (rojo semi-transparente)
-        a.controlled.forEach(sq => {
-            const r = Math.floor(sq / 8), c = sq % 8;
-            const vy = (7 - r) * squareSize + 20;
-            const vx = c * squareSize + 20;
-            svg += `<rect x="${vx}" y="${vy}" width="${squareSize}" height="${squareSize}" fill="rgba(231,76,60,0.25)" pointer-events="none" />`;
-        });
-        // Escapes seguros (verde semi-transparente)
-        a.safe.forEach(sq => {
-            const r = Math.floor(sq / 8), c = sq % 8;
-            const vy = (7 - r) * squareSize + 20;
-            const vx = c * squareSize + 20;
-            svg += `<rect x="${vx}" y="${vy}" width="${squareSize}" height="${squareSize}" fill="rgba(39,174,96,0.2)" pointer-events="none" />`;
-            // Círculo verde indicador
-            svg += `<circle cx="${vx + squareSize/2}" cy="${vy + squareSize/2}" r="6" fill="rgba(39,174,96,0.7)" pointer-events="none" />`;
-        });
+        if (lastEscapeAnalysis.white) {
+            lastEscapeAnalysis.white.safe.forEach(sq => {
+                const r = Math.floor(sq / 8), c = sq % 8;
+                const vy = (7 - r) * squareSize + 20;
+                const vx = c * squareSize + 20;
+                svg += `<circle cx="${vx + squareSize/2}" cy="${vy + squareSize/2}" r="5" fill="rgba(52,152,219,0.6)" pointer-events="none" />`;
+            });
+        }
+        if (lastEscapeAnalysis.black) {
+            lastEscapeAnalysis.black.safe.forEach(sq => {
+                const r = Math.floor(sq / 8), c = sq % 8;
+                const vy = (7 - r) * squareSize + 20;
+                const vx = c * squareSize + 20;
+                svg += `<circle cx="${vx + squareSize/2}" cy="${vy + squareSize/2}" r="5" fill="rgba(231,76,60,0.6)" pointer-events="none" />`;
+            });
+        }
     }
     if (ramseyOverlays && lastRamseyResult && lastRamseyResult.disputed) {
         lastRamseyResult.disputed.forEach(sq => {
@@ -648,14 +707,12 @@ function drawBoard() {
 }
 
 function resetRamseyDisplay() {
-    document.getElementById('ramseyStatus').textContent = 'Sin análisis estructural';
-    document.getElementById('ramseyStatus').style.borderLeftColor = '#c0392b';
     document.getElementById('ramseyFillW').style.width = '50%';
     document.getElementById('ramseyFillW').textContent = 'B --';
     document.getElementById('ramseyFillB').style.width = '50%';
     document.getElementById('ramseyFillB').textContent = 'N --';
     document.getElementById('ramseyMetrics').innerHTML = '';
-    document.getElementById('ramseyEscapeInfo').style.display = 'none';
+    document.getElementById('ramseyEscapeRow').innerHTML = '';
     document.getElementById('ramseyPills').innerHTML = '';
 }
 
@@ -1092,9 +1149,6 @@ function runRamseyFilter() {
         const maxDensity = Math.max(...lastHeatmap.flat());
         const hotCells = lastHeatmap.flat().filter(v => v > 0.5).length;
         const avgDensity = lastHeatmap.flat().reduce((acc, v) => acc + v, 0) / 64;
-        const st = document.getElementById('ramseyStatus');
-        st.textContent = `Heatmap: ${hotCells} casillas críticas | Máx densidad: ${(maxDensity * 100).toFixed(0)}% — ${dt}ms`;
-        st.style.borderLeftColor = maxDensity > 0.66 ? '#e74c3c' : '#f39c12';
         document.getElementById('ramseyFillW').style.width = `${(avgDensity * 100).toFixed(1)}%`;
         document.getElementById('ramseyFillW').textContent = `Dens ${(avgDensity * 100).toFixed(0)}%`;
         document.getElementById('ramseyFillB').style.width = `${(100 - avgDensity * 100).toFixed(1)}%`;
@@ -1107,7 +1161,8 @@ function runRamseyFilter() {
             <div class="ramsey-metric"><span>Pico local</span><span>${(maxDensity * 100).toFixed(0)}%</span></div>
             <div class="ramsey-metric"><span>Tiempo</span><span>${dt} ms</span></div>
         `;
-        document.getElementById('ramseyEscapeInfo').style.display = 'none';
+        const escRow = document.getElementById('ramseyEscapeRow');
+        escRow.innerHTML = `<div style="display:flex;gap:8px;font-size:0.72rem;margin-top:3px;"><span style="color:#3498db;">♔ --</span><span style="color:#e74c3c;">♚ --</span><span style="margin-left:auto;color:#666;">${dt}ms</span></div>`;
         document.getElementById('ramseyPills').innerHTML = '<span class="status-pill pill-ramsey-warning">Mapa térmico activo</span>';
         addLog('ramsey', `Heatmap Ramsey: ${hotCells} casillas críticas | pico ${(maxDensity * 100).toFixed(0)}% (${dt}ms)`);
         return;
@@ -1126,15 +1181,11 @@ function runRamseyFilter() {
     document.getElementById('ramseyFillB').textContent = 'N ' + b.score.toFixed(1);
 
     const diff = Math.abs(w.score - b.score);
-    const st = document.getElementById('ramseyStatus');
-    if (diff < 10) st.textContent = `Posición equilibrada estructuralmente (Δ${diff.toFixed(1)}) — ${dt}ms`;
-    else if (w.score > b.score) st.textContent = `Ventaja blanca estructural (Δ${diff.toFixed(1)}) — ${dt}ms`;
-    else st.textContent = `Ventaja negra estructural (Δ${diff.toFixed(1)}) — ${dt}ms`;
-    st.style.borderLeftColor = diff > 20 ? '#e74c3c' : '#27ae60';
-
     // Métricas
     const mEl = document.getElementById('ramseyMetrics');
     mEl.innerHTML = `
+        <div class="ramsey-metric"><span>Modo</span><span>Choque</span></div>
+        <div class="ramsey-metric"><span>Δ score</span><span>${diff.toFixed(1)}</span></div>
         <div class="ramsey-metric"><span>Piezas</span><span>B:${w.n} N:${b.n}</span></div>
         <div class="ramsey-metric"><span>Peso total</span><span>B:${w.totalWeight.toFixed(1)} N:${b.totalWeight.toFixed(1)}</span></div>
         <div class="ramsey-metric"><span>K3 cliques</span><span>B:${w.k3} N:${b.k3}</span></div>
@@ -1146,14 +1197,16 @@ function runRamseyFilter() {
     `;
 
     // Escape analysis
-    const targetColor = chess.turn() === 'w' ? 'black' : 'white';
-    const esc = analyzeEscape(board, targetColor);
-    lastEscapeAnalysis = esc;
-    const escEl = document.getElementById('ramseyEscapeInfo');
+    const escW = analyzeEscape(board, 'white');
+    const escB = analyzeEscape(board, 'black');
+    lastEscapeAnalysis = { white: escW, black: escB, turn: chess.turn() };
+    const esc = chess.turn() === 'w' ? escB : escW;
+    const escRow = document.getElementById('ramseyEscapeRow');
     const pillsEl = document.getElementById('ramseyPills');
+    const wText = escW ? `${escW.safe.size}/${escW.escapes.size} seg` : '--';
+    const bText = escB ? `${escB.safe.size}/${escB.escapes.size} seg` : '--';
+    escRow.innerHTML = `<div style="display:flex;gap:8px;font-size:0.72rem;margin-top:3px;"><span style="color:#3498db;">♔ ${wText}</span><span style="color:#e74c3c;">♚ ${bText}</span><span style="margin-left:auto;color:#666;">${(performance.now()-t0).toFixed(0)}ms</span></div>`;
     if (esc) {
-        escEl.style.display = 'block';
-        escEl.innerHTML = `<b>Rey ${targetColor === 'white' ? 'Blanco' : 'Negro'}:</b> ${esc.safe.size}/${esc.escapes.size} escapes seguros | ${esc.controlled.size} controlados | Score: ${esc.score.toFixed(0)}/100`;
         if (esc.score >= 95) {
             pillsEl.innerHTML = '<span class="status-pill pill-ramsey-mate">⚠ MATE ESTRUCTURAL</span>';
             addLog('ramsey', `MATE ESTRUCTURAL detectado (score ${esc.score.toFixed(0)}) — Motor innecesario`);
@@ -1165,7 +1218,6 @@ function runRamseyFilter() {
             addLog('ramsey', `Ramsey: Δ${diff.toFixed(1)} | K3:${w.k3}v${b.k3} | Escape:${esc.safe.size}/${esc.escapes.size} (${dt}ms)`);
         }
     } else {
-        escEl.style.display = 'none';
         pillsEl.innerHTML = '';
         addLog('ramsey', `Ramsey: Δ${diff.toFixed(1)} | K3:${w.k3}v${b.k3} | K4:${w.k4}v${b.k4} (${dt}ms)`);
     }
