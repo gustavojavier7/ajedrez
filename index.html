@@ -679,6 +679,17 @@ function resetAnalysisDisplay() {
     document.getElementById('engineStats').textContent = '--';
     document.getElementById('pvLine').textContent = 'Inicia el análisis para ver la mejor línea';
 }
+
+function prepareAnalysisOutput() {
+    const pvLine = document.getElementById('pvLine');
+    if (pvLine) {
+        pvLine.textContent = 'Analizando...';
+        pvLine.scrollTop = 0;
+    }
+    document.getElementById('evaluation').textContent = '--';
+    document.getElementById('bestMove').textContent = '--';
+    document.getElementById('engineStats').textContent = '--';
+}
 function resetHighlights() {
     previousHighlightedSquares.forEach(sq => sq.classList.remove('square-highlight', 'dark'));
     previousHighlightedSquares = [];
@@ -725,6 +736,7 @@ function highlightBestLine() {
 
 function toggleAnalysis() {
     if (isAnalyzing) { stopAnalysis(); return; }
+    prepareAnalysisOutput();
     // === INTEGRACIÓN RAMSEY: Filtro pre-análisis ===
     runRamseyFilter();
     const esc = analyzeEscape(board, chess.turn() === 'w' ? 'black' : 'white');
@@ -1013,7 +1025,8 @@ function showLegalMoves() {
     const moves = chess.moves({ verbose: true });
     const movesList = document.getElementById('legalMovesList');
     const movesHeader = document.getElementById('legalMovesHeader');
-    movesList.innerHTML = '';
+    movesList.replaceChildren();
+    movesList.scrollTop = 0;
     movesHeader.innerHTML = `<i class="fas fa-chess-knight"></i> Movimientos Legales (${moves.length})`;
     if (moves.length === 0) {
         movesList.innerHTML = '<div style="text-align:center;padding:20px;color:#6c757d;">No hay movimientos legales</div>';
