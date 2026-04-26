@@ -206,6 +206,24 @@
         .pill-ramsey-warning { background: #fdebd0; color: #d35400; }
         .pill-ramsey-safe { background: #d5f5e3; color: #27ae60; }
 
+        /* ====== MB-DEEP-SCANNER ====== */
+        .scanner-panel { background: #fff; border: 1px solid #dee2e6; border-radius: 6px; padding: 10px; }
+        .scanner-title { color: #c0392b; font-weight: 700; font-size: .85rem; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; border-bottom: 2px solid #e74c3c; padding-bottom: 4px; }
+        .scanner-status { font-size: .75rem; color: #6c757d; margin-bottom: 6px; }
+        .scanner-table { width: 100%; border-collapse: collapse; font-size: .72rem; margin-top: 4px; }
+        .scanner-table th { background: #f8f9fa; padding: 4px 6px; text-align: left; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6; }
+        .scanner-table td { padding: 3px 6px; border-bottom: 1px solid #f1f3f5; }
+        .scanner-table tr:hover { background: #f8f9fa; }
+        .scanner-limpia { color: #27ae60; font-weight: 600; }
+        .scanner-alerta-critica { color: #e74c3c; font-weight: 700; background: rgba(231,76,60,.08); }
+        .scanner-alerta-advertencia { color: #f39c12; font-weight: 600; background: rgba(243,156,18,.06); }
+        .scanner-acumulador { margin-top: 6px; padding: 6px 8px; background: #f8f9fa; border-radius: 4px; font-size: .72rem; color: #495057; border-left: 3px solid #c0392b; }
+        .scanner-legend { margin-top: 4px; font-size: .68rem; color: #868e96; }
+        .scanner-badge { display: inline-block; padding: 1px 4px; border-radius: 3px; font-size: .65rem; margin-right: 2px; }
+        .badge-critica { background: #e74c3c; color: white; }
+        .badge-adv { background: #f39c12; color: white; }
+        .badge-info { background: #adb5bd; color: white; }
+
         @media (max-width: 1200px) {
             .main-layout { flex-direction: column; }
             .board-container-wrapper { align-self: center; width: 560px; min-width: 560px; }
@@ -270,7 +288,7 @@
                             <div class="engine-controls">
                                 <button onclick="toggleEngine()" id="engineToggleBtn" class="btn btn-secondary"><i class="fas fa-plug"></i> Conectar Motor</button>
                                 <button onclick="toggleAnalysis()" id="analysisToggleBtn" class="btn btn-success"><i class="fas fa-play"></i> Analizar</button>
-                                <button onclick="runRamseyOnly()" id="ramseyToggleBtn" class="btn btn-ramsey"><i class="fas fa-project-diagram"></i> Filtro Ramsey</button>
+                                <button onclick="runMBDeepScan()" id="ramseyToggleBtn" class="btn btn-ramsey"><i class="fas fa-radar"></i> Escanear</button>
                                 <button onclick="forceBestMove()" id="forceMoveBtn" class="btn btn-warning" style="display:none;"><i class="fas fa-forward"></i> Forzar</button>
                             </div>
                             <div id="engineStatus" class="engine-status">Motor no conectado</div>
@@ -305,6 +323,18 @@
                                 <div id="ramseyMetrics" class="ramsey-metrics"></div>
                                 <div id="ramseyEscapeRow"></div>
                                 <div id="ramseyPills" class="ramsey-pills"></div>
+                            </div>
+                        </div>
+                        <div class="analysis-section">
+                            <div class="scanner-panel" id="scannerPanel">
+                                <div class="scanner-title"><i class="fas fa-radar"></i> MB-Deep-Scanner: Vulnerabilidades en PV</div>
+                                <div id="scannerStatus" class="scanner-status">Inicia el análisis para escanear la línea principal</div>
+                                <div id="scannerTable"></div>
+                                <div id="scannerAccumulator" class="scanner-acumulador" style="display:none;"></div>
+                                <div class="scanner-legend">
+                                    <span class="scanner-badge badge-critica">CRÍTICO</span> Colapso propio | Rey &lt;2 escapes
+                                    <span class="scanner-badge badge-adv">ADVERTENCIA</span> K4 enemigo cerca | Corona disputada
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -362,6 +392,7 @@ let lastRamseyResult = null;
 let lastEscapeAnalysis = null;
 let lastHeatmap = null;
 let ramseyMode = 'global';
+let lastScannerResult = null;
 
 // ===================== SISTEMA DE LOGS =====================
 let logs = [];
@@ -886,13 +917,19 @@ function toggleAnalysis() {
     else startAdaptiveAnalysis();
 }
 
-// Botón independiente para ejecutar solo Ramsey
-function runRamseyOnly() {
-    runRamseyFilter();
-    refreshEscapeAnalysis();
-    ramseyOverlays = true;
-    updateBoard();
-    addLog('ramsey', 'Filtro Ramsey ejecutado manualmente');
+function runMBDeepScan() {
+    if (!chess) return;
+    const fen = chess.fen();
+    const pvMoves = extractPVFromDisplay();
+    if (!pvMoves || pvMoves.length === 0) {
+        document.getElementById('scannerStatus').textContent = 'No hay PV disponible. Inicia el análisis primero.';
+        return;
+    }
+    const monitoredSide = chess.turn() === 'w' ? 'white' : 'black';
+    const result = mbDeepScan(fen, pvMoves, monitoredSide);
+    lastScannerResult = result;
+    renderMBScanner(result);
+    addLog('ramsey', `MB-Scanner: ${result.scans.length} niveles escaneados en ${result.timeMs.toFixed(1)}ms`);
 }
 
 function startEngineTurnIfNeeded() {
@@ -1099,7 +1136,10 @@ function parseInfoLine(message) {
         const pvText = convertPVToSAN(pvMoves);
         if (!lastStats.pvs) lastStats.pvs = {};
         lastStats.pvs[pvNum] = pvText;
-        if (pvNum === 1) lastStats.pv = pvText;
+        if (pvNum === 1) {
+            lastStats.pv = pvText;
+            lastStats.pvUCI = pvMoves;
+        }
     }
     updateEngineDisplay();
 }
@@ -1454,6 +1494,166 @@ function analyzeEscape(boardArr, color) {
     return{escapes,controlled,safe,kingUnderAttack,score,kingPos:kr*8+kc,coverage};
 }
 
+// ===================== MB-DEEP-SCANNER: NUEVA ARQUITECTURA =====================
+function extractPVFromDisplay() {
+    if (lastStats.pvUCI && lastStats.pvUCI.length > 0) return lastStats.pvUCI.slice();
+    return null;
+}
+
+function mbDeepScan(startFen, pvMoves, sideToMonitor) {
+    const t0 = performance.now();
+    const scans = [];
+    const tempBoard = new Chess(startFen);
+    const arr0 = parseFENtoBoardArr(tempBoard.fen());
+    scans.push({level: 0, move: '(inicio)', side: '-', scan: scanPosition(arr0, sideToMonitor)});
+    for (let i = 0; i < pvMoves.length; i++) {
+        const uci = pvMoves[i];
+        try {
+            const moveObj = tempBoard.move(uci, { sloppy: true });
+            if (!moveObj) break;
+            const arr = parseFENtoBoardArr(tempBoard.fen());
+            const sideMoved = (i % 2 === 0) ? 'white' : 'black';
+            scans.push({level: i + 1, move: uci, side: sideMoved, scan: scanPosition(arr, sideToMonitor)});
+        } catch (e) {
+            break;
+        }
+    }
+    return { scans, timeMs: performance.now() - t0, side: sideToMonitor };
+}
+
+function scanPosition(boardArr, sideToMonitor) {
+    const rival = sideToMonitor === 'white' ? 'black' : 'white';
+    const myVuln = analyzePieceVulnerability(boardArr, sideToMonitor);
+    const rivalVuln = analyzePieceVulnerability(boardArr, rival);
+    const myEsc = analyzeEscape(boardArr, sideToMonitor);
+    const rivalEsc = analyzeEscape(boardArr, rival);
+    const data = buildControlData(boardArr);
+    let k4NearKing = 0;
+    const myKing = findKingSquare(boardArr, sideToMonitor);
+    const rivalK4 = findCliques(sideToMonitor === 'white' ? data.Gblack : data.Gwhite, 4);
+    const rivalPieces = sideToMonitor === 'white' ? data.blackPieces : data.whitePieces;
+    if (myKing) {
+        const [kr, kc] = myKing;
+        for (const clique of rivalK4) {
+            for (const idx of clique) {
+                const { r, c } = rivalPieces[idx];
+                if (Math.max(Math.abs(r - kr), Math.abs(c - kc)) <= 2) {
+                    k4NearKing++;
+                    break;
+                }
+            }
+        }
+    }
+    let crownDisputed = 0;
+    if (myKing) {
+        const [kr, kc] = myKing;
+        for (const sq of data.disputed) {
+            const sr = Math.floor(sq / 8), sc = sq % 8;
+            if (Math.max(Math.abs(sr - kr), Math.abs(sc - kc)) <= 1) crownDisputed++;
+        }
+    }
+    return {
+        myCollapses: myVuln.numCollapse,
+        rivalCollapses: rivalVuln.numCollapse,
+        myEscapesSafe: myEsc ? myEsc.safe.size : 0,
+        myEscapesAttacked: myEsc ? myEsc.controlled.size : 0,
+        rivalEscapesSafe: rivalEsc ? rivalEsc.safe.size : 0,
+        rivalEscapesAttacked: rivalEsc ? rivalEsc.controlled.size : 0,
+        myMaxDanger: myVuln.maxDanger,
+        rivalMaxDanger: rivalVuln.maxDanger,
+        k4NearMyKing: k4NearKing,
+        crownDisputed,
+        totalDisputed: data.disputed.size
+    };
+}
+
+function renderMBScanner(result) {
+    const statusEl = document.getElementById('scannerStatus');
+    const tableEl = document.getElementById('scannerTable');
+    const accEl = document.getElementById('scannerAccumulator');
+    if (!result || !result.scans || result.scans.length === 0) {
+        statusEl.textContent = 'No se pudo escanear la PV.';
+        tableEl.innerHTML = '';
+        accEl.style.display = 'none';
+        return;
+    }
+    statusEl.textContent = `Escaneo completado: ${result.scans.length} niveles en ${result.timeMs.toFixed(1)}ms`;
+    let html = `<table class="scanner-table"><tr><th>Nivel</th><th>Jugada</th><th>Col-P</th><th>Col-R</th><th>Rey⚠</th><th>K4⚠</th><th>Crn</th><th>Alerta</th></tr>`;
+    for (const r of result.scans) {
+        const s = r.scan;
+        const alerts = [];
+        let rowClass = '';
+        if (s.myCollapses > 0) { alerts.push(`<span class="scanner-badge badge-critica">${s.myCollapses}COL</span>`); rowClass = 'scanner-alerta-critica'; }
+        if (s.myEscapesSafe === 0 && s.myEscapesAttacked > 0) { alerts.push('<span class="scanner-badge badge-critica">REY0</span>'); rowClass = 'scanner-alerta-critica'; }
+        if (s.myEscapesSafe === 1 && s.myEscapesAttacked > 0) { alerts.push('<span class="scanner-badge badge-adv">REY1</span>'); if (!rowClass) rowClass = 'scanner-alerta-advertencia'; }
+        if (s.k4NearMyKing > 0) { alerts.push(`<span class="scanner-badge badge-adv">K4×${s.k4NearMyKing}</span>`); if (!rowClass) rowClass = 'scanner-alerta-advertencia'; }
+        if (s.crownDisputed >= 2) { alerts.push(`<span class="scanner-badge badge-adv">CRN${s.crownDisputed}</span>`); if (!rowClass) rowClass = 'scanner-alerta-advertencia'; }
+        if (s.rivalCollapses > 0 && s.myCollapses === 0 && s.myEscapesSafe >= 2) alerts.push(`<span class="scanner-badge badge-info">R${s.rivalCollapses}COL</span>`);
+        const alertStr = alerts.length > 0 ? alerts.join(' ') : '<span class="scanner-limpia">✓</span>';
+        html += `<tr class="${rowClass}"><td>N${r.level}</td><td>${r.move}</td><td>${s.myCollapses}</td><td>${s.rivalCollapses}</td><td>${s.myEscapesSafe}/${s.myEscapesSafe + s.myEscapesAttacked}</td><td>${s.k4NearMyKing}</td><td>${s.crownDisputed}</td><td>${alertStr}</td></tr>`;
+    }
+    html += '</table>';
+    tableEl.innerHTML = html;
+    const totalMyCol = result.scans.reduce((a, r) => a + r.scan.myCollapses, 0);
+    const totalRivalCol = result.scans.reduce((a, r) => a + r.scan.rivalCollapses, 0);
+    const maxDangerLevels = result.scans.filter(r => r.scan.myMaxDanger > 15).map(r => r.level);
+    accEl.style.display = 'block';
+    accEl.innerHTML = `<b>Acumulado:</b> Colapsos propios=${totalMyCol}, Rival=${totalRivalCol} | ${maxDangerLevels.length > 0 ? `Peligro extremo en niveles: ${maxDangerLevels.join(',')}` : 'Sin peligro extremo'}`;
+}
+
+function parseFENtoBoardArr(fen) {
+    const [position] = fen.split(' ');
+    const rows = position.split('/');
+    const boardArr = Array(8).fill().map(() => Array(8).fill(null));
+    for (let row = 0; row < 8; row++) {
+        let col = 0;
+        const actualRow = 7 - row;
+        for (const char of rows[row]) {
+            if (/\d/.test(char)) col += parseInt(char);
+            else { boardArr[actualRow][col] = char; col++; }
+        }
+    }
+    return boardArr;
+}
+
+function findKingSquare(boardArr, color) {
+    const target = color === 'white' ? 'K' : 'k';
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (boardArr[r][c] === target) return [r, c];
+    return null;
+}
+
+function analyzePieceVulnerability(boardArr, color) {
+    const myPieces = [];
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+        const p = boardArr[r][c];
+        if (!p) continue;
+        const pc = p === p.toUpperCase() ? 'white' : 'black';
+        if (pc === color) myPieces.push({r, c, p});
+    }
+    const opp = color === 'white' ? 'black' : 'white';
+    const oppCtrl = {}, myCtrl = {};
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+        const p = boardArr[r][c];
+        if (!p) continue;
+        const pc = p === p.toUpperCase() ? 'white' : 'black';
+        const sqs = getAttackedSquares(boardArr, r, c);
+        if (pc === opp) sqs.forEach(sq => { if (!oppCtrl[sq]) oppCtrl[sq] = 0; oppCtrl[sq]++; });
+        else sqs.forEach(sq => { if (!myCtrl[sq]) myCtrl[sq] = 0; myCtrl[sq]++; });
+    }
+    let totalCollapseRisk = 0, maxDanger = 0, numCollapse = 0;
+    for (const {r, c, p} of myPieces) {
+        const sq = r * 8 + c;
+        const attackers = oppCtrl[sq] || 0;
+        const defenders = myCtrl[sq] || 0;
+        const weight = PIECE_WEIGHTS[p] || 1;
+        const collapse = defenders === 0 && attackers > 0;
+        const danger = Math.max(0, attackers - defenders) * weight;
+        if (collapse) { totalCollapseRisk += weight * attackers; numCollapse++; }
+        maxDanger = Math.max(maxDanger, danger);
+    }
+    return { totalCollapseRisk, maxDanger, numCollapse };
+}
+
 // ===================== EVENTOS E INICIALIZACIÓN =====================
 window.addEventListener('load', function() {
     if (!window.Chess) { alert('Error: No se pudo cargar la biblioteca de ajedrez.'); return; }
@@ -1486,7 +1686,7 @@ window.forceBestMove = forceBestMove;
 window.handleSquareClick = handleSquareClick;
 window.clearLogs = clearLogs;
 window.toggleLogsPause = toggleLogsPause;
-window.runRamseyOnly = runRamseyOnly;
+window.runMBDeepScan = runMBDeepScan;
 window.setRamseyMode = setRamseyMode;
 </script>
 </body>
