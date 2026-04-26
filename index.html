@@ -225,6 +225,13 @@
                         <div class="analysis-section">
                             <div class="ramsey-panel" id="ramseyPanel">
                                 <div class="ramsey-title"><i class="fas fa-project-diagram"></i> Filtro Estructural Ramsey</div>
+                                <div class="input-group" style="max-width:280px; margin-bottom:8px;">
+                                    <label for="ramseyMode"><i class="fas fa-layer-group"></i> Modo Ramsey:</label>
+                                    <select id="ramseyMode" onchange="setRamseyMode(this.value)">
+                                        <option value="global">Choque global (actual)</option>
+                                        <option value="heatmap">Ventanas deslizantes (heatmap)</option>
+                                    </select>
+                                </div>
                                 <div id="ramseyStatus" class="ramsey-status">Sin análisis estructural</div>
                                 <div class="ramsey-score-bar" id="ramseyBar">
                                     <div class="ramsey-fill-white" id="ramseyFillW" style="width:50%">B —</div>
@@ -292,6 +299,8 @@ const PIECE_WEIGHTS = {
 let ramseyOverlays = false;
 let lastRamseyResult = null;
 let lastEscapeAnalysis = null;
+let lastHeatmap = null;
+let ramseyMode = 'global';
 
 // ===================== SISTEMA DE LOGS =====================
 let logs = [];
@@ -462,6 +471,21 @@ function generateChessboardSVG() {
 </circle>`;
         });
     }
+    if (ramseyMode === 'heatmap' && lastHeatmap) {
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const intensity = lastHeatmap[r][c];
+                if (intensity <= 0.05) continue;
+                const vy = (7 - r) * squareSize + 20;
+                const vx = c * squareSize + 20;
+                const opacity = Math.min(0.6, intensity * 0.6);
+                let color = `rgba(255,193,7,${opacity})`;
+                if (intensity > 0.66) color = `rgba(192,57,43,${opacity})`;
+                else if (intensity > 0.33) color = `rgba(230,126,34,${opacity})`;
+                svg += `<rect x="${vx}" y="${vy}" width="${squareSize}" height="${squareSize}" fill="${color}" pointer-events="none" />`;
+            }
+        }
+    }
     // Last move highlight
     if (lastMove && chess) {
         const history = chess.history({ verbose: true });
@@ -604,7 +628,7 @@ function drawBoard() {
     parseFEN(fen);
     lastStats = { nps:0, pv:'', pvs:{}, evaluation:null, depth:0, bestMove:'', bestMoveSan:'', nodes:0, time:0 };
     selectedSquare = null; possibleMoves = [];
-    ramseyOverlays = false; lastRamseyResult = null; lastEscapeAnalysis = null;
+    ramseyOverlays = false; lastRamseyResult = null; lastEscapeAnalysis = null; lastHeatmap = null;
     updateBoard();
     document.getElementById('legalMoves').style.display = 'none';
     lastMove = null;
@@ -645,6 +669,7 @@ function makeMove(move) {
         parseFEN(chess.fen());
         selectedSquare = null; possibleMoves = [];
         ramseyOverlays = false;
+        lastHeatmap = null;
         updateBoard();
         showLegalMoves();
         showGameStatus();
@@ -1059,6 +1084,35 @@ function updateMemoryStats() {
 // ===================== MOTOR RAMSEY (FUNCIÓN PRINCIPAL) =====================
 
 function runRamseyFilter() {
+    if (ramseyMode === 'heatmap') {
+        const t0 = performance.now();
+        lastHeatmap = runSlidingWindowAnalysis(board);
+        lastRamseyResult = null;
+        const dt = (performance.now() - t0).toFixed(1);
+        const maxDensity = Math.max(...lastHeatmap.flat());
+        const hotCells = lastHeatmap.flat().filter(v => v > 0.5).length;
+        const avgDensity = lastHeatmap.flat().reduce((acc, v) => acc + v, 0) / 64;
+        const st = document.getElementById('ramseyStatus');
+        st.textContent = `Heatmap: ${hotCells} casillas críticas | Máx densidad: ${(maxDensity * 100).toFixed(0)}% — ${dt}ms`;
+        st.style.borderLeftColor = maxDensity > 0.66 ? '#e74c3c' : '#f39c12';
+        document.getElementById('ramseyFillW').style.width = `${(avgDensity * 100).toFixed(1)}%`;
+        document.getElementById('ramseyFillW').textContent = `Dens ${(avgDensity * 100).toFixed(0)}%`;
+        document.getElementById('ramseyFillB').style.width = `${(100 - avgDensity * 100).toFixed(1)}%`;
+        document.getElementById('ramseyFillB').textContent = `Hot ${hotCells}`;
+        document.getElementById('ramseyMetrics').innerHTML = `
+            <div class="ramsey-metric"><span>Modo</span><span>Heatmap</span></div>
+            <div class="ramsey-metric"><span>Ventanas</span><span>3x3, 4x4, 2x4, 3x4</span></div>
+            <div class="ramsey-metric"><span>Casillas críticas</span><span>${hotCells}/64</span></div>
+            <div class="ramsey-metric"><span>Densidad media</span><span>${(avgDensity * 100).toFixed(0)}%</span></div>
+            <div class="ramsey-metric"><span>Pico local</span><span>${(maxDensity * 100).toFixed(0)}%</span></div>
+            <div class="ramsey-metric"><span>Tiempo</span><span>${dt} ms</span></div>
+        `;
+        document.getElementById('ramseyEscapeInfo').style.display = 'none';
+        document.getElementById('ramseyPills').innerHTML = '<span class="status-pill pill-ramsey-warning">Mapa térmico activo</span>';
+        addLog('ramsey', `Heatmap Ramsey: ${hotCells} casillas críticas | pico ${(maxDensity * 100).toFixed(0)}% (${dt}ms)`);
+        return;
+    }
+
     const t0 = performance.now();
     const data = buildControlData(board);
     const result = computeWeightedScore(data);
@@ -1117,6 +1171,20 @@ function runRamseyFilter() {
     }
 }
 
+function setRamseyMode(mode) {
+    ramseyMode = mode === 'heatmap' ? 'heatmap' : 'global';
+    ramseyOverlays = true;
+    if (ramseyMode === 'heatmap') {
+        lastHeatmap = runSlidingWindowAnalysis(board);
+        lastRamseyResult = null;
+    } else {
+        lastHeatmap = null;
+        runRamseyFilter();
+    }
+    updateBoard();
+    addLog('ramsey', `Modo Ramsey: ${ramseyMode === 'heatmap' ? 'Heatmap' : 'Choque global'}`);
+}
+
 // ===================== FUNCIONES INTERNAS DEL MOTOR RAMSEY =====================
 
 function getAttackedSquares(boardArr, r, c) {
@@ -1140,11 +1208,11 @@ function getAttackedSquares(boardArr, r, c) {
     return attacked;
 }
 
-function buildControlData(boardArr) {
+function buildControlData(boardArr, rowStart = 0, rowEnd = 8, colStart = 0, colEnd = 8) {
     const allSq = new Set();
-    for (let r=0;r<8;r++) for (let c=0;c<8;c++) allSq.add(r*8+c);
+    for (let r = rowStart; r < rowEnd; r++) for (let c = colStart; c < colEnd; c++) allSq.add(r*8+c);
     const whitePieces=[], blackPieces=[];
-    for (let r=0;r<8;r++) for (let c=0;c<8;c++) {
+    for (let r = rowStart; r < rowEnd; r++) for (let c = colStart; c < colEnd; c++) {
         const p=boardArr[r][c];
         if(p) (p===p.toUpperCase()?whitePieces:blackPieces).push({idx:0,r,c,p});
     }
@@ -1166,6 +1234,32 @@ function buildControlData(boardArr) {
     Object.values(bCtrl).forEach(s=>s.forEach(x=>bUnion.add(x)));
     const disputed=new Set([...wUnion].filter(x=>bUnion.has(x)));
     return {whitePieces,blackPieces,wCtrl,bCtrl,Gwhite:buildGraph(whitePieces,wCtrl),Gblack:buildGraph(blackPieces,bCtrl),disputed,wUnion,bUnion,allSq};
+}
+
+function buildControlDataForWindow(boardArr, r0, c0, h, w) {
+    return buildControlData(boardArr, r0, r0 + h, c0, c0 + w);
+}
+
+function runSlidingWindowAnalysis(boardArr) {
+    const heatmap = Array(8).fill(0).map(() => Array(8).fill(0));
+    const windows = [[3,3],[4,4],[2,4],[3,4]];
+    for (const [h,w] of windows) {
+        for (let r0 = 0; r0 <= 8 - h; r0++) {
+            for (let c0 = 0; c0 <= 8 - w; c0++) {
+                const subData = buildControlDataForWindow(boardArr, r0, c0, h, w);
+                const result = computeWeightedScore(subData);
+                const hasStructure = result.white.k3 > 0 || result.black.k3 > 0;
+                const weight = hasStructure ? 1.5 : 0.5;
+                for (let r = r0; r < r0 + h; r++) {
+                    for (let c = c0; c < c0 + w; c++) {
+                        heatmap[r][c] += weight;
+                    }
+                }
+            }
+        }
+    }
+    const maxVal = Math.max(...heatmap.flat());
+    return maxVal > 0 ? heatmap.map(row => row.map(v => v / maxVal)) : heatmap;
 }
 
 function findCliques(G, k) {
@@ -1293,6 +1387,7 @@ window.handleSquareClick = handleSquareClick;
 window.clearLogs = clearLogs;
 window.toggleLogsPause = toggleLogsPause;
 window.runRamseyOnly = runRamseyOnly;
+window.setRamseyMode = setRamseyMode;
 </script>
 </body>
 </html>
