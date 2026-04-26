@@ -454,7 +454,12 @@ function generateChessboardSVG() {
             const r = Math.floor(sq / 8), c = sq % 8;
             const vy = (7 - r) * squareSize + 20;
             const vx = c * squareSize + 20;
-            svg += `<rect x="${vx + 2}" y="${vy + 2}" width="${squareSize - 4}" height="${squareSize - 4}" fill="none" stroke="#e74c3c" stroke-width="3" stroke-dasharray="4,2" pointer-events="none" />`;
+            const cx = vx + squareSize / 2;
+            const cy = vy + squareSize / 2;
+            svg += `<circle cx="${cx}" cy="${cy}" r="10" fill="#e74c3c" opacity="0.25" pointer-events="none">
+    <animate attributeName="r" values="6;20;6" dur="1.4s" repeatCount="indefinite" calcMode="easeInOut" />
+    <animate attributeName="opacity" values="0.15;0.45;0.15" dur="1.4s" repeatCount="indefinite" calcMode="easeInOut" />
+</circle>`;
         });
     }
     // Last move highlight
