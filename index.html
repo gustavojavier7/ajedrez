@@ -208,7 +208,7 @@
                             </div>
                             <div id="engineStatus" class="engine-status">Motor no conectado</div>
                             <div class="adaptive-config">
-                                <label id="adaptiveLabel"><input type="checkbox" id="adaptiveToggle" checked><span>Modo adaptativo</span></label>
+                                <label id="adaptiveLabel"><input type="checkbox" id="adaptiveToggle"><span>Modo adaptativo</span></label>
                             </div>
                         </div>
                         <div class="analysis-section">
@@ -240,7 +240,7 @@
                 <div class="logs-column">
                     <div class="logs-section">
                         <div class="logs-header">
-                            <div class="logs-title"><i class="fas fa-terminal"></i> Logs de Adaptación</div>
+                            <div class="logs-title"><i class="fas fa-terminal"></i> Logs de Análisis</div>
                             <div class="logs-controls">
                                 <button onclick="clearLogs()" title="Limpiar logs"><i class="fas fa-trash"></i></button>
                                 <button onclick="toggleLogsPause()" id="pauseLogsBtn" title="Pausar logs"><i class="fas fa-pause"></i></button>
@@ -736,6 +736,7 @@ function highlightBestLine() {
 
 function toggleAnalysis() {
     if (isAnalyzing) { stopAnalysis(); return; }
+    addLog('info', 'Inicio de análisis solicitado desde el botón "Analizar"');
     prepareAnalysisOutput();
     // === INTEGRACIÓN RAMSEY: Filtro pre-análisis ===
     runRamseyFilter();
@@ -813,11 +814,11 @@ function startStandardAnalysis() {
     stockfish.postMessage(`position fen ${fen}`);
     stockfish.postMessage('go infinite');
     isAnalyzing = true;
-    document.getElementById('engineStatus').textContent = 'Análisis estándar en progreso...';
+    document.getElementById('engineStatus').textContent = 'Análisis estándar en progreso (profundidad infinita)...';
     document.getElementById('engineStatus').style.borderLeftColor = '#007bff';
     updateButtonStates();
     document.getElementById('pvLine').textContent = 'Analizando...';
-    addLog('info', 'Análisis estándar iniciado');
+    addLog('info', 'Análisis estándar iniciado en profundidad infinita');
 }
 
 function forceBestMove() {
