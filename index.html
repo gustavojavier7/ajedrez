@@ -1600,7 +1600,12 @@ function renderMBScanner(result) {
         accEl.style.display = 'none';
         return;
     }
-    statusEl.textContent = `Escaneo completado: ${result.scans.length} niveles en ${result.timeMs.toFixed(1)}ms`;
+    const prunedPlys = result.scans.filter(s => s.scan.turanPruned).length;
+    if (prunedPlys === result.scans.length) {
+        statusEl.textContent = `Estructura estable en toda la PV (${prunedPlys} plys, sin K4 posible).`;
+    } else {
+        statusEl.textContent = `Escaneados ${result.scans.length} plys (${prunedPlys} podados, ${result.scans.length - prunedPlys} con cliques posibles).`;
+    }
     let html = `<table class="scanner-table"><tr><th>Nivel</th><th>Jugada</th><th>Col-P</th><th>Col-R</th><th>Rey⚠</th><th>K4⚠</th><th>Crn</th><th>Alerta</th></tr>`;
     for (const r of result.scans) {
         const s = r.scan;
