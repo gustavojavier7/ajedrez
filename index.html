@@ -98,7 +98,7 @@
         .log-entry.success { color: #000; background: rgba(63,185,80,.1); }
         .log-entry.warning { color: #000; background: rgba(248,81,73,.1); }
         .log-entry.adaptation { color: #000; background: rgba(240,136,62,.1); }
-        .log-entry.ramsey { color: #000; background: rgba(192,57,43,.1); border-left: 2px solid #c0392b; }
+        .log-entry.ramsey { color: #006d5b; background: rgba(0,209,178,.14); border-left: 2px solid #00d1b2; }
         .log-timestamp { color: #6c757d; margin-right: 8px; min-width: 60px; }
         .log-message { flex: 1; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
@@ -926,6 +926,17 @@ function runMBDeepScan() {
         return;
     }
     const monitoredSide = chess.turn() === 'w' ? 'white' : 'black';
+    const boardArr = parseFENtoBoardArr(fen);
+    const controlData = buildControlData(boardArr);
+    const rivalGraph = monitoredSide === 'white' ? controlData.Gblack : controlData.Gwhite;
+    const turanCheck = evaluateTuranK4Prune(rivalGraph);
+    if (turanCheck.shouldPrune) {
+        addLog('info', `Poda de Turán: ${turanCheck.edgeCount} aristas detectadas. Umbral K4 es > ${turanCheck.turanLimit}.`);
+        addLog('ramsey', 'Estructura estable (Poda matemática aplicada).');
+        document.getElementById('scannerStatus').textContent = 'Poda de Turán activada: estructura sin K4 posible.';
+        return;
+    }
+    addLog('warning', `Densidad crítica detectada (${turanCheck.edgeCount} aristas). Iniciando búsqueda de cliques...`);
     const result = mbDeepScan(fen, pvMoves, monitoredSide);
     lastScannerResult = result;
     renderMBScanner(result);
@@ -1436,6 +1447,22 @@ function connectedComponents(G) {
     return comp;
 }
 
+/**
+ * Calcula el umbral de Turán para un K4.
+ * Si las aristas actuales <= este umbral, no hay K4 posible.
+ */
+function getTuranThreshold(n) {
+    if (n < 4) return 6;
+    return Math.floor((n * n) / 3);
+}
+
+function evaluateTuranK4Prune(graph) {
+    const nodes = graph?.nodes?.length || 0;
+    const edgeCount = graph?.edges?.length || 0;
+    const turanLimit = getTuranThreshold(nodes);
+    return { nodes, edgeCount, turanLimit, shouldPrune: edgeCount <= turanLimit };
+}
+
 function computeWeightedScore(data) {
     function analyze(pieces,control,G,disputed,allSq) {
         const n=pieces.length;if(n===0)return{score:0,metrics:{}};
@@ -1530,7 +1557,9 @@ function scanPosition(boardArr, sideToMonitor) {
     const data = buildControlData(boardArr);
     let k4NearKing = 0;
     const myKing = findKingSquare(boardArr, sideToMonitor);
-    const rivalK4 = findCliques(sideToMonitor === 'white' ? data.Gblack : data.Gwhite, 4);
+    const rivalGraph = sideToMonitor === 'white' ? data.Gblack : data.Gwhite;
+    const turanCheck = evaluateTuranK4Prune(rivalGraph);
+    const rivalK4 = turanCheck.shouldPrune ? [] : findCliques(rivalGraph, 4);
     const rivalPieces = sideToMonitor === 'white' ? data.blackPieces : data.whitePieces;
     if (myKing) {
         const [kr, kc] = myKing;
