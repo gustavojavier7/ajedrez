@@ -926,21 +926,12 @@ function runMBDeepScan() {
         return;
     }
     const monitoredSide = chess.turn() === 'w' ? 'white' : 'black';
-    const boardArr = parseFENtoBoardArr(fen);
-    const controlData = buildControlData(boardArr);
-    const rivalGraph = monitoredSide === 'white' ? controlData.Gblack : controlData.Gwhite;
-    const turanCheck = evaluateTuranK4Prune(rivalGraph);
-    if (turanCheck.shouldPrune) {
-        addLog('info', `Poda de Turán: ${turanCheck.edgeCount} aristas detectadas. Umbral K4 es > ${turanCheck.turanLimit}.`);
-        addLog('ramsey', 'Estructura estable (Poda matemática aplicada).');
-        document.getElementById('scannerStatus').textContent = 'Poda de Turán activada: estructura sin K4 posible.';
-        return;
-    }
-    addLog('warning', `Densidad crítica detectada (${turanCheck.edgeCount} aristas). Iniciando búsqueda de cliques...`);
     const result = mbDeepScan(fen, pvMoves, monitoredSide);
     lastScannerResult = result;
     renderMBScanner(result);
-    addLog('ramsey', `MB-Scanner: ${result.scans.length} niveles escaneados en ${result.timeMs.toFixed(1)}ms`);
+    const prunedPlys = result.scans.filter(s => s.scan.turanPruned).length;
+    const totalPlys = result.scans.length;
+    addLog('ramsey', `MB-Scanner: ${totalPlys} niveles escaneados (${prunedPlys} podados por Turán) en ${result.timeMs.toFixed(1)}ms`);
 }
 
 function startEngineTurnIfNeeded() {
@@ -1559,7 +1550,8 @@ function scanPosition(boardArr, sideToMonitor) {
     const myKing = findKingSquare(boardArr, sideToMonitor);
     const rivalGraph = sideToMonitor === 'white' ? data.Gblack : data.Gwhite;
     const turanCheck = evaluateTuranK4Prune(rivalGraph);
-    const rivalK4 = turanCheck.shouldPrune ? [] : findCliques(rivalGraph, 4);
+    const turanPruned = turanCheck.shouldPrune;
+    const rivalK4 = turanPruned ? [] : findCliques(rivalGraph, 4);
     const rivalPieces = sideToMonitor === 'white' ? data.blackPieces : data.whitePieces;
     if (myKing) {
         const [kr, kc] = myKing;
@@ -1592,7 +1584,9 @@ function scanPosition(boardArr, sideToMonitor) {
         rivalMaxDanger: rivalVuln.maxDanger,
         k4NearMyKing: k4NearKing,
         crownDisputed,
-        totalDisputed: data.disputed.size
+        totalDisputed: data.disputed.size,
+        turanPruned,
+        turanEdgeCount: turanCheck.edgeCount
     };
 }
 
