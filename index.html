@@ -256,11 +256,12 @@
         }
     </style>
 <base target="_blank">
+<base target="_blank">
 </head>
 <body>
 <div class="container">
     <div class="header">
-        <h1><i class="fas fa-chess"></i> Analizador de Ajedrez — Stockfish + Filtro Ramsey</h1>
+        <h1><i class="fas fa-chess"></i> Analizador de Ajedrez - Stockfish + Filtro Ramsey</h1>
     </div>
     <div class="main-layout">
         <div class="board-container-wrapper">
@@ -271,8 +272,8 @@
             </div>
             <div id="gameStatus" class="game-status-compact status-info"><i class="fas fa-info-circle"></i><span>Cargando...</span></div>
             <div class="pv-section-main">
-                <div class="pv-title"><i class="fas fa-route"></i> Mejor línea de juego:</div>
-                <div id="pvLine" class="pv-line-main">Inicia el análisis para ver la mejor línea</div>
+                <div class="pv-title"><i class="fas fa-route"></i> Mejor linea de juego:</div>
+                <div id="pvLine" class="pv-line-main">Inicia el analisis para ver la mejor linea</div>
             </div>
         </div>
         <div class="right-panel">
@@ -280,37 +281,37 @@
                 <div class="input-section">
                     <div class="input-row">
                         <div class="input-group">
-                            <label for="fenInput"><i class="fas fa-code"></i> Posición FEN:</label>
-                            <input type="text" id="fenInput" value="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" placeholder="Ingresa la posición FEN" onclick="this.select()">
+                            <label for="fenInput"><i class="fas fa-code"></i> Posicion FEN:</label>
+                            <input type="text" id="fenInput" value="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" placeholder="Ingresa la posicion FEN" onclick="this.select()">
                         </div>
                         <div class="input-group" style="max-width:200px;">
                             <label for="modeSelect"><i class="fas fa-gamepad"></i> Modo:</label>
                             <select id="modeSelect">
-                                <option value="edit">Edición y análisis</option>
+                                <option value="edit">Edicion y analisis</option>
                                 <option value="human">Humano vs Humano</option>
                                 <option value="cpu">Versus CPU</option>
                             </select>
                         </div>
                         <div class="button-group">
-                            <button onclick="drawBoard()" class="btn btn-primary"><i class="fas fa-chess-board"></i> Cargar Posición</button>
+                            <button onclick="drawBoard()" class="btn btn-primary"><i class="fas fa-chess-board"></i> Cargar Posicion</button>
                             <button onclick="showLegalMoves()" id="showMovesBtn" class="btn btn-success"><i class="fas fa-list"></i> Movimientos</button>
                         </div>
                     </div>
                     <div class="analysis-inline">
                         <div class="analysis-section">
-                            <div class="section-title"><i class="fas fa-microchip"></i> Motor de Análisis</div>
+                            <div class="section-title"><i class="fas fa-microchip"></i> Motor de Analisis</div>
                             <div class="engine-controls">
                                 <button onclick="toggleEngine()" id="engineToggleBtn" class="btn btn-secondary"><i class="fas fa-plug"></i> Conectar Motor</button>
                                 <button onclick="startStockfishInfinite()" id="stockfishAnalyzeBtn" class="btn btn-success"><i class="fas fa-play"></i> Analizar</button>
-                                <button onclick="startRamseyIterative()" id="ramseyAnalyzeBtn" class="btn btn-ramsey"><i class="fas fa-brain"></i> Análisis estructural</button>
+                                <button onclick="startRamseyIterative()" id="ramseyAnalyzeBtn" class="btn btn-ramsey"><i class="fas fa-brain"></i> Analisis estructural</button>
                                 <button onclick="stopAnyAnalysis()" id="stopBtn" class="btn btn-danger" disabled><i class="fas fa-stop"></i> Detener</button>
                                 <button onclick="forceBestMove()" id="forceMoveBtn" class="btn btn-warning" style="display:none;"><i class="fas fa-forward"></i> Forzar</button>
                             </div>
                             <div id="engineStatus" class="engine-status">Motor no conectado</div>
-                            <div id="analysisModeBadge" style="font-size:0.7rem;margin-top:4px;color:#868e96;">Ningún análisis activo</div>
+                            <div id="analysisModeBadge" style="font-size:0.7rem;margin-top:4px;color:#868e96;">Ningun analisis activo</div>
                         </div>
                         <div class="analysis-section evaluation-section">
-                            <div class="section-title"><i class="fas fa-balance-scale"></i> Evaluación Stockfish</div>
+                            <div class="section-title"><i class="fas fa-balance-scale"></i> Evaluacion Stockfish</div>
                             <div class="evaluation-display">
                                 <span id="evaluation" class="evaluation">--</span>
                                 <span id="bestMove" class="best-move">--</span>
@@ -341,11 +342,11 @@
                         <div class="analysis-section">
                             <div class="scanner-panel" id="scannerPanel">
                                 <div class="scanner-title"><i class="fas fa-radar"></i> MB-Deep-Scanner: Vulnerabilidades en PV</div>
-                                <div id="scannerStatus" class="scanner-status">Inicia el análisis para escanear la línea principal</div>
+                                <div id="scannerStatus" class="scanner-status">Inicia el analisis para escanear la linea principal</div>
                                 <div id="scannerTable"></div>
                                 <div id="scannerAccumulator" class="scanner-acumulador" style="display:none;"></div>
                                 <div class="scanner-legend">
-                                    <span class="scanner-badge badge-critica">CRÍTICO</span> Colapso propio | Rey &lt;2 escapes
+                                    <span class="scanner-badge badge-critica">CRITICO</span> Colapso propio | Rey &lt;2 escapes
                                     <span class="scanner-badge badge-adv">ADVERTENCIA</span> K4 enemigo cerca | Corona disputada
                                 </div>
                             </div>
@@ -368,7 +369,7 @@
                 <div class="logs-column">
                     <div class="logs-section">
                         <div class="logs-header">
-                            <div class="logs-title"><i class="fas fa-terminal"></i> Logs de Análisis</div>
+                            <div class="logs-title"><i class="fas fa-terminal"></i> Logs de Analisis</div>
                             <div class="logs-controls">
                                 <button onclick="clearLogs()" title="Limpiar logs"><i class="fas fa-trash"></i></button>
                                 <button onclick="toggleLogsPause()" id="pauseLogsBtn" title="Pausar logs"><i class="fas fa-pause"></i></button>
@@ -427,35 +428,29 @@ const PV_MAX_MOVES_TO_SIMULATE = 8;
 let lastPVSnapshot = null;
 let currentPVRamseyDecision = null;
 
-// ===================== MODO RAMSEY-PV: EVALUACIÓN POR VARIANTE =====================
-// Para cada PV, Ramsey evalúa la estructura de la posición final y asigna un score propio.
+// ===================== MODO RAMSEY-PV: EVALUACION POR VARIANTE =====================
 const PV_EVAL_CONFIG = {
-    MULTIPV: 6,               // Número de PVs a evaluar
-    SIM_MOVES: 8,              // Movimientos a simular por PV
-    WEIGHT_KING_SAFETY: 0.25,  // Peso king safety en score
-    WEIGHT_MATERIAL: 0.20,      // Peso material
-    WEIGHT_CONTROL: 0.20,       // Peso control territorial
-    WEIGHT_K4_THREAT: -0.15,    // Penalización K4 rival cerca del rey
-    WEIGHT_PAWN_STRUCT: 0.10,    // Peso estructura de peones
-    WEIGHT_CENTRAL: 0.10       // Peso control central
+    MULTIPV: 6,
+    SIM_MOVES: 8,
+    WEIGHT_KING_SAFETY: 0.25,
+    WEIGHT_MATERIAL: 0.20,
+    WEIGHT_CONTROL: 0.20,
+    WEIGHT_K4_THREAT: -0.15,
+    WEIGHT_PAWN_STRUCT: 0.10,
+    WEIGHT_CENTRAL: 0.10
 };
 
 // ===================== VARIABLES CONFIGURABLES DEL CORTE INTELIGENTE =====================
-// Ajusta estas 8 variables para tunear el comportamiento de Ramsey-PV:
-
-// Variables de FVM (Fase de Verificación del Mate)
-const MATE_VERIFICATION_ITERS = 2;       // Iteraciones para confirmar mate M3-M5
-const MATE_VERIFICATION_DEPTH = 5;       // Profundización extra por verificación
-const MATE_VERIFICATION_MULTIPV = 1;     // MultiPV durante verificación (1 = foco total)
-const MATE_LENGTH_TOLERANCE = 3;         // Diferencia máxima de movimientos antes de abortar
-
-// Variables de corte inteligente
-const MAX_ITERATIONS_HARD = 15;          // 1. Límite absoluto de seguridad (más iteraciones)
-const CHAOS_PERSISTENCE_LIMIT = 3;       // 2. Iteraciones consecutivas de caos antes de cortar
-const CHAOS_MIN_DEPTH_TO_CUT = 15;       // 3. Profundidad mínima para cortar por caos persistente
-const EVAL_JUMP_THRESHOLD = 80;          // 4. Cambio de eval >N centipeones = inestabilidad
-const CONSENSUS_EARLY_DEPTH = 16;        // 5. Profundidad mínima para corte por consenso temprano
-const DIVERGENCE_MIN_PVS = 4;            // 6. Mínimo de PVs divergentes para expandir búsqueda
+const MATE_VERIFICATION_ITERS = 2;
+const MATE_VERIFICATION_DEPTH = 5;
+const MATE_VERIFICATION_MULTIPV = 1;
+const MATE_LENGTH_TOLERANCE = 3;
+const MAX_ITERATIONS_HARD = 15;
+const CHAOS_PERSISTENCE_LIMIT = 3;
+const CHAOS_MIN_DEPTH_TO_CUT = 15;
+const EVAL_JUMP_THRESHOLD = 80;
+const CONSENSUS_EARLY_DEPTH = 16;
+const DIVERGENCE_MIN_PVS = 4;
 
 // ===================== SISTEMA DE LOGS =====================
 let logs = [];
@@ -491,24 +486,14 @@ function toggleLogsPause() {
 }
 
 // ===================== SISTEMA DE REPORTE ADAPTATIVO =====================
+let adaptiveEnabled = false;
+
 function reportAdaptiveModeStatus() {
-    const modeLabels = { edit:'Edición y análisis', human:'Humano vs Humano', cpu:'Versus CPU' };
+    const modeLabels = { edit:'Edicion y analisis', human:'Humano vs Humano', cpu:'Versus CPU' };
     if (gameMode === 'human') {
         addLog('info', `Modo: ${modeLabels[gameMode]} | Adaptativo: NO APLICABLE`);
-    } else if (gameMode === 'cpu') {
-        addLog('info', `Modo: ${modeLabels[gameMode]} | Adaptativo: ${adaptiveEnabled ? 'ACTIVADO' : 'DESACTIVADO'}`);
     } else {
         addLog('info', `Modo: ${modeLabels[gameMode]} | Adaptativo: ${adaptiveEnabled ? 'ACTIVADO' : 'DESACTIVADO'}`);
-    }
-}
-function updateAdaptiveControlState() {
-    const adaptiveLabel = document.getElementById('adaptiveLabel');
-    if (gameMode === 'human') {
-        adaptiveLabel.classList.add('disabled');
-        adaptiveLabel.title = 'El modo adaptativo no se aplica en partidas humano vs humano';
-    } else {
-        adaptiveLabel.classList.remove('disabled');
-        adaptiveLabel.title = '';
     }
 }
 
@@ -579,7 +564,7 @@ function formatEvaluation(score, isMate) {
     return pawns > 0 ? `+${pawns.toFixed(2)}` : pawns.toFixed(2);
 }
 
-// ===================== GENERACIÓN DEL TABLERO SVG (CON OVERLAYS RAMSEY) =====================
+// ===================== GENERACION DEL TABLERO SVG =====================
 function generateChessboardSVG() {
     let svg = `<svg width="${boardSize + 40}" height="${boardSize + 40}" xmlns="http://www.w3.org/2000/svg">`;
     const defs = [];
@@ -611,7 +596,7 @@ function generateChessboardSVG() {
     if (defs.length > 0) {
         svg += `<defs>${defs.join('')}</defs>`;
     }
-    // Overlays Ramsey (opcionales)
+    // Overlays Ramsey
     if (hasRamseyEscapeArrows) {
         const drawEscapeArrows = (analysis, isWhiteKing) => {
             if (!analysis || typeof analysis.kingPos !== 'number') return;
@@ -753,20 +738,20 @@ function showGameStatus() {
     const statusElement = document.getElementById('gameStatus');
     if (!chess) return;
     let status = "", iconClass = "fas fa-info-circle", statusClass = "status-info";
-    if (chess.in_checkmate()) { status = "¡Jaque mate!"; iconClass = "fas fa-crown"; statusClass = "status-danger"; }
+    if (chess.in_checkmate()) { status = "Jaque mate!"; iconClass = "fas fa-crown"; statusClass = "status-danger"; }
     else if (chess.in_stalemate()) { status = "Tablas por ahogado"; iconClass = "fas fa-handshake"; statusClass = "status-warning"; }
     else if (chess.in_draw()) {
-        if (chess.in_threefold_repetition()) status = "Tablas por repetición";
+        if (chess.in_threefold_repetition()) status = "Tablas por repeticion";
         else if (chess.insufficient_material()) status = "Tablas por material";
         else status = "Tablas por 50 movimientos";
         iconClass = "fas fa-handshake"; statusClass = "status-warning";
-    } else if (chess.in_check()) { status = "¡Jaque!"; iconClass = "fas fa-exclamation-triangle"; statusClass = "status-warning"; }
+    } else if (chess.in_check()) { status = "Jaque!"; iconClass = "fas fa-exclamation-triangle"; statusClass = "status-warning"; }
     else { status = chess.turn() === 'w' ? "Turno: Blancas" : "Turno: Negras"; iconClass = "fas fa-chess"; statusClass = "status-success"; }
     statusElement.className = `game-status-compact ${statusClass}`;
     statusElement.innerHTML = `<i class="${iconClass}"></i><span>${status}</span>`;
 }
 
-// ===================== INTERACCIÓN CON EL TABLERO =====================
+// ===================== INTERACCION CON EL TABLERO =====================
 function handleSquareClick(square) {
     if (gameMode === 'edit' || !chess) return;
     if (!selectedSquare) {
@@ -802,7 +787,7 @@ function setGameMode(mode) {
     if (select && select.value !== mode) select.value = mode;
     selectedSquare = null; possibleMoves = [];
     updateButtonStates();
-    addLog('info', `Modo cambiado a: ${mode === 'edit' ? 'Edición y análisis' : mode}`);
+    addLog('info', `Modo cambiado a: ${mode === 'edit' ? 'Edicion y analisis' : mode}`);
     reportAdaptiveModeStatus();
 }
 function updateBoard() {
@@ -812,11 +797,11 @@ function updateBoard() {
 
 function drawBoard() {
     const fen = document.getElementById('fenInput')?.value.trim();
-    if (!fen) { alert('Por favor, ingresa una posición FEN válida.'); return; }
+    if (!fen) { alert('Por favor, ingresa una posicion FEN valida.'); return; }
     if (!window.Chess) { alert('Error: No se pudo cargar la biblioteca de ajedrez.'); return; }
     chess = new Chess();
     const validation = chess.validate_fen(fen);
-    if (!validation.valid) { alert(`Posición FEN inválida: ${validation.error}`); return; }
+    if (!validation.valid) { alert(`Posicion FEN invalida: ${validation.error}`); return; }
     chess.load(fen);
     parseFEN(fen);
     lastStats = { nps:0, pv:'', pvs:{}, evaluation:null, depth:0, bestMove:'', bestMoveSan:'', nodes:0, time:0 };
@@ -830,13 +815,13 @@ function drawBoard() {
     document.getElementById('evaluation').textContent = '--';
     document.getElementById('bestMove').textContent = '--';
     document.getElementById('engineStats').textContent = '--';
-    document.getElementById('pvLine').textContent = 'Inicia el análisis para ver la mejor línea';
+    document.getElementById('pvLine').textContent = 'Inicia el analisis para ver la mejor linea';
     resetRamseyDisplay();
     resetHighlights();
     if (isAnalyzing) stopAnalysis();
     updateMemoryStats();
     setupPVObserver();
-    addLog('success', 'Posición cargada correctamente');
+    addLog('success', 'Posicion cargada correctamente');
     reportAdaptiveModeStatus();
 }
 
@@ -854,7 +839,7 @@ function makeMove(move) {
     if (!chess) return;
     try {
         const moveResult = chess.move(move);
-        if (!moveResult) { console.warn('Movimiento inválido:', move); return; }
+        if (!moveResult) { console.warn('Movimiento invalido:', move); return; }
         lastMove = moveResult;
         document.getElementById('fenInput').value = chess.fen();
         parseFEN(chess.fen());
@@ -874,8 +859,7 @@ function makeMove(move) {
             setTimeout(() => {
                 const cpuTurn = gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b');
                 if (cpuTurn) {
-                    // Modo CPU: esperar a que usuario pulse "Analizar" o "Análisis estructural"
-                    addLog('info', 'Turno de CPU. Pulse Analizar o Análisis estructural para jugar.');
+                    addLog('info', 'Turno de CPU. Pulse Analizar o Analisis estructural para jugar.');
                 }
             }, 500);
         }
@@ -896,13 +880,13 @@ function resetStats() {
     lastStats = { nps:0, nodes:0, time:0, depth:0, pv:'', pvs:{}, pvEvaluations:{}, pvUCIs:{}, evaluation:null, bestMove:'', bestMoveSan:'', lastUpdateTimestamp:Date.now(), analysisMode:'standard', totalPVsReceived:0, adaptiveMetrics:{ iterationsCompleted:0, bestEquilibriumFound:Infinity, searchStartTime:null, totalVariantsAnalyzed:0, fallbacksUsed:0 } };
     currentPVAnalysis = { pvCount:6, depth:8, targetEvaluation:0, searchInProgress:false, adaptationActive:false, iterationCount:0, lastIterationTime:null, bestResultSoFar:null, convergenceHistory:[], ramseyDecision:null, chaosHistory:[], prevBestEval:null, autoStopped:false, mateVerification:null };
     lastPVSnapshot = null;
-    addLog('info', 'Estadísticas y estado adaptativo reiniciados');
+    addLog('info', 'Estadisticas y estado adaptativo reiniciados');
 }
 function resetAnalysisDisplay() {
     document.getElementById('evaluation').textContent = '--';
     document.getElementById('bestMove').textContent = '--';
     document.getElementById('engineStats').textContent = '--';
-    document.getElementById('pvLine').textContent = 'Inicia el análisis para ver la mejor línea';
+    document.getElementById('pvLine').textContent = 'Inicia el analisis para ver la mejor linea';
 }
 
 function prepareAnalysisOutput() {
@@ -914,7 +898,6 @@ function prepareAnalysisOutput() {
     document.getElementById('evaluation').textContent = '--';
     document.getElementById('bestMove').textContent = '--';
     document.getElementById('engineStats').textContent = '--';
-    // Resetear display Ramsey-PV
     const badgeEl = document.getElementById('pvCompatBadge');
     if (badgeEl) { badgeEl.style.background = '#e9ecef'; badgeEl.style.color = '#495057'; badgeEl.textContent = '--'; }
     const matrixEl = document.getElementById('pvCompatMatrix');
@@ -940,7 +923,7 @@ function highlightBestLine() {
     resetHighlights();
     const bestLineElement = document.getElementById('pvLine');
     const bestLine = bestLineElement.textContent.split('\n')[0].trim();
-    if (bestLine === "Inicia el análisis para ver la mejor línea" || bestLine === "Analizando..." || !bestLine || bestLine.length < 3) return;
+    if (bestLine === "Inicia el analisis para ver la mejor linea" || bestLine === "Analizando..." || !bestLine || bestLine.length < 3) return;
     try {
         const tempChess = new Chess(chess.fen());
         const moves = bestLine.split(/\s+/).filter(m => m.match(/^[a-h1-8KQRBNOX+#=\-]+$/) && !m.match(/^\d+\.+$/));
@@ -963,17 +946,17 @@ function highlightBestLine() {
                 }
             });
         });
-    } catch (error) { console.warn('Error al destacar la mejor línea:', error); }
+    } catch (error) { console.warn('Error al destacar la mejor linea:', error); }
 }
 
-// ===================== MOTOR DE ANÁLISIS CON ADAPTACIÓN Y FILTRO RAMSEY =====================
+// ===================== MOTOR DE ANALISIS =====================
 
 function runMBDeepScan() {
     if (!chess) return;
     const fen = chess.fen();
     const pvMoves = extractPVFromDisplay();
     if (!pvMoves || pvMoves.length === 0) {
-        document.getElementById('scannerStatus').textContent = 'No hay PV disponible. Inicia el análisis primero.';
+        document.getElementById('scannerStatus').textContent = 'No hay PV disponible. Inicia el analisis primero.';
         return;
     }
     const monitoredSide = chess.turn() === 'w' ? 'white' : 'black';
@@ -982,12 +965,12 @@ function runMBDeepScan() {
     renderMBScanner(result);
     const prunedPlys = result.scans.filter(s => s.scan.turanPruned).length;
     const totalPlys = result.scans.length;
-    addLog('ramsey', `MB-Scanner: ${totalPlys} niveles escaneados (${prunedPlys} podados por Turán) en ${result.timeMs.toFixed(1)}ms`);
+    addLog('ramsey', `MB-Scanner: ${totalPlys} niveles escaneados (${prunedPlys} podados por Turan) en ${result.timeMs.toFixed(1)}ms`);
 }
 
-// ===================== MODO STOCKFISH: ANÁLISIS INFINITO PURO =====================
+// ===================== MODO STOCKFISH =====================
 
-let activeAnalysisMode = 'none'; // 'none' | 'stockfish' | 'ramsey'
+let activeAnalysisMode = 'none';
 let ramseyIterativeInterval = null;
 let bestRamseyFEN = null;
 let bestRamseyScore = -Infinity;
@@ -1018,7 +1001,7 @@ function startStockfishInfinite() {
     addLog('info', 'Stockfish: go infinite iniciado');
 }
 
-// ===================== MODO RAMSEY: MOTOR ESTRUCTURAL ITERATIVO =====================
+// ===================== MODO RAMSEY =====================
 
 function startRamseyIterative() {
     if (isAnalyzing) return;
@@ -1057,7 +1040,6 @@ function ramseyIterativeStep(stepNumber) {
         return;
     }
     
-    // Evaluar cada jugada legal con Ramsey
     let bestMove = null;
     let bestScore = -Infinity;
     let bestFEN = null;
@@ -1068,11 +1050,8 @@ function ramseyIterativeStep(stepNumber) {
         tempChess.move(move);
         
         const boardArr = parseFENtoBoardArr(tempChess.fen());
-        const turn = tempChess.turn();
-        const side = turn === 'w' ? 'white' : 'black';
         const playingSide = move.color === 'w' ? 'white' : 'black';
         
-        // Evaluación Ramsey estructural
         const esc = analyzeEscape(boardArr, playingSide);
         const kingSafety = esc ? esc.score : 50;
         
@@ -1107,21 +1086,16 @@ function ramseyIterativeStep(stepNumber) {
         }
         const materialDiff = (playingSide === 'white' ? materialWhite - materialBlack : materialBlack - materialWhite);
         
-        // Score Ramsey para esta jugada
         const score = computeRamseyScore({
             kingSafety,
             rivalK4NearKing,
             materialDiff,
             disputed: data.disputed.size,
-            pawnStructure: 0, // simplificado
-            centralControl: 0 // simplificado
+            pawnStructure: 0,
+            centralControl: 0
         });
         
-        evaluations.push({
-            san: move.san,
-            score,
-            fen: tempChess.fen()
-        });
+        evaluations.push({ san: move.san, score, fen: tempChess.fen() });
         
         if (score > bestScore) {
             bestScore = score;
@@ -1130,19 +1104,16 @@ function ramseyIterativeStep(stepNumber) {
         }
     }
     
-    // Ordenar para mostrar ranking
     evaluations.sort((a, b) => b.score - a.score);
     const top3 = evaluations.slice(0, 3).map(e => `${e.san}=${e.score}`).join(', ');
     
     addLog('ramsey', `Paso ${stepNumber}: ${legalMoves.length} jugadas evaluadas | Top: ${top3}`);
     
-    // Aplicar mejor jugada al tablero real
     if (bestMove) {
         chess.move(bestMove);
         board = parseFENtoBoardArr(chess.fen());
         updateBoard();
         
-        // Trackear mejor FEN global
         if (bestScore > bestRamseyScore) {
             bestRamseyScore = bestScore;
             bestRamseyFEN = chess.fen();
@@ -1153,16 +1124,14 @@ function ramseyIterativeStep(stepNumber) {
         document.getElementById('bestMove').textContent = bestMove.san;
         document.getElementById('engineStats').textContent = `${legalMoves.length} ops evaluadas`;
         
-        // Mostrar top 3 en pvLine
         const pvLine = document.getElementById('pvLine');
         if (pvLine) {
             pvLine.innerHTML = evaluations.slice(0, 5).map((e, i) => 
-                `<div style="color:${i===0?'#27ae60':'#666'}">${i+1}. ${e.san} — Ramsey ${e.score} pts</div>`
+                `<div style="color:${i===0?'#27ae60':'#666'}">${i+1}. ${e.san} -- Ramsey ${e.score} pts</div>`
             ).join('');
         }
     }
     
-    // Siguiente paso con delay para no bloquear UI
     ramseyIterativeInterval = setTimeout(() => {
         ramseyIterativeStep(stepNumber + 1);
     }, 300);
@@ -1171,7 +1140,7 @@ function ramseyIterativeStep(stepNumber) {
 function stopAnyAnalysis() {
     if (activeAnalysisMode === 'stockfish') {
         stockfish.postMessage('stop');
-        addLog('info', 'Stockfish: análisis detenido');
+        addLog('info', 'Stockfish: analisis detenido');
     } else if (activeAnalysisMode === 'ramsey') {
         if (ramseyIterativeInterval) {
             clearTimeout(ramseyIterativeInterval);
@@ -1179,15 +1148,13 @@ function stopAnyAnalysis() {
         }
         addLog('ramsey', 'Ramsey: motor estructural detenido');
         
-        // Mostrar FEN de la mejor evaluación
         if (bestRamseyFEN) {
             addLog('ramsey', `MEJOR FEN: ${bestRamseyFEN}`);
-            // Mostrar en modal o en un elemento destacado
             const modalHtml = `
                 <div style="background:#d5f5e3;border:2px solid #27ae60;border-radius:6px;padding:12px;margin-top:10px;">
-                    <div style="font-size:0.75rem;font-weight:700;color:#27ae60;margin-bottom:6px;">🏆 Mejor posición según Ramsey</div>
+                    <div style="font-size:0.75rem;font-weight:700;color:#27ae60;margin-bottom:6px;">🏆 Mejor posicion segun Ramsey</div>
                     <div style="font-family:monospace;font-size:0.7rem;word-break:break-all;background:#fff;padding:6px;border-radius:3px;border:1px solid #dee2e6;">${bestRamseyFEN}</div>
-                    <div style="font-size:0.65rem;color:#666;margin-top:4px;">Copiá esta FEN y pegala en el campo FEN para comparar con Stockfish</div>
+                    <div style="font-size:0.65rem;color:#666;margin-top:4px;">Copia esta FEN y pegala en el campo FEN para comparar con Stockfish</div>
                 </div>
             `;
             const pvLine = document.getElementById('pvLine');
@@ -1201,9 +1168,9 @@ function stopAnyAnalysis() {
     isAnalyzing = false;
     currentPVAnalysis.searchInProgress = false;
     
-    document.getElementById('engineStatus').textContent = 'Análisis detenido';
+    document.getElementById('engineStatus').textContent = 'Analisis detenido';
     document.getElementById('engineStatus').style.borderLeftColor = '#6c757d';
-    document.getElementById('analysisModeBadge').textContent = 'Ningún análisis activo';
+    document.getElementById('analysisModeBadge').textContent = 'Ningun analisis activo';
     document.getElementById('analysisModeBadge').style.color = '#868e96';
     document.getElementById('stockfishAnalyzeBtn').disabled = false;
     document.getElementById('ramseyAnalyzeBtn').disabled = false;
@@ -1234,9 +1201,6 @@ async function connectEngine() {
         document.getElementById('engineStatus').style.borderLeftColor = '#007bff';
         updateButtonStates();
         addLog('success', 'Motor Stockfish conectado');
-        if (chess && gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b') && !chess.game_over()) {
-            setTimeout(() => { console.log('Motor conectado'); }, 500);
-        }
     } catch (error) {
         document.getElementById('engineStatus').textContent = 'Error: ' + error.message;
         document.getElementById('engineStatus').style.borderLeftColor = '#dc3545';
@@ -1272,13 +1236,13 @@ function stopAnalysis() {
     if (stockfish) stockfish.postMessage('stop');
     isAnalyzing = false;
     currentPVAnalysis.searchInProgress = false;
-    document.getElementById('engineStatus').textContent = 'Motor conectado — Análisis detenido';
+    document.getElementById('engineStatus').textContent = 'Motor conectado -- Analisis detenido';
     document.getElementById('engineStatus').style.borderLeftColor = '#ffc107';
     updateButtonStates();
-    addLog('info', 'Análisis detenido');
+    addLog('info', 'Analisis detenido');
 }
 
-// ===================== HANDLERS DE STOCKFISH (simplificados) =====================
+// ===================== HANDLERS DE STOCKFISH =====================
 let stockfishResolve = null;
 
 function handleEngineMessage(msg) {
@@ -1292,29 +1256,27 @@ function handleEngineMessage(msg) {
         if (stockfishResolve) stockfishResolve();
         isAnalyzing = false;
 
-        // En modo stockfish, bestmove solo llega tras 'stop'
         if (activeAnalysisMode === 'stockfish') {
             isAnalyzing = false;
             activeAnalysisMode = 'none';
             currentPVAnalysis.searchInProgress = false;
-            addLog('info', 'Stockfish: análisis finalizado');
-            document.getElementById('engineStatus').textContent = 'Análisis completado';
+            addLog('info', 'Stockfish: analisis finalizado');
+            document.getElementById('engineStatus').textContent = 'Analisis completado';
             document.getElementById('engineStatus').style.borderLeftColor = '#28a745';
-            document.getElementById('analysisModeBadge').textContent = 'Ningún análisis activo';
+            document.getElementById('analysisModeBadge').textContent = 'Ningun analisis activo';
             document.getElementById('analysisModeBadge').style.color = '#868e96';
             document.getElementById('stockfishAnalyzeBtn').disabled = false;
             document.getElementById('ramseyAnalyzeBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
         } else {
             currentPVAnalysis.searchInProgress = false;
-            document.getElementById('engineStatus').textContent = 'Análisis completado';
+            document.getElementById('engineStatus').textContent = 'Analisis completado';
             document.getElementById('engineStatus').style.borderLeftColor = '#28a745';
         }
 
         if (lastStats.bestMoveSan) {
             document.getElementById('bestMove').textContent = `Mejor: ${lastStats.bestMoveSan}`;
         }
-        // La flecha del motor debe persistir incluso cuando las flechas Ramsey están activas.
         updateBoard();
         updateButtonStates();
     } else if (msg.startsWith('info')) {
@@ -1404,11 +1366,10 @@ function updateEngineDisplay() {
         else if (e.value < -50) evalEl.classList.add('eval-negative');
         else evalEl.classList.add('eval-neutral');
 
-        // AUTO-STOP: mate inminente en flujo estándar (no adaptativo)
         if (e.type === 'mate' && Math.abs(e.value) <= 3 && isAnalyzing && !currentPVAnalysis.adaptationActive && !currentPVAnalysis.autoStopped) {
             currentPVAnalysis.autoStopped = true;
             stockfish.postMessage('stop');
-            addLog('success', `Mate M${e.value} detectado → análisis detenido automáticamente.`);
+            addLog('success', `Mate M${e.value} detectado -> analisis detenido automaticamente.`);
             document.getElementById('engineStatus').textContent = `Mate M${e.value} confirmado`;
             document.getElementById('engineStatus').style.borderLeftColor = '#e74c3c';
         }
@@ -1455,7 +1416,7 @@ function updateMemoryStats() {
     } else memoryStats.textContent = 'Mem: N/A';
 }
 
-// ===================== MOTOR RAMSEY (FUNCIÓN PRINCIPAL) =====================
+// ===================== MOTOR RAMSEY =====================
 
 function runRamseyFilter() {
     if (ramseyMode === 'heatmap') {
@@ -1473,15 +1434,15 @@ function runRamseyFilter() {
         document.getElementById('ramseyMetrics').innerHTML = `
             <div class="ramsey-metric"><span>Modo</span><span>Heatmap</span></div>
             <div class="ramsey-metric"><span>Ventanas</span><span>3x3, 4x4, 2x4, 3x4</span></div>
-            <div class="ramsey-metric"><span>Casillas críticas</span><span>${hotCells}/64</span></div>
+            <div class="ramsey-metric"><span>Casillas criticas</span><span>${hotCells}/64</span></div>
             <div class="ramsey-metric"><span>Densidad media</span><span>${(avgDensity * 100).toFixed(0)}%</span></div>
             <div class="ramsey-metric"><span>Pico local</span><span>${(maxDensity * 100).toFixed(0)}%</span></div>
             <div class="ramsey-metric"><span>Tiempo</span><span>${dt} ms</span></div>
         `;
         const escRow = document.getElementById('ramseyEscapeRow');
-        escRow.innerHTML = `<div style="display:flex;gap:8px;font-size:0.72rem;margin-top:3px;"><span style="color:#3498db;">♔ --</span><span style="color:#e74c3c;">♚ --</span><span style="margin-left:auto;color:#666;">${dt}ms</span></div>`;
-        document.getElementById('ramseyPills').innerHTML = '<span class="status-pill pill-ramsey-warning">Mapa térmico activo</span>';
-        addLog('ramsey', `Heatmap Ramsey: ${hotCells} casillas críticas | pico ${(maxDensity * 100).toFixed(0)}% (${dt}ms)`);
+        escRow.innerHTML = `<div style="display:flex;gap:8px;font-size:0.72rem;margin-top:3px;"><span style="color:#3498db;">&#9812; --</span><span style="color:#e74c3c;">&#9818; --</span><span style="margin-left:auto;color:#666;">${dt}ms</span></div>`;
+        document.getElementById('ramseyPills').innerHTML = '<span class="status-pill pill-ramsey-warning">Mapa termico activo</span>';
+        addLog('ramsey', `Heatmap Ramsey: ${hotCells} casillas criticas | pico ${(maxDensity * 100).toFixed(0)}% (${dt}ms)`);
         return;
     }
 
@@ -1498,11 +1459,10 @@ function runRamseyFilter() {
     document.getElementById('ramseyFillB').textContent = 'N ' + b.score.toFixed(1);
 
     const diff = Math.abs(w.score - b.score);
-    // Métricas
     const mEl = document.getElementById('ramseyMetrics');
     mEl.innerHTML = `
         <div class="ramsey-metric"><span>Modo</span><span>Choque</span></div>
-        <div class="ramsey-metric"><span>Δ score</span><span>${diff.toFixed(1)}</span></div>
+        <div class="ramsey-metric"><span>Delta score</span><span>${diff.toFixed(1)}</span></div>
         <div class="ramsey-metric"><span>Piezas</span><span>B:${w.n} N:${b.n}</span></div>
         <div class="ramsey-metric"><span>Peso total</span><span>B:${w.totalWeight.toFixed(1)} N:${b.totalWeight.toFixed(1)}</span></div>
         <div class="ramsey-metric"><span>K3 cliques</span><span>B:${w.k3} N:${b.k3}</span></div>
@@ -1513,7 +1473,6 @@ function runRamseyFilter() {
         <div class="ramsey-metric"><span>Tiempo</span><span>${dt} ms</span></div>
     `;
 
-    // Escape analysis
     const escW = analyzeEscape(board, 'white');
     const escB = analyzeEscape(board, 'black');
     lastEscapeAnalysis = { white: escW, black: escB, turn: chess.turn() };
@@ -1522,21 +1481,21 @@ function runRamseyFilter() {
     const pillsEl = document.getElementById('ramseyPills');
     const wText = escW ? `${escW.safe.size}/${escW.escapes.size} seg` : '--';
     const bText = escB ? `${escB.safe.size}/${escB.escapes.size} seg` : '--';
-    escRow.innerHTML = `<div style="display:flex;gap:8px;font-size:0.72rem;margin-top:3px;"><span style="color:#3498db;">♔ ${wText}</span><span style="color:#e74c3c;">♚ ${bText}</span><span style="margin-left:auto;color:#666;">${(performance.now()-t0).toFixed(0)}ms</span></div>`;
+    escRow.innerHTML = `<div style="display:flex;gap:8px;font-size:0.72rem;margin-top:3px;"><span style="color:#3498db;">&#9812; ${wText}</span><span style="color:#e74c3c;">&#9818; ${bText}</span><span style="margin-left:auto;color:#666;">${(performance.now()-t0).toFixed(0)}ms</span></div>`;
     if (esc) {
         if (esc.score >= 95) {
-            pillsEl.innerHTML = '<span class="status-pill pill-ramsey-mate">⚠ MATE ESTRUCTURAL</span>';
-            addLog('ramsey', `MATE ESTRUCTURAL detectado (score ${esc.score.toFixed(0)}) — Motor innecesario`);
+            pillsEl.innerHTML = '<span class="status-pill pill-ramsey-mate">&#9888; MATE ESTRUCTURAL</span>';
+            addLog('ramsey', `MATE ESTRUCTURAL detectado (score ${esc.score.toFixed(0)}) -- Motor innecesario`);
         } else if (esc.score >= 70) {
-            pillsEl.innerHTML = '<span class="status-pill pill-ramsey-warning">⚠ Rey expuesto</span>';
-            addLog('ramsey', `Rey expuesto (score ${esc.score.toFixed(0)}) — Búsqueda priorizada`);
+            pillsEl.innerHTML = '<span class="status-pill pill-ramsey-warning">&#9888; Rey expuesto</span>';
+            addLog('ramsey', `Rey expuesto (score ${esc.score.toFixed(0)}) -- Busqueda priorizada`);
         } else {
-            pillsEl.innerHTML = '<span class="status-pill pill-ramsey-safe">✓ Rey seguro</span>';
-            addLog('ramsey', `Ramsey: Δ${diff.toFixed(1)} | K3:${w.k3}v${b.k3} | Escape:${esc.safe.size}/${esc.escapes.size} (${dt}ms)`);
+            pillsEl.innerHTML = '<span class="status-pill pill-ramsey-safe">&#10003; Rey seguro</span>';
+            addLog('ramsey', `Ramsey: Delta${diff.toFixed(1)} | K3:${w.k3}v${b.k3} | Escape:${esc.safe.size}/${esc.escapes.size} (${dt}ms)`);
         }
     } else {
         pillsEl.innerHTML = '';
-        addLog('ramsey', `Ramsey: Δ${diff.toFixed(1)} | K3:${w.k3}v${b.k3} | K4:${w.k4}v${b.k4} (${dt}ms)`);
+        addLog('ramsey', `Ramsey: Delta${diff.toFixed(1)} | K3:${w.k3}v${b.k3} | K4:${w.k4}v${b.k4} (${dt}ms)`);
     }
 }
 
@@ -1671,10 +1630,6 @@ function connectedComponents(G) {
     return comp;
 }
 
-/**
- * Calcula el umbral de Turán para un K4.
- * Si las aristas actuales <= este umbral, no hay K4 posible.
- */
 function getTuranThreshold(n) {
     if (n < 4) return 6;
     return Math.floor((n * n) / 3);
@@ -1745,7 +1700,7 @@ function analyzeEscape(boardArr, color) {
     return{escapes,controlled,safe,kingUnderAttack,score,kingPos:kr*8+kc,coverage};
 }
 
-// ===================== MB-DEEP-SCANNER: NUEVA ARQUITECTURA =====================
+// ===================== MB-DEEP-SCANNER =====================
 function extractPVFromDisplay() {
     if (lastStats.pvUCI && lastStats.pvUCI.length > 0) return lastStats.pvUCI.slice();
     return null;
@@ -1839,7 +1794,7 @@ function renderMBScanner(result) {
     } else {
         statusEl.textContent = `Escaneados ${result.scans.length} plys (${prunedPlys} podados, ${result.scans.length - prunedPlys} con cliques posibles).`;
     }
-    let html = `<table class="scanner-table"><tr><th>Nivel</th><th>Jugada</th><th>Col-P</th><th>Col-R</th><th>Rey⚠</th><th>K4⚠</th><th>Crn</th><th>Alerta</th></tr>`;
+    let html = `<table class="scanner-table"><tr><th>Nivel</th><th>Jugada</th><th>Col-P</th><th>Col-R</th><th>Rey&#9888;</th><th>K4&#9888;</th><th>Crn</th><th>Alerta</th></tr>`;
     for (const r of result.scans) {
         const s = r.scan;
         const alerts = [];
@@ -1847,10 +1802,10 @@ function renderMBScanner(result) {
         if (s.myCollapses > 0) { alerts.push(`<span class="scanner-badge badge-critica">${s.myCollapses}COL</span>`); rowClass = 'scanner-alerta-critica'; }
         if (s.myEscapesSafe === 0 && s.myEscapesAttacked > 0) { alerts.push('<span class="scanner-badge badge-critica">REY0</span>'); rowClass = 'scanner-alerta-critica'; }
         if (s.myEscapesSafe === 1 && s.myEscapesAttacked > 0) { alerts.push('<span class="scanner-badge badge-adv">REY1</span>'); if (!rowClass) rowClass = 'scanner-alerta-advertencia'; }
-        if (s.k4NearMyKing > 0) { alerts.push(`<span class="scanner-badge badge-adv">K4×${s.k4NearMyKing}</span>`); if (!rowClass) rowClass = 'scanner-alerta-advertencia'; }
+        if (s.k4NearMyKing > 0) { alerts.push(`<span class="scanner-badge badge-adv">K4&times;${s.k4NearMyKing}</span>`); if (!rowClass) rowClass = 'scanner-alerta-advertencia'; }
         if (s.crownDisputed >= 2) { alerts.push(`<span class="scanner-badge badge-adv">CRN${s.crownDisputed}</span>`); if (!rowClass) rowClass = 'scanner-alerta-advertencia'; }
         if (s.rivalCollapses > 0 && s.myCollapses === 0 && s.myEscapesSafe >= 2) alerts.push(`<span class="scanner-badge badge-info">R${s.rivalCollapses}COL</span>`);
-        const alertStr = alerts.length > 0 ? alerts.join(' ') : '<span class="scanner-limpia">✓</span>';
+        const alertStr = alerts.length > 0 ? alerts.join(' ') : '<span class="scanner-limpia">&#10003;</span>';
         html += `<tr class="${rowClass}"><td>N${r.level}</td><td>${r.move}</td><td>${s.myCollapses}</td><td>${s.rivalCollapses}</td><td>${s.myEscapesSafe}/${s.myEscapesSafe + s.myEscapesAttacked}</td><td>${s.k4NearMyKing}</td><td>${s.crownDisputed}</td><td>${alertStr}</td></tr>`;
     }
     html += '</table>';
@@ -1915,9 +1870,7 @@ function analyzePieceVulnerability(boardArr, color) {
     return { totalCollapseRisk, maxDanger, numCollapse };
 }
 
-// ===================== COPILOTO: AVANCE Y FALLBACK =====================
-
-// ===================== RAMSEY-PV: EVALUACIÓN POR VARIANTE =====================
+// ===================== RAMSEY-PV: EVALUACION POR VARIANTE =====================
 
 function evaluatePVStructures() {
     if (!lastStats || !lastStats.pvs || !lastStats.pvUCIs) return null;
@@ -1929,11 +1882,9 @@ function evaluatePVStructures() {
         if (!uciMoves || uciMoves.length === 0) continue;
         const ev = lastStats.pvEvaluations?.[pvNum] || null;
 
-        // Simular PV
         const vector = simulatePVVector(uciMoves);
         if (!vector) continue;
 
-        // Calcular score estructural Ramsey
         const ramseyScore = computeRamseyScore(vector);
         const motorEval = ev ? (ev.type === 'mate' ? `M${ev.value}` : `${(ev.value/100).toFixed(2)}`) : '--';
 
@@ -1948,20 +1899,18 @@ function evaluatePVStructures() {
         });
     }
 
-    // Ordenar por score Ramsey descendente
     results.sort((a, b) => b.ramseyScore - a.ramseyScore);
     return results;
 }
 
 function computeRamseyScore(vec) {
     if (!vec) return 0;
-    // Normalizar componentes a escala 0-100
     const kingSafetyNorm = Math.min(vec.kingSafety || 50, 100) / 100;
     const materialNorm = Math.min(Math.abs(vec.materialDiff) / 15, 1);
     const materialSign = vec.materialDiff >= 0 ? 1 : -1;
     const controlNorm = Math.min((vec.disputed || 0) / 20, 1);
     const k4Penalty = Math.min((vec.rivalK4NearKing || 0) / 4, 1);
-    const pawnNorm = (vec.pawnStructure || 0) > 0 ? 1 : (1 + (vec.pawnStructure || 0) / 3); // peones doblados penalizan
+    const pawnNorm = (vec.pawnStructure || 0) > 0 ? 1 : (1 + (vec.pawnStructure || 0) / 3);
     const centralNorm = Math.min(Math.abs(vec.centralControl || 0) / 5, 1);
 
     const score = (
@@ -1973,7 +1922,7 @@ function computeRamseyScore(vec) {
         centralNorm * PV_EVAL_CONFIG.WEIGHT_CENTRAL
     );
 
-    return Math.round(score * 100); // 0-100
+    return Math.round(score * 100);
 }
 
 function renderPVEvaluation(results) {
@@ -1991,7 +1940,6 @@ function renderPVEvaluation(results) {
         return;
     }
 
-    // Renderizar tabla de ranking
     let html = '<div style="font-size:0.7rem;font-weight:700;color:#495057;margin-bottom:4px;">Ranking Ramsey por Variante</div>';
     html += '<div style="display:grid;grid-template-columns:30px 1fr 50px 50px;gap:2px;font-size:0.65rem;">';
     html += '<div style="font-weight:600;">#</div><div style="font-weight:600;">PV</div><div style="font-weight:600;text-align:right;">Motor</div><div style="font-weight:600;text-align:right;">Ramsey</div>';
@@ -2000,7 +1948,7 @@ function renderPVEvaluation(results) {
         const isTop = idx === 0;
         const bg = isTop ? '#d5f5e3' : (idx === 1 ? '#eafaf1' : 'transparent');
         const color = isTop ? '#27ae60' : '#495057';
-        const crown = isTop ? '👑 ' : '';
+        const crown = isTop ? '&#9812; ' : '';
         html += `<div style="background:${bg};border-radius:2px;padding:1px 3px;text-align:center;font-weight:600;color:${color}">${r.pvNum}</div>`;
         html += `<div style="background:${bg};border-radius:2px;padding:1px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${color}">${crown}${r.san.substring(0,25)}</div>`;
         html += `<div style="background:${bg};border-radius:2px;padding:1px 3px;text-align:right;color:${color}">${r.motorEval}</div>`;
@@ -2009,7 +1957,6 @@ function renderPVEvaluation(results) {
     html += '</div>';
     matrixEl.innerHTML = html;
 
-    // Badge de mejor según Ramsey
     const best = results[0];
     const bestMotor = results.reduce((a, b) => b.motorValue > a.motorValue ? b : a);
     const divergence = best.pvNum !== bestMotor.pvNum;
@@ -2019,7 +1966,7 @@ function renderPVEvaluation(results) {
     badgeEl.textContent = divergence ? 'DIVERGENCIA' : 'CONSENSO';
 
     compEl.innerHTML = `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">
-        <span style="background:#d5f5e3;color:#27ae60;padding:1px 5px;border-radius:3px;font-size:0.68rem;font-weight:600;">👑 Ramsey PV#${best.pvNum}</span>
+        <span style="background:#d5f5e3;color:#27ae60;padding:1px 5px;border-radius:3px;font-size:0.68rem;font-weight:600;">&#9812; Ramsey PV#${best.pvNum}</span>
         <span style="background:#d6eaf8;color:#2980b9;padding:1px 5px;border-radius:3px;font-size:0.68rem;font-weight:600;">Motor PV#${bestMotor.pvNum}</span>
     </div>`;
 
@@ -2028,91 +1975,76 @@ function renderPVEvaluation(results) {
         : `Motor y Ramsey coinciden: PV#${best.pvNum} es la mejor`;
 }
 
-// ===================== RAMSEY-PV: MOTOR DE CONSISTENCIA =====================
-
 // ===================== CORTE INTELIGENTE DE ITERACIONES =====================
 
 function shouldStopIterating(decision) {
-    // 1. Corte por consenso abrumador (ya existente)
     if (decision.action === 'CUT_CONFIDENT') return true;
 
-    // === FASE DE VERIFICACIÓN DEL MATE (FVM) ===
-    // Sentido común: M1/M2 es mate confirmado matemáticamente → cortar.
-    // M3+: verificar que el mate no se alarga (efecto horizonte).
     const mateEvals = Object.values(lastStats.pvEvaluations || {}).filter(ev => ev.type === 'mate');
     if (mateEvals.length > 0) {
         const shortestMate = Math.min(...mateEvals.map(ev => Math.abs(ev.value)));
         const allSameSign = mateEvals.every(ev => Math.sign(ev.value) === Math.sign(mateEvals[0].value));
 
-        // M1/M2 confirmado matemáticamente → cortar inmediatamente
         if (shortestMate <= 2 && mateEvals.length >= 3 && allSameSign) {
-            addLog('adaptation', `Mate M${shortestMate} confirmado matemáticamente (${mateEvals.length} PVs) → corte.`);
+            addLog('adaptation', `Mate M${shortestMate} confirmado matematicamente (${mateEvals.length} PVs) -> corte.`);
             return true;
         }
 
-        // Si estamos en fase de verificación
         if (currentPVAnalysis.mateVerification) {
             const v = currentPVAnalysis.mateVerification;
             v.iterations++;
 
-            // ¿El mate se alargó significativamente o cambió de signo? = horizonte, abortar
             if (!allSameSign || shortestMate > v.originalMate + MATE_LENGTH_TOLERANCE) {
-                addLog('adaptation', `Mate refutado: M${v.originalMate} → M${shortestMate} | volviendo a búsqueda normal`);
+                addLog('adaptation', `Mate refutado: M${v.originalMate} -> M${shortestMate} | volviendo a busqueda normal`);
                 currentPVAnalysis.mateVerification = null;
-                return false; // NO cortar
+                return false;
             }
 
-            // ¿Mate estable por N iteraciones? = confirmado
             if (v.iterations >= MATE_VERIFICATION_ITERS) {
-                addLog('adaptation', `Mate M${shortestMate} VERIFICADO (${v.iterations} iter) → corte.`);
-                return true; // CORTAR
+                addLog('adaptation', `Mate M${shortestMate} VERIFICADO (${v.iterations} iter) -> corte.`);
+                return true;
             }
 
-            // Seguir verificando
             addLog('adaptation', `Verificando mate M${shortestMate}... (${v.iterations}/${MATE_VERIFICATION_ITERS})`);
             currentPVAnalysis.ramseyDecision = {
                 action: 'VERIFY_MATE',
                 multiPV: MATE_VERIFICATION_MULTIPV,
                 depthDelta: MATE_VERIFICATION_DEPTH
             };
-            return false; // NO cortar todavía
+            return false;
         }
 
-        // Iniciar fase de verificación (M3+)
         if (allSameSign && mateEvals.length >= 3 && shortestMate >= 3) {
             currentPVAnalysis.mateVerification = {
                 originalMate: shortestMate,
                 iterations: 1,
                 startDepth: currentPVAnalysis.depth
             };
-            addLog('adaptation', `Mate M${shortestMate} detectado en ${mateEvals.length} PVs → verificación (${MATE_VERIFICATION_ITERS} iter, prof+${MATE_VERIFICATION_DEPTH})`);
+            addLog('adaptation', `Mate M${shortestMate} detectado en ${mateEvals.length} PVs -> verificacion (${MATE_VERIFICATION_ITERS} iter, prof+${MATE_VERIFICATION_DEPTH})`);
             currentPVAnalysis.ramseyDecision = {
                 action: 'VERIFY_MATE',
                 multiPV: MATE_VERIFICATION_MULTIPV,
                 depthDelta: MATE_VERIFICATION_DEPTH
             };
-            return false; // NO cortar, iniciar verificación
+            return false;
         }
     }
 
-    // 2b. EVALUACIÓN UNÁNIME: todas las PVs convergen en ventaja para el mismo color
     const allEvals = Object.values(lastStats.pvEvaluations || {});
     if (allEvals.length >= 3) {
         const signs = allEvals.map(ev => Math.sign(ev.type === 'mate' ? ev.value : ev.value));
         if (signs.every(s => s > 0) || signs.every(s => s < 0)) {
-            // Todas positivas o todas negativas
             const allMagnitude = allEvals.every(ev =>
                 (ev.type === 'mate' && Math.abs(ev.value) <= 5) ||
                 (ev.type !== 'mate' && Math.abs(ev.value) >= 300)
             );
             if (allMagnitude && currentPVAnalysis.depth >= 14) {
-                addLog('adaptation', `Evaluación unánime (${allEvals.length} PVs, misma dirección) → corte.`);
-                return true; // CORTAR: decisión clara
+                addLog('adaptation', `Evaluacion unanime (${allEvals.length} PVs, misma direccion) -> corte.`);
+                return true;
             }
         }
     }
 
-    // 3. Caos persistente: sin cliques en N iteraciones consecutivas
     if (!currentPVAnalysis.chaosHistory) currentPVAnalysis.chaosHistory = [];
     currentPVAnalysis.chaosHistory.push(decision.badge === 'warning' || decision.badge === 'gray');
     if (currentPVAnalysis.chaosHistory.length > CHAOS_PERSISTENCE_LIMIT) {
@@ -2121,35 +2053,31 @@ function shouldStopIterating(decision) {
     const recentChaos = currentPVAnalysis.chaosHistory;
     const chaosStreak = recentChaos.length >= CHAOS_PERSISTENCE_LIMIT && recentChaos.every(Boolean);
     if (chaosStreak && currentPVAnalysis.depth >= CHAOS_MIN_DEPTH_TO_CUT) {
-        addLog('adaptation', `Caos persistente (${CHAOS_PERSISTENCE_LIMIT} iter) a prof ${currentPVAnalysis.depth} → corte.`);
-        return true; // cortar
+        addLog('adaptation', `Caos persistente (${CHAOS_PERSISTENCE_LIMIT} iter) a prof ${currentPVAnalysis.depth} -> corte.`);
+        return true;
     }
 
-    // 4. Salto brusco de evaluación entre iteraciones = inestabilidad
     if (!currentPVAnalysis.prevBestEval) currentPVAnalysis.prevBestEval = null;
     const bestEval = lastStats.pvEvaluations?.[1]?.value ?? null;
     if (bestEval !== null && currentPVAnalysis.prevBestEval !== null) {
         const jump = Math.abs(bestEval - currentPVAnalysis.prevBestEval);
         if (jump > EVAL_JUMP_THRESHOLD) {
-            addLog('adaptation', `Salto de eval ${jump}cp > ${EVAL_JUMP_THRESHOLD} → continuando...`);
+            addLog('adaptation', `Salto de eval ${jump}cp > ${EVAL_JUMP_THRESHOLD} -> continuando...`);
             currentPVAnalysis.prevBestEval = bestEval;
-            return false; // NO cortar
+            return false;
         }
     }
     if (bestEval !== null) currentPVAnalysis.prevBestEval = bestEval;
 
-    // 5. Consenso temprano: K3 rojo a prof baja sigue siendo sospechoso
     if (decision.action === 'DEEPEN_RED' && currentPVAnalysis.depth < CONSENSUS_EARLY_DEPTH) {
-        addLog('adaptation', `Consenso temprano a prof ${currentPVAnalysis.depth} < ${CONSENSUS_EARLY_DEPTH} → verificando...`);
-        return false; // NO cortar
+        addLog('adaptation', `Consenso temprano a prof ${currentPVAnalysis.depth} < ${CONSENSUS_EARLY_DEPTH} -> verificando...`);
+        return false;
     }
 
-    // 6. Límite absoluto de seguridad
     if (currentPVAnalysis.iterationCount >= MAX_ITERATIONS_HARD) {
-        return true; // cortar
+        return true;
     }
 
-    // 7. Por defecto: seguir iterando si hay espacio
     return false;
 }
 
@@ -2157,7 +2085,6 @@ function commitPVSnapshot() {
     if (!lastStats || !lastStats.pvs || !lastStats.pvUCIs) return null;
     const snapshot = [];
     const keys = Object.keys(lastStats.pvs).map(Number).sort((a,b)=>a-b);
-    // DIAGNÓSTICO: mostrar qué evaluaciones se leen para cada PV
     let diag = 'Ramsey-PV diag: ';
     for (const pvNum of keys) {
         const uciMoves = lastStats.pvUCIs[pvNum];
@@ -2192,7 +2119,6 @@ function simulatePVVector(uciMoves) {
         const turn = temp.turn();
         const side = turn === 'w' ? 'white' : 'black';
 
-        // === MOTOR RAMSEY EXISTENTE (no redefinir) ===
         const esc = analyzeEscape(boardArr, side);
         const kingSafety = esc ? esc.score : 50;
 
@@ -2217,7 +2143,6 @@ function simulatePVVector(uciMoves) {
             }
         }
 
-        // === VECTOR ESTRUCTURAL ENRIQUECIDO (20 dimensiones) ===
         const profile = new Array(20).fill(0);
         const ownMatByCol = new Array(8).fill(0);
         const oppMatByCol = new Array(8).fill(0);
@@ -2234,7 +2159,6 @@ function simulatePVVector(uciMoves) {
                 const isWhite = p === p.toUpperCase();
                 const isOwn = isWhite === (side === 'white');
 
-                // Material por columna (propio/rival)
                 if (isOwn) {
                     if (isWhite) { ownMatByCol[c] += w; materialWhite += w; }
                     else { oppMatByCol[c] += w; materialBlack += w; }
@@ -2243,20 +2167,17 @@ function simulatePVVector(uciMoves) {
                     else { ownMatByCol[c] += w; materialBlack += w; }
                 }
 
-                // Pawn structure O(1) por casilla (acumular, penalizar después)
                 if (p.toLowerCase() === 'p') {
                     const colorKey = isWhite ? 'white' : 'black';
                     pawnsByCol[colorKey][c]++;
                 }
 
-                // Central control (d4,d5,e4,e5 ponderado por peso de pieza)
                 if ((c === 3 || c === 4) && (r === 3 || r === 4)) {
                     centralControl += (isOwn ? 1 : -0.8) * w * 0.25;
                 }
             }
         }
 
-        // Pawn structure: penalizar doubled pawns O(8) no O(64)
         const ownPawnColor = side === 'white' ? 'white' : 'black';
         for (let c = 0; c < 8; c++) {
             const count = pawnsByCol[ownPawnColor][c];
@@ -2265,13 +2186,12 @@ function simulatePVVector(uciMoves) {
 
         const materialDiff = side === 'white' ? materialWhite - materialBlack : materialBlack - materialWhite;
 
-        // Rellenar profile array
-        profile[0] = 0; // evalCp se setea fuera (desde lastStats)
+        profile[0] = 0;
         for (let c = 0; c < 8; c++) {
             profile[1 + c] = ownMatByCol[c] / 32;
             profile[9 + c] = oppMatByCol[c] / 32;
         }
-        profile[17] = kingSafety / 100; // normalizado 0-1
+        profile[17] = kingSafety / 100;
         profile[18] = pawnStructure;
         profile[19] = centralControl;
 
@@ -2296,14 +2216,12 @@ function buildPVCompatGraph(snapshot) {
     const adjBlue = Array.from({ length: n }, () => new Set());
     const distances = Array.from({ length: n }, () => Array(n).fill(0));
 
-    // Enriquecer snapshot con evaluaciones + dimensión 0 del profile
     for (let i = 0; i < n; i++) {
         const pvNum = snapshot[i].pvNum;
         const ev = lastStats.pvEvaluations ? lastStats.pvEvaluations[pvNum] : null;
         if (ev && ev.type === 'mate') {
-            // Mate: evalCp para signo, pero profile usa movimientos reales (no ±30000)
             snapshot[i].evalCp = ev.value > 0 ? 30000 : -30000;
-            if (snapshot[i].profile) snapshot[i].profile[0] = ev.value / 30; // mate in 30 = 1.0
+            if (snapshot[i].profile) snapshot[i].profile[0] = ev.value / 30;
         } else {
             snapshot[i].evalCp = ev ? ev.value : 0;
             if (snapshot[i].profile) snapshot[i].profile[0] = snapshot[i].evalCp / 300;
@@ -2315,12 +2233,10 @@ function buildPVCompatGraph(snapshot) {
             const v1 = snapshot[i];
             const v2 = snapshot[j];
 
-            // Filtro por signo: PVs con ventaja opuesta no son comparables
             if (Math.sign(v1.evalCp) !== Math.sign(v2.evalCp)) continue;
 
             let dist = computePVDistance(v1, v2);
 
-            // Bonus por prefijo compartido (misma apertura = más compatibles)
             const sharedPrefix = sharedMovesPrefix(v1.uci, v2.uci);
             if (sharedPrefix >= 2) dist *= 0.6;
             else if (sharedPrefix >= 1) dist *= 0.85;
@@ -2346,7 +2262,6 @@ function sharedMovesPrefix(a, b) {
     return k;
 }
 
-// === SAD PONDERADO sobre vector de 20 dimensiones ===
 const PV_SAD_WEIGHTS = [2.0, 1.1,1.1,1.1,1.1,1.1,1.1,1.1,1.1, 1.1,1.1,1.1,1.1,1.1,1.1,1.1,1.1, 1.8, 1.5, 1.4];
 
 function profileSAD(p1, p2) {
@@ -2357,9 +2272,7 @@ function profileSAD(p1, p2) {
 }
 
 function computePVDistance(v1, v2) {
-    // Evaluación como dimensión 0 del profile (seteada en buildPVCompatGraph)
     const dProfile = profileSAD(v1.profile, v2.profile);
-    // Dimensión adicional: casillas disputadas (del motor Ramsey estático)
     const dDisputed = Math.abs(v1.disputed - v2.disputed) / 10;
     return dProfile + dDisputed;
 }
@@ -2399,19 +2312,16 @@ function analyzePVConsistency() {
     const snapshot = commitPVSnapshot();
     const allEvals = Object.values(lastStats.pvEvaluations || {});
 
-    // === CRITERIO PRIORITARIO: Evaluación unánime y fuerte ===
-    // Si TODAS las PVs convergen en ventaja enorme para el mismo color,
-    // profundizar agresivamente para confirmar/corregir el mate.
     if (allEvals.length >= 2) {
         const signs = allEvals.map(ev => Math.sign(ev.type === 'mate' ? ev.value : ev.value));
         const allSameSign = signs.every(s => s === signs[0]) && signs[0] !== 0;
         const hasStrongEval = allEvals.some(ev =>
             (ev.type === 'mate') ||
-            (ev.type !== 'mate' && Math.abs(ev.value) >= 1500)  // +15 peones o más
+            (ev.type !== 'mate' && Math.abs(ev.value) >= 1500)
         );
         const allStrong = allEvals.every(ev =>
             (ev.type === 'mate') ||
-            (ev.type !== 'mate' && Math.abs(ev.value) >= 800)  // Todas > 8 peones
+            (ev.type !== 'mate' && Math.abs(ev.value) >= 800)
         );
 
         if (allSameSign && (hasStrongEval || allStrong)) {
@@ -2426,8 +2336,8 @@ function analyzePVConsistency() {
 
             const action = 'DEEPEN_FORCE';
             const multiPV = 6;
-            const depthDelta = 5;  // +5 de profundidad = agresivo
-            const reason = `Eval unánime fuerte (${str} ${side}) → prof+${depthDelta}`;
+            const depthDelta = 5;
+            const reason = `Eval unanime fuerte (${str} ${side}) -> prof+${depthDelta}`;
             const badge = 'safe';
 
             const display = renderPVCompatDisplay(graph, redComponents, blueComponents, snapshot, chaos);
@@ -2459,7 +2369,7 @@ function analyzePVConsistency() {
         action = 'STANDARD';
         multiPV = 6;
         depthDelta = 1;
-        reason = `Caos: componente máx ${chaos.maxComp} < esperado ${chaos.expectedK}`;
+        reason = `Caos: componente max ${chaos.maxComp} < esperado ${chaos.expectedK}`;
         badge = 'warning';
     } else if (bigRed.length > 0) {
         const mainRed = bigRed[0];
@@ -2467,21 +2377,21 @@ function analyzePVConsistency() {
         action = 'DEEPEN_RED';
         multiPV = Math.min(mainRed.length, 6);
         depthDelta = 3;
-        reason = `K₃ rojo (PVs ${redPVNums.join(',')}) → consenso estructural`;
+        reason = `K3 rojo (PVs ${redPVNums.join(',')}) -> consenso estructural`;
         badge = 'safe';
         if (mainRed.length >= 5) {
             action = 'CUT_CONFIDENT';
-            reason = `Consenso abrumador (${mainRed.length} PVs) → corte posible`;
+            reason = `Consenso abrumador (${mainRed.length} PVs) -> corte posible`;
         }
     } else if (bigBlue.length > 0 && bigBlue[0].length >= DIVERGENCE_MIN_PVS) {
         const bluePVNums = bigBlue[0].map(idx => snapshot[idx].pvNum);
         action = 'EXPAND_BLUE';
         multiPV = 8;
         depthDelta = 0;
-        reason = `K₃ azul (${bluePVNums.length} PVs ≥ min ${DIVERGENCE_MIN_PVS}) → divergencia real`;
+        reason = `K3 azul (${bluePVNums.length} PVs >= min ${DIVERGENCE_MIN_PVS}) -> divergencia real`;
         badge = 'danger';
     } else if (bigBlue.length > 0) {
-        reason = `Divergencia parcial (${bigBlue[0].length} PVs < min ${DIVERGENCE_MIN_PVS}) → mixto`;
+        reason = `Divergencia parcial (${bigBlue[0].length} PVs < min ${DIVERGENCE_MIN_PVS}) -> mixto`;
         badge = 'neutral';
     } else {
         reason = 'Mixto: sin cliques estructurales claros';
@@ -2501,7 +2411,7 @@ function renderPVCompatDisplay(graph, redComp, blueComp, snapshot, chaos) {
         html += `<div style="font-weight:700;">${snapshot[i].pvNum}</div>`;
         for (let j = 0; j < n; j++) {
             if (i === j) {
-                html += '<div style="background:#e9ecef;border-radius:2px;">—</div>';
+                html += '<div style="background:#e9ecef;border-radius:2px;">-</div>';
             } else {
                 const dist = graph.distances[i][j];
                 let bg = '#f8f9fa';
@@ -2524,7 +2434,7 @@ function renderPVCompatDisplay(graph, redComp, blueComp, snapshot, chaos) {
         compHtml += `<span style="background:#d6eaf8;color:#2980b9;padding:1px 5px;border-radius:3px;font-size:0.68rem;font-weight:600;">B${idx+1}:[${nums.join(',')}]</span>`;
     });
     if (chaos.chaotic) {
-        compHtml += `<span style="background:#fdebd0;color:#d35400;padding:1px 5px;border-radius:3px;font-size:0.68rem;font-weight:600;">⚠ Caos</span>`;
+        compHtml += `<span style="background:#fdebd0;color:#d35400;padding:1px 5px;border-radius:3px;font-size:0.68rem;font-weight:600;">&#9888; Caos</span>`;
     }
     compHtml += '</div>';
 
@@ -2537,31 +2447,26 @@ function decideNextIteration(pvResults) {
     }
 
     const best = pvResults[0];
-    const ev = best.motorValue; // ya normalizado a centipeones o mate
+    const ev = best.motorValue;
 
-    // MATE CONFIRMADO
     if (Math.abs(ev) >= 29000) {
-        const mateVal = Math.round((30000 - Math.abs(ev)) / 100); // aprox
+        const mateVal = Math.round((30000 - Math.abs(ev)) / 100);
         return { action: 'CUT', depthDelta: 0, reason: `Mate confirmado (M${mateVal})`, badge: 'safe' };
     }
 
-    // EVALUACIÓN CRÍTICA (>15 peones) = casi mate
     if (Math.abs(ev) >= 1500) {
-        return { action: 'DEEPEN', depthDelta: 5, reason: `Eval crítica (${(ev/100).toFixed(1)}p) → prof+5`, badge: 'safe' };
+        return { action: 'DEEPEN', depthDelta: 5, reason: `Eval critica (${(ev/100).toFixed(1)}p) -> prof+5`, badge: 'safe' };
     }
 
-    // EVALUACIÓN FUERTE (>8 peones)
     if (Math.abs(ev) >= 800) {
-        return { action: 'DEEPEN', depthDelta: 3, reason: `Eval fuerte (${(ev/100).toFixed(1)}p) → prof+3`, badge: 'safe' };
+        return { action: 'DEEPEN', depthDelta: 3, reason: `Eval fuerte (${(ev/100).toFixed(1)}p) -> prof+3`, badge: 'safe' };
     }
 
-    // EVALUACIÓN MODERADA (>3 peones)
     if (Math.abs(ev) >= 300) {
-        return { action: 'DEEPEN', depthDelta: 2, reason: `Eval moderada (${(ev/100).toFixed(1)}p) → prof+2`, badge: 'neutral' };
+        return { action: 'DEEPEN', depthDelta: 2, reason: `Eval moderada (${(ev/100).toFixed(1)}p) -> prof+2`, badge: 'neutral' };
     }
 
-    // POSICIÓN IGUALADA O DÉBIL
-    return { action: 'DEEPEN', depthDelta: 1, reason: `Eval débil (${(ev/100).toFixed(1)}p) → prof+1`, badge: 'warning' };
+    return { action: 'DEEPEN', depthDelta: 1, reason: `Eval debil (${(ev/100).toFixed(1)}p) -> prof+1`, badge: 'warning' };
 }
 
 function applyPVCompatDisplay(decision) {
@@ -2593,7 +2498,12 @@ function applyPVCompatDisplay(decision) {
     badgeEl.textContent = bc.text;
 }
 
-// ===================== EVENTOS E INICIALIZACIÓN =====================
+function forceBestMove() {
+    if (!lastStats.bestMoveSan || !chess) return;
+    makeMove(lastStats.bestMoveSan);
+}
+
+// ===================== EVENTOS E INICIALIZACION =====================
 window.addEventListener('load', function() {
     if (!window.Chess) { alert('Error: No se pudo cargar la biblioteca de ajedrez.'); return; }
     chess = new Chess();
@@ -2602,19 +2512,17 @@ window.addEventListener('load', function() {
     updateButtonStates();
     setupPVObserver();
     document.getElementById('modeSelect').addEventListener('change', e => setGameMode(e.target.value));
-        addLog('info', `Modo adaptativo ${e.target.checked ? 'activado' : 'desactivado'}`);
-        setTimeout(reportAdaptiveModeStatus, 100);
-    });
-    addLog('success', 'Sistema inicializado — Stockfish + Filtro Ramsey listos');
-    addLog('ramsey', 'Filtro estructural Ramsey cargado (post-cuántico)');
+    addLog('success', 'Sistema inicializado -- Stockfish + Filtro Ramsey listos');
+    addLog('ramsey', 'Filtro estructural Ramsey cargado');
 });
+
 window.addEventListener('beforeunload', function() {
     if (stockfish) stockfish.terminate();
     if (blobURL) URL.revokeObjectURL(blobURL);
     if (pvObserver) pvObserver.disconnect();
 });
 
-// Exposición global de funciones
+// Exposicion global de funciones
 window.drawBoard = drawBoard;
 window.showLegalMoves = showLegalMoves;
 window.hideLegalMoves = hideLegalMoves;
