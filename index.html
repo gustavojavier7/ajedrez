@@ -1800,6 +1800,7 @@ function simulatePVVector(uciMoves) {
         const turn = temp.turn();
         const side = turn === 'w' ? 'white' : 'black';
 
+        // === MOTOR RAMSEY EXISTENTE (no redefinir) ===
         const esc = analyzeEscape(boardArr, side);
         const kingSafety = esc ? esc.score : 50;
 
@@ -1824,17 +1825,66 @@ function simulatePVVector(uciMoves) {
             }
         }
 
+        // === VECTOR ESTRUCTURAL ENRIQUECIDO (20 dimensiones) ===
+        const profile = new Array(20).fill(0);
+        const ownMatByCol = new Array(8).fill(0);
+        const oppMatByCol = new Array(8).fill(0);
+        const pawnsByCol = { white: new Array(8).fill(0), black: new Array(8).fill(0) };
+        let pawnStructure = 0;
+        let centralControl = 0;
         let materialWhite = 0, materialBlack = 0;
-        for (let r=0;r<8;r++)for(let c=0;c<8;c++){
-            const p=boardArr[r][c];
-            if(p){
-                const w=PIECE_WEIGHTS[p]||0;
-                if(p===p.toUpperCase())materialWhite+=w;else materialBlack+=w;
+
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const p = boardArr[r][c];
+                if (!p) continue;
+                const w = PIECE_WEIGHTS[p] || 1;
+                const isWhite = p === p.toUpperCase();
+                const isOwn = isWhite === (side === 'white');
+
+                // Material por columna (propio/rival)
+                if (isOwn) {
+                    if (isWhite) { ownMatByCol[c] += w; materialWhite += w; }
+                    else { oppMatByCol[c] += w; materialBlack += w; }
+                } else {
+                    if (isWhite) { oppMatByCol[c] += w; materialWhite += w; }
+                    else { ownMatByCol[c] += w; materialBlack += w; }
+                }
+
+                // Pawn structure O(1) por casilla (acumular, penalizar después)
+                if (p.toLowerCase() === 'p') {
+                    const colorKey = isWhite ? 'white' : 'black';
+                    pawnsByCol[colorKey][c]++;
+                }
+
+                // Central control (d4,d5,e4,e5 ponderado por peso de pieza)
+                if ((c === 3 || c === 4) && (r === 3 || r === 4)) {
+                    centralControl += (isOwn ? 1 : -0.8) * w * 0.25;
+                }
             }
         }
-        const materialDiff = (side === 'white' ? materialWhite - materialBlack : materialBlack - materialWhite);
+
+        // Pawn structure: penalizar doubled pawns O(8) no O(64)
+        const ownPawnColor = side === 'white' ? 'white' : 'black';
+        for (let c = 0; c < 8; c++) {
+            const count = pawnsByCol[ownPawnColor][c];
+            if (count >= 2) pawnStructure -= 0.6 * (count - 1);
+        }
+
+        const materialDiff = side === 'white' ? materialWhite - materialBlack : materialBlack - materialWhite;
+
+        // Rellenar profile array
+        profile[0] = 0; // evalCp se setea fuera (desde lastStats)
+        for (let c = 0; c < 8; c++) {
+            profile[1 + c] = ownMatByCol[c] / 32;
+            profile[9 + c] = oppMatByCol[c] / 32;
+        }
+        profile[17] = kingSafety / 100; // normalizado 0-1
+        profile[18] = pawnStructure;
+        profile[19] = centralControl;
 
         return {
+            profile,
             kingSafety,
             rivalK4NearKing,
             materialDiff,
@@ -1854,19 +1904,25 @@ function buildPVCompatGraph(snapshot) {
     const adjBlue = Array.from({ length: n }, () => new Set());
     const distances = Array.from({ length: n }, () => Array(n).fill(0));
 
-    // Enriquecer snapshot con evaluaciones de lastStats
+    // Enriquecer snapshot con evaluaciones + dimensión 0 del profile
     for (let i = 0; i < n; i++) {
         const pvNum = snapshot[i].pvNum;
         const ev = lastStats.pvEvaluations ? lastStats.pvEvaluations[pvNum] : null;
         snapshot[i].evalCp = ev ? (ev.type === 'mate' ? (ev.value > 0 ? 30000 : -30000) : ev.value) : 0;
+        if (snapshot[i].profile) snapshot[i].profile[0] = snapshot[i].evalCp / 300;
     }
 
     for (let i = 0; i < n; i++) {
         for (let j = i + 1; j < n; j++) {
             const v1 = snapshot[i];
             const v2 = snapshot[j];
+
+            // Filtro por signo: PVs con ventaja opuesta no son comparables
+            if (Math.sign(v1.evalCp) !== Math.sign(v2.evalCp)) continue;
+
             let dist = computePVDistance(v1, v2);
 
+            // Bonus por prefijo compartido (misma apertura = más compatibles)
             const sharedPrefix = sharedMovesPrefix(v1.uci, v2.uci);
             if (sharedPrefix >= 2) dist *= 0.6;
             else if (sharedPrefix >= 1) dist *= 0.85;
@@ -1892,12 +1948,22 @@ function sharedMovesPrefix(a, b) {
     return k;
 }
 
+// === SAD PONDERADO sobre vector de 20 dimensiones ===
+const PV_SAD_WEIGHTS = [2.0, 1.1,1.1,1.1,1.1,1.1,1.1,1.1,1.1, 1.1,1.1,1.1,1.1,1.1,1.1,1.1,1.1, 1.8, 1.5, 1.4];
+
+function profileSAD(p1, p2) {
+    if (!p1 || !p2 || p1.length !== p2.length) return Infinity;
+    let sum = 0;
+    for (let i = 0; i < p1.length; i++) sum += Math.abs(p1[i] - p2[i]) * PV_SAD_WEIGHTS[i];
+    return sum;
+}
+
 function computePVDistance(v1, v2) {
-    const dEval = Math.abs(v1.evalCp - v2.evalCp) / 100;
-    const dKing = Math.abs(v1.kingSafety - v2.kingSafety) / 100;
-    const dMat = Math.abs(v1.materialDiff - v2.materialDiff) / 10;
+    // Evaluación como dimensión 0 del profile (seteada en buildPVCompatGraph)
+    const dProfile = profileSAD(v1.profile, v2.profile);
+    // Dimensión adicional: casillas disputadas (del motor Ramsey estático)
     const dDisputed = Math.abs(v1.disputed - v2.disputed) / 10;
-    return dEval + dKing + dMat + dDisputed;
+    return dProfile + dDisputed;
 }
 
 function findPVComponents(adj) {
