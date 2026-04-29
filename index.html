@@ -1195,21 +1195,39 @@ function handleEngineMessage(msg) {
                 
                 addLog('adaptation', `Ramsey-PV: Ranking completo (${pvResults.length} PVs) | 👑 PV#${bestRamsey.pvNum}=${bestRamsey.ramseyScore}pts | Motor PV#${bestMotor.pvNum}=${bestMotor.motorEval}`);
                 
-                // Si hay divergencia interesante, log adicional
                 if (divergence) {
                     addLog('warning', `Ramsey-PV: DIVERGENCIA → Motor dice PV#${bestMotor.pvNum}, Ramsey dice PV#${bestRamsey.pvNum}`);
                 }
-            }
-            
-            // Continuar iteraciones si no se alcanzó límite
-            if (currentPVAnalysis.iterationCount < MAX_ITERATIONS_HARD) {
-                currentPVAnalysis.iterationCount++;
-                setTimeout(() => {
-                    if (currentPVAnalysis.searchInProgress) executeProgressiveStep();
-                }, 50);
-                document.getElementById('engineStatus').textContent = `Ramsey-PV: iteración ${currentPVAnalysis.iterationCount}/${MAX_ITERATIONS_HARD}`;
-                updateButtonStates();
-                return;
+                
+                // === DECIDIR SIGUIENTE ITERACIÓN ===
+                const decision = decideNextIteration(pvResults);
+                
+                if (decision.action === 'CUT') {
+                    currentPVAnalysis.searchInProgress = false;
+                    addLog('adaptation', `Ramsey-PV: ${decision.reason}`);
+                    document.getElementById('engineStatus').textContent = `Análisis completado (${decision.reason})`;
+                    document.getElementById('engineStatus').style.borderLeftColor = '#27ae60';
+                } else if (currentPVAnalysis.iterationCount < MAX_ITERATIONS_HARD) {
+                    currentPVAnalysis.ramseyDecision = {
+                        action: decision.action,
+                        multiPV: PV_EVAL_CONFIG.MULTIPV,
+                        depthDelta: decision.depthDelta,
+                        reason: decision.reason
+                    };
+                    currentPVAnalysis.iterationCount++;
+                    setTimeout(() => {
+                        if (currentPVAnalysis.searchInProgress) executeProgressiveStep();
+                    }, 50);
+                    document.getElementById('engineStatus').textContent = `Ramsey-PV: ${decision.reason} [${currentPVAnalysis.iterationCount}/${MAX_ITERATIONS_HARD}]`;
+                    document.getElementById('engineStatus').style.borderLeftColor = decision.badge === 'safe' ? '#27ae60' : '#f39c12';
+                    updateButtonStates();
+                    return;
+                } else {
+                    currentPVAnalysis.searchInProgress = false;
+                    addLog('adaptation', `Ramsey-PV: límite de iteraciones alcanzado (${MAX_ITERATIONS_HARD}).`);
+                    document.getElementById('engineStatus').textContent = 'Análisis completado (límite iteraciones)';
+                    document.getElementById('engineStatus').style.borderLeftColor = '#ffc107';
+                }
             } else {
                 currentPVAnalysis.searchInProgress = false;
                 addLog('adaptation', `Ramsey-PV: límite de iteraciones alcanzado (${MAX_ITERATIONS_HARD}).`);
@@ -2440,6 +2458,39 @@ function renderPVCompatDisplay(graph, redComp, blueComp, snapshot, chaos) {
     compHtml += '</div>';
 
     return { matrix: html, components: compHtml };
+}
+
+function decideNextIteration(pvResults) {
+    if (!pvResults || pvResults.length === 0) {
+        return { action: 'STANDARD', depthDelta: 3, reason: 'Sin datos, profundizando', badge: 'neutral' };
+    }
+
+    const best = pvResults[0];
+    const ev = best.motorValue; // ya normalizado a centipeones o mate
+
+    // MATE CONFIRMADO
+    if (Math.abs(ev) >= 29000) {
+        const mateVal = Math.round((30000 - Math.abs(ev)) / 100); // aprox
+        return { action: 'CUT', depthDelta: 0, reason: `Mate confirmado (M${mateVal})`, badge: 'safe' };
+    }
+
+    // EVALUACIÓN CRÍTICA (>15 peones) = casi mate
+    if (Math.abs(ev) >= 1500) {
+        return { action: 'DEEPEN', depthDelta: 5, reason: `Eval crítica (${(ev/100).toFixed(1)}p) → prof+5`, badge: 'safe' };
+    }
+
+    // EVALUACIÓN FUERTE (>8 peones)
+    if (Math.abs(ev) >= 800) {
+        return { action: 'DEEPEN', depthDelta: 3, reason: `Eval fuerte (${(ev/100).toFixed(1)}p) → prof+3`, badge: 'safe' };
+    }
+
+    // EVALUACIÓN MODERADA (>3 peones)
+    if (Math.abs(ev) >= 300) {
+        return { action: 'DEEPEN', depthDelta: 2, reason: `Eval moderada (${(ev/100).toFixed(1)}p) → prof+2`, badge: 'neutral' };
+    }
+
+    // POSICIÓN IGUALADA O DÉBIL
+    return { action: 'DEEPEN', depthDelta: 1, reason: `Eval débil (${(ev/100).toFixed(1)}p) → prof+1`, badge: 'warning' };
 }
 
 function applyPVCompatDisplay(decision) {
