@@ -224,6 +224,15 @@
         .badge-adv { background: #f39c12; color: white; }
         .badge-info { background: #adb5bd; color: white; }
 
+        /* ====== RAMSEY-PV: Consistencia de Variants ====== */
+        .pv-compat-matrix { display:grid; gap:2px; margin-top:4px; }
+        .pv-compat-cell { font-size:0.65rem; text-align:center; padding:2px; border-radius:2px; font-weight:500; }
+        .pv-compat-red { background:#fadbd8; color:#c0392b; }
+        .pv-compat-blue { background:#d6eaf8; color:#2980b9; }
+        .pv-compat-gray { background:#f8f9fa; color:#868e96; }
+        .pv-components { display:flex; gap:4px; flex-wrap:wrap; margin-top:4px; }
+        .pv-component-badge { padding:1px 5px; border-radius:3px; font-size:0.68rem; font-weight:600; }
+
         @media (max-width: 1200px) {
             .main-layout { flex-direction: column; }
             .board-container-wrapper { align-self: center; width: 560px; min-width: 560px; }
@@ -241,6 +250,7 @@
             .right-panel { width: 100%; }
         }
     </style>
+<base target="_blank">
 <base target="_blank">
 </head>
 <body>
@@ -338,6 +348,17 @@
                             </div>
                         </div>
                     </div>
+                    <div class="analysis-section">
+                        <div class="ramsey-panel" id="pvCompatPanel">
+                            <div class="ramsey-title">
+                                <i class="fas fa-project-diagram"></i> Ramsey-PV: Consistencia de Variants
+                                <span id="pvCompatBadge" style="margin-left:auto;font-size:0.7rem;padding:1px 6px;border-radius:3px;background:#e9ecef;">--</span>
+                            </div>
+                            <div id="pvCompatMatrix" style="margin-top:6px;"></div>
+                            <div id="pvCompatComponents" style="margin-top:4px;"></div>
+                            <div id="pvCompatAction" style="margin-top:4px;font-size:0.75rem;color:#555;"></div>
+                        </div>
+                    </div>
                 </div>
                 <div class="logs-column">
                     <div class="logs-section">
@@ -393,6 +414,13 @@ let lastEscapeAnalysis = null;
 let lastHeatmap = null;
 let ramseyMode = 'global';
 let lastScannerResult = null;
+
+// ===================== RAMSEY-PV: META-FILTRO SOBRE VARIANTES =====================
+const PV_COMPAT_TAU_RED = 2.0;
+const PV_COMPAT_TAU_BLUE = 4.0;
+const PV_MAX_MOVES_TO_SIMULATE = 8;
+let lastPVSnapshot = null;
+let currentPVRamseyDecision = null;
 
 // ===================== SISTEMA DE LOGS =====================
 let logs = [];
@@ -828,8 +856,9 @@ let previousHighlightedSquares = [];
 let pvObserver = null;
 
 function resetStats() {
-    lastStats = { nps:0, nodes:0, time:0, depth:0, pv:'', pvs:{}, pvEvaluations:{}, evaluation:null, bestMove:'', bestMoveSan:'', lastUpdateTimestamp:Date.now(), analysisMode:'standard', totalPVsReceived:0, adaptiveMetrics:{ iterationsCompleted:0, bestEquilibriumFound:Infinity, searchStartTime:null, totalVariantsAnalyzed:0, fallbacksUsed:0 } };
-    currentPVAnalysis = { pvCount:10, depth:1, targetEvaluation:0, searchInProgress:false, adaptationActive:false, iterationCount:0, lastIterationTime:null, bestResultSoFar:null, convergenceHistory:[] };
+    lastStats = { nps:0, nodes:0, time:0, depth:0, pv:'', pvs:{}, pvEvaluations:{}, pvUCIs:{}, evaluation:null, bestMove:'', bestMoveSan:'', lastUpdateTimestamp:Date.now(), analysisMode:'standard', totalPVsReceived:0, adaptiveMetrics:{ iterationsCompleted:0, bestEquilibriumFound:Infinity, searchStartTime:null, totalVariantsAnalyzed:0, fallbacksUsed:0 } };
+    currentPVAnalysis = { pvCount:6, depth:8, targetEvaluation:0, searchInProgress:false, adaptationActive:false, iterationCount:0, lastIterationTime:null, bestResultSoFar:null, convergenceHistory:[], ramseyDecision:null };
+    lastPVSnapshot = null;
     addLog('info', 'Estadísticas y estado adaptativo reiniciados');
 }
 function resetAnalysisDisplay() {
@@ -848,6 +877,15 @@ function prepareAnalysisOutput() {
     document.getElementById('evaluation').textContent = '--';
     document.getElementById('bestMove').textContent = '--';
     document.getElementById('engineStats').textContent = '--';
+    // Resetear display Ramsey-PV
+    const badgeEl = document.getElementById('pvCompatBadge');
+    if (badgeEl) { badgeEl.style.background = '#e9ecef'; badgeEl.style.color = '#495057'; badgeEl.textContent = '--'; }
+    const matrixEl = document.getElementById('pvCompatMatrix');
+    if (matrixEl) matrixEl.innerHTML = '<div style="font-size:0.75rem;color:#868e96;">Esperando iteraciones...</div>';
+    const compEl = document.getElementById('pvCompatComponents');
+    if (compEl) compEl.innerHTML = '';
+    const actionEl = document.getElementById('pvCompatAction');
+    if (actionEl) actionEl.textContent = '';
 }
 function resetHighlights() {
     previousHighlightedSquares.forEach(sq => sq.classList.remove('square-highlight', 'dark'));
@@ -953,16 +991,30 @@ function startAdaptiveAnalysis() {
 function startProgressivePVSearch() {
     currentPVAnalysis.searchInProgress = true;
     currentPVAnalysis.adaptationActive = true;
-    currentPVAnalysis.pvCount = 10;
-    currentPVAnalysis.depth = 1;
-    addLog('adaptation', `Búsqueda progresiva PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth}`);
+    currentPVAnalysis.pvCount = 6;
+    currentPVAnalysis.depth = 8;
+    currentPVAnalysis.iterationCount = 0;
+    currentPVAnalysis.ramseyDecision = null;
+    addLog('adaptation', `Búsqueda progresiva PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth} (Ramsey-PV activo)`);
     executeProgressiveStep();
 }
 
 function executeProgressiveStep() {
     if (!currentPVAnalysis.searchInProgress || !chess) return;
+
+    // Aplicar decisión Ramsey-PV si existe
+    if (currentPVAnalysis.ramseyDecision) {
+        const dec = currentPVAnalysis.ramseyDecision;
+        if (dec.multiPV > 0) currentPVAnalysis.pvCount = Math.min(dec.multiPV, 8);
+        if (dec.depthDelta !== 0) currentPVAnalysis.depth = Math.max(1, currentPVAnalysis.depth + dec.depthDelta);
+        addLog('adaptation', `Ramsey-PV → ${dec.reason} | PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth}`);
+        currentPVAnalysis.ramseyDecision = null;
+    }
+
     const fen = chess.fen();
     lastStats.pvs = {};
+    lastStats.pvEvaluations = {};
+    lastStats.pvUCIs = {};
     stockfish.postMessage(`setoption name MultiPV value ${currentPVAnalysis.pvCount}`);
     stockfish.postMessage(`position fen ${fen}`);
     stockfish.postMessage(`go depth ${currentPVAnalysis.depth}`);
@@ -1086,9 +1138,38 @@ function handleEngineMessage(msg) {
         stockfishBusy = false;
         if (stockfishResolve) stockfishResolve();
         isAnalyzing = false;
-        currentPVAnalysis.searchInProgress = false;
-        document.getElementById('engineStatus').textContent = 'Análisis completado';
-        document.getElementById('engineStatus').style.borderLeftColor = '#28a745';
+
+        // RAMSEY-PV: meta-filtro post-iteración
+        if (currentPVAnalysis.adaptationActive && currentPVAnalysis.searchInProgress) {
+            const decision = analyzePVConsistency();
+            applyPVCompatDisplay(decision);
+            if (decision.action === 'CUT_CONFIDENT') {
+                currentPVAnalysis.searchInProgress = false;
+                addLog('adaptation', 'Ramsey-PV: corte por consenso abrumador.');
+                document.getElementById('engineStatus').textContent = 'Análisis completado (consenso Ramsey)';
+                document.getElementById('engineStatus').style.borderLeftColor = '#27ae60';
+            } else if (currentPVAnalysis.iterationCount < 4) {
+                currentPVAnalysis.ramseyDecision = decision;
+                currentPVAnalysis.iterationCount++;
+                setTimeout(() => {
+                    if (currentPVAnalysis.searchInProgress) executeProgressiveStep();
+                }, 50);
+                document.getElementById('engineStatus').textContent = `Ramsey-PV: ${decision.reason}`;
+                document.getElementById('engineStatus').style.borderLeftColor = decision.badge === 'safe' ? '#27ae60' : (decision.badge === 'danger' ? '#e74c3c' : '#f39c12');
+                updateButtonStates();
+                return;
+            } else {
+                currentPVAnalysis.searchInProgress = false;
+                addLog('adaptation', 'Ramsey-PV: límite de iteraciones alcanzado.');
+                document.getElementById('engineStatus').textContent = 'Análisis completado (límite iteraciones)';
+                document.getElementById('engineStatus').style.borderLeftColor = '#ffc107';
+            }
+        } else {
+            currentPVAnalysis.searchInProgress = false;
+            document.getElementById('engineStatus').textContent = 'Análisis completado';
+            document.getElementById('engineStatus').style.borderLeftColor = '#28a745';
+        }
+
         if (lastStats.bestMoveSan) {
             document.getElementById('bestMove').textContent = `Mejor: ${lastStats.bestMoveSan}`;
         }
@@ -1142,6 +1223,8 @@ function parseInfoLine(message) {
             lastStats.pv = pvText;
             lastStats.pvUCI = pvMoves;
         }
+        if (!lastStats.pvUCIs) lastStats.pvUCIs = {};
+        lastStats.pvUCIs[pvNum] = pvMoves;
     }
     updateEngineDisplay();
 }
@@ -1680,6 +1763,295 @@ function analyzePieceVulnerability(boardArr, color) {
         maxDanger = Math.max(maxDanger, danger);
     }
     return { totalCollapseRisk, maxDanger, numCollapse };
+}
+
+// ===================== RAMSEY-PV: MOTOR DE CONSISTENCIA =====================
+
+function commitPVSnapshot() {
+    if (!lastStats || !lastStats.pvs || !lastStats.pvUCIs) return null;
+    const snapshot = [];
+    const keys = Object.keys(lastStats.pvs).map(Number).sort((a,b)=>a-b);
+    for (const pvNum of keys) {
+        const uciMoves = lastStats.pvUCIs[pvNum];
+        if (!uciMoves || uciMoves.length === 0) continue;
+        const vector = simulatePVVector(uciMoves);
+        if (vector) {
+            vector.pvNum = pvNum;
+            vector.san = lastStats.pvs[pvNum];
+            vector.uci = uciMoves.slice();
+            snapshot.push(vector);
+        }
+    }
+    lastPVSnapshot = snapshot;
+    return snapshot;
+}
+
+function simulatePVVector(uciMoves) {
+    try {
+        const temp = new Chess(chess.fen());
+        const movesToSim = Math.min(uciMoves.length, PV_MAX_MOVES_TO_SIMULATE);
+        for (let i = 0; i < movesToSim; i++) {
+            const uci = uciMoves[i];
+            if (!uci || uci.length < 4) break;
+            const moveObj = temp.move(uci, { sloppy: true });
+            if (!moveObj) break;
+        }
+        const boardArr = parseFENtoBoardArr(temp.fen());
+        const turn = temp.turn();
+        const side = turn === 'w' ? 'white' : 'black';
+
+        const esc = analyzeEscape(boardArr, side);
+        const kingSafety = esc ? esc.score : 50;
+
+        const data = buildControlData(boardArr);
+        const myKing = findKingSquare(boardArr, side);
+        const rivalGraph = side === 'white' ? data.Gblack : data.Gwhite;
+        const turanCheck = evaluateTuranK4Prune(rivalGraph);
+        const turanPruned = turanCheck.shouldPrune;
+        const rivalK4 = turanPruned ? [] : findCliques(rivalGraph, 4);
+        let rivalK4NearKing = 0;
+        const rivalPieces = side === 'white' ? data.blackPieces : data.whitePieces;
+        if (myKing) {
+            const [kr, kc] = myKing;
+            for (const clique of rivalK4) {
+                for (const idx of clique) {
+                    const { r, c } = rivalPieces[idx];
+                    if (Math.max(Math.abs(r - kr), Math.abs(c - kc)) <= 2) {
+                        rivalK4NearKing++;
+                        break;
+                    }
+                }
+            }
+        }
+
+        let materialWhite = 0, materialBlack = 0;
+        for (let r=0;r<8;r++)for(let c=0;c<8;c++){
+            const p=boardArr[r][c];
+            if(p){
+                const w=PIECE_WEIGHTS[p]||0;
+                if(p===p.toUpperCase())materialWhite+=w;else materialBlack+=w;
+            }
+        }
+        const materialDiff = (side === 'white' ? materialWhite - materialBlack : materialBlack - materialWhite);
+
+        return {
+            kingSafety,
+            rivalK4NearKing,
+            materialDiff,
+            disputed: data.disputed.size,
+            turanPruned,
+            turn
+        };
+    } catch (e) {
+        console.warn('Error simulando PV:', e);
+        return null;
+    }
+}
+
+function buildPVCompatGraph(snapshot) {
+    const n = snapshot.length;
+    const adjRed = Array.from({ length: n }, () => new Set());
+    const adjBlue = Array.from({ length: n }, () => new Set());
+    const distances = Array.from({ length: n }, () => Array(n).fill(0));
+
+    // Enriquecer snapshot con evaluaciones de lastStats
+    for (let i = 0; i < n; i++) {
+        const pvNum = snapshot[i].pvNum;
+        const ev = lastStats.pvEvaluations ? lastStats.pvEvaluations[pvNum] : null;
+        snapshot[i].evalCp = ev ? (ev.type === 'mate' ? (ev.value > 0 ? 30000 : -30000) : ev.value) : 0;
+    }
+
+    for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+            const v1 = snapshot[i];
+            const v2 = snapshot[j];
+            let dist = computePVDistance(v1, v2);
+
+            const sharedPrefix = sharedMovesPrefix(v1.uci, v2.uci);
+            if (sharedPrefix >= 2) dist *= 0.6;
+            else if (sharedPrefix >= 1) dist *= 0.85;
+
+            distances[i][j] = dist;
+            distances[j][i] = dist;
+
+            if (dist < PV_COMPAT_TAU_RED) {
+                adjRed[i].add(j);
+                adjRed[j].add(i);
+            } else if (dist > PV_COMPAT_TAU_BLUE) {
+                adjBlue[i].add(j);
+                adjBlue[j].add(i);
+            }
+        }
+    }
+    return { adjRed, adjBlue, distances, nodes: snapshot };
+}
+
+function sharedMovesPrefix(a, b) {
+    let k = 0;
+    while (k < a.length && k < b.length && a[k] === b[k]) k++;
+    return k;
+}
+
+function computePVDistance(v1, v2) {
+    const dEval = Math.abs(v1.evalCp - v2.evalCp) / 100;
+    const dKing = Math.abs(v1.kingSafety - v2.kingSafety) / 100;
+    const dMat = Math.abs(v1.materialDiff - v2.materialDiff) / 10;
+    const dDisputed = Math.abs(v1.disputed - v2.disputed) / 10;
+    return dEval + dKing + dMat + dDisputed;
+}
+
+function findPVComponents(adj) {
+    const n = adj.length;
+    const visited = new Uint8Array(n);
+    const components = [];
+    for (let i = 0; i < n; i++) {
+        if (visited[i]) continue;
+        const comp = [];
+        const stack = [i];
+        visited[i] = 1;
+        while (stack.length) {
+            const v = stack.pop();
+            comp.push(v);
+            for (const u of adj[v]) {
+                if (!visited[u]) { visited[u] = 1; stack.push(u); }
+            }
+        }
+        components.push(comp);
+    }
+    return components;
+}
+
+function detectChessChaos(components, M) {
+    const expectedK = Math.ceil(Math.log2(Math.max(M, 2)));
+    const maxComp = components.length > 0 ? Math.max(...components.map(c => c.length)) : 0;
+    return {
+        chaotic: maxComp < expectedK - 1,
+        expectedK,
+        maxComp
+    };
+}
+
+function analyzePVConsistency() {
+    const snapshot = commitPVSnapshot();
+    if (!snapshot || snapshot.length < 3) {
+        return { action: 'STANDARD', multiPV: 6, depthDelta: 0, reason: 'Insuficientes PVs para Ramsey', badge: 'gray', display: null };
+    }
+
+    const graph = buildPVCompatGraph(snapshot);
+    const redComponents = findPVComponents(graph.adjRed);
+    const blueComponents = findPVComponents(graph.adjBlue);
+
+    const chaos = detectChessChaos(redComponents, snapshot.length);
+
+    let action = 'STANDARD';
+    let multiPV = 6;
+    let depthDelta = 0;
+    let reason = '';
+    let badge = 'gray';
+
+    const bigRed = redComponents.filter(c => c.length >= 3);
+    const bigBlue = blueComponents.filter(c => c.length >= 3);
+
+    if (chaos.chaotic) {
+        action = 'STANDARD';
+        multiPV = 6;
+        depthDelta = 1;
+        reason = `Caos: componente máx ${chaos.maxComp} < esperado ${chaos.expectedK}`;
+        badge = 'warning';
+    } else if (bigRed.length > 0) {
+        const mainRed = bigRed[0];
+        const redPVNums = mainRed.map(idx => snapshot[idx].pvNum);
+        action = 'DEEPEN_RED';
+        multiPV = Math.min(mainRed.length, 6);
+        depthDelta = 3;
+        reason = `K₃ rojo (PVs ${redPVNums.join(',')}) → consenso estructural`;
+        badge = 'safe';
+        if (mainRed.length >= 5) {
+            action = 'CUT_CONFIDENT';
+            reason = `Consenso abrumador (${mainRed.length} PVs) → corte posible`;
+        }
+    } else if (bigBlue.length > 0) {
+        const bluePVNums = bigBlue[0].map(idx => snapshot[idx].pvNum);
+        action = 'EXPAND_BLUE';
+        multiPV = 8;
+        depthDelta = 0;
+        reason = `K₃ azul (PVs ${bluePVNums.join(',')}) → divergencia real`;
+        badge = 'danger';
+    } else {
+        reason = 'Mixto: sin cliques estructurales claros';
+        badge = 'neutral';
+    }
+
+    const display = renderPVCompatDisplay(graph, redComponents, blueComponents, snapshot, chaos);
+    return { action, multiPV, depthDelta, reason, badge, display };
+}
+
+function renderPVCompatDisplay(graph, redComp, blueComp, snapshot, chaos) {
+    const n = snapshot.length;
+    let html = '<div style="display:grid;grid-template-columns:repeat(' + (n + 1) + ', 28px);gap:2px;font-size:0.65rem;text-align:center;">';
+    html += '<div></div>';
+    for (let i = 0; i < n; i++) html += `<div style="font-weight:700;">${snapshot[i].pvNum}</div>`;
+    for (let i = 0; i < n; i++) {
+        html += `<div style="font-weight:700;">${snapshot[i].pvNum}</div>`;
+        for (let j = 0; j < n; j++) {
+            if (i === j) {
+                html += '<div style="background:#e9ecef;border-radius:2px;">—</div>';
+            } else {
+                const dist = graph.distances[i][j];
+                let bg = '#f8f9fa';
+                let color = '#666';
+                if (graph.adjRed[i].has(j)) { bg = '#fadbd8'; color = '#c0392b'; }
+                else if (graph.adjBlue[i].has(j)) { bg = '#d6eaf8'; color = '#2980b9'; }
+                html += `<div style="background:${bg};color:${color};border-radius:2px;" title="dist=${dist.toFixed(2)}">${dist.toFixed(1)}</div>`;
+            }
+        }
+    }
+    html += '</div>';
+
+    let compHtml = '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">';
+    redComp.forEach((c, idx) => {
+        const nums = c.map(i => snapshot[i].pvNum);
+        compHtml += `<span style="background:#fadbd8;color:#c0392b;padding:1px 5px;border-radius:3px;font-size:0.68rem;font-weight:600;">R${idx+1}:[${nums.join(',')}]</span>`;
+    });
+    blueComp.forEach((c, idx) => {
+        const nums = c.map(i => snapshot[i].pvNum);
+        compHtml += `<span style="background:#d6eaf8;color:#2980b9;padding:1px 5px;border-radius:3px;font-size:0.68rem;font-weight:600;">B${idx+1}:[${nums.join(',')}]</span>`;
+    });
+    if (chaos.chaotic) {
+        compHtml += `<span style="background:#fdebd0;color:#d35400;padding:1px 5px;border-radius:3px;font-size:0.68rem;font-weight:600;">⚠ Caos</span>`;
+    }
+    compHtml += '</div>';
+
+    return { matrix: html, components: compHtml };
+}
+
+function applyPVCompatDisplay(decision) {
+    const matrixEl = document.getElementById('pvCompatMatrix');
+    const compEl = document.getElementById('pvCompatComponents');
+    const actionEl = document.getElementById('pvCompatAction');
+    const badgeEl = document.getElementById('pvCompatBadge');
+    if (!matrixEl || !compEl || !actionEl || !badgeEl) return;
+
+    if (decision.display) {
+        matrixEl.innerHTML = decision.display.matrix;
+        compEl.innerHTML = decision.display.components;
+    } else {
+        matrixEl.innerHTML = '<div style="font-size:0.75rem;color:#868e96;">No hay datos de consistencia PV.</div>';
+        compEl.innerHTML = '';
+    }
+
+    actionEl.textContent = decision.reason;
+    const badgeColors = {
+        safe: { bg: '#d5f5e3', color: '#27ae60', text: 'CONSENSO' },
+        danger: { bg: '#fadbd8', color: '#c0392b', text: 'DIVERGENCIA' },
+        warning: { bg: '#fdebd0', color: '#d35400', text: 'CAOS' },
+        neutral: { bg: '#e9ecef', color: '#495057', text: 'MIXTO' },
+        gray: { bg: '#e9ecef', color: '#868e96', text: '--' }
+    };
+    const bc = badgeColors[decision.badge] || badgeColors.gray;
+    badgeEl.style.background = bc.bg;
+    badgeEl.style.color = bc.color;
+    badgeEl.textContent = bc.text;
 }
 
 // ===================== EVENTOS E INICIALIZACIÓN =====================
