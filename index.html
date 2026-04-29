@@ -425,14 +425,19 @@ let currentPVRamseyDecision = null;
 // ===================== VARIABLES CONFIGURABLES DEL CORTE INTELIGENTE =====================
 // Ajusta estas 8 variables para tunear el comportamiento de Ramsey-PV:
 
+// Variables de FVM (Fase de Verificación del Mate)
+const MATE_VERIFICATION_ITERS = 2;       // Iteraciones para confirmar mate M3-M5
+const MATE_VERIFICATION_DEPTH = 5;       // Profundización extra por verificación
+const MATE_VERIFICATION_MULTIPV = 1;     // MultiPV durante verificación (1 = foco total)
+const MATE_LENGTH_TOLERANCE = 3;         // Diferencia máxima de movimientos antes de abortar
+
+// Variables de corte inteligente
 const MAX_ITERATIONS_HARD = 15;          // 1. Límite absoluto de seguridad (más iteraciones)
-const PHANTOM_MATE_THRESHOLD = 5;        // 2. Mate ±N se considera "fantasma" si prof < esta
-const PHANTOM_MATE_MIN_DEPTH = 25;       // 3. Profundidad mínima para confiar en mates cortos
-const CHAOS_PERSISTENCE_LIMIT = 3;       // 4. Iteraciones consecutivas de caos antes de cortar
-const CHAOS_MIN_DEPTH_TO_CUT = 15;       // 5. Profundidad mínima para cortar por caos persistente
-const EVAL_JUMP_THRESHOLD = 80;          // 6. Cambio de eval >N centipeones = inestabilidad
-const CONSENSUS_EARLY_DEPTH = 16;        // 7. Profundidad mínima para corte por consenso temprano
-const DIVERGENCE_MIN_PVS = 4;            // 8. Mínimo de PVs divergentes para expandir búsqueda
+const CHAOS_PERSISTENCE_LIMIT = 3;       // 2. Iteraciones consecutivas de caos antes de cortar
+const CHAOS_MIN_DEPTH_TO_CUT = 15;       // 3. Profundidad mínima para cortar por caos persistente
+const EVAL_JUMP_THRESHOLD = 80;          // 4. Cambio de eval >N centipeones = inestabilidad
+const CONSENSUS_EARLY_DEPTH = 16;        // 5. Profundidad mínima para corte por consenso temprano
+const DIVERGENCE_MIN_PVS = 4;            // 6. Mínimo de PVs divergentes para expandir búsqueda
 
 // ===================== SISTEMA DE LOGS =====================
 let logs = [];
@@ -1807,10 +1812,18 @@ function shouldStopIterating(decision) {
     if (decision.action === 'CUT_CONFIDENT') return true;
 
     // === FASE DE VERIFICACIÓN DEL MATE (FVM) ===
+    // Sentido común: M1/M2 es mate confirmado matemáticamente → cortar.
+    // M3+: verificar que el mate no se alarga (efecto horizonte).
     const mateEvals = Object.values(lastStats.pvEvaluations || {}).filter(ev => ev.type === 'mate');
     if (mateEvals.length > 0) {
         const shortestMate = Math.min(...mateEvals.map(ev => Math.abs(ev.value)));
         const allSameSign = mateEvals.every(ev => Math.sign(ev.value) === Math.sign(mateEvals[0].value));
+
+        // M1/M2 confirmado matemáticamente → cortar inmediatamente
+        if (shortestMate <= 2 && mateEvals.length >= 3 && allSameSign) {
+            addLog('adaptation', `Mate M${shortestMate} confirmado matemáticamente (${mateEvals.length} PVs) → corte.`);
+            return true;
+        }
 
         // Si estamos en fase de verificación
         if (currentPVAnalysis.mateVerification) {
@@ -1818,19 +1831,19 @@ function shouldStopIterating(decision) {
             v.iterations++;
 
             // ¿El mate se alargó significativamente o cambió de signo? = horizonte, abortar
-            if (!allSameSign || currentMate > v.originalMate + MATE_LENGTH_TOLERANCE) {
-                addLog('adaptation', `Mate refutado: M${v.originalMate} → M${currentMate} | volviendo a búsqueda normal`);
+            if (!allSameSign || shortestMate > v.originalMate + MATE_LENGTH_TOLERANCE) {
+                addLog('adaptation', `Mate refutado: M${v.originalMate} → M${shortestMate} | volviendo a búsqueda normal`);
                 currentPVAnalysis.mateVerification = null;
                 return false; // NO cortar
             }
 
-            // ¿Mate estable por N iteraciones con prof creciente? = confirmado
+            // ¿Mate estable por N iteraciones? = confirmado
             if (v.iterations >= MATE_VERIFICATION_ITERS) {
-                addLog('adaptation', `Mate M${shortestMate} VERIFICADO (${v.iterations} iter estables, prof ${currentPVAnalysis.depth}) → corte.`);
+                addLog('adaptation', `Mate M${shortestMate} VERIFICADO (${v.iterations} iter) → corte.`);
                 return true; // CORTAR
             }
 
-            // Seguir verificando: profundizar y reducir MultiPV
+            // Seguir verificando
             addLog('adaptation', `Verificando mate M${shortestMate}... (${v.iterations}/${MATE_VERIFICATION_ITERS})`);
             currentPVAnalysis.ramseyDecision = {
                 action: 'VERIFY_MATE',
@@ -1840,30 +1853,20 @@ function shouldStopIterating(decision) {
             return false; // NO cortar todavía
         }
 
-        // Iniciar fase de verificación (primera vez que vemos mate consistente)
-        if (allSameSign && mateEvals.length >= 3) {
+        // Iniciar fase de verificación (M3+)
+        if (allSameSign && mateEvals.length >= 3 && shortestMate >= 3) {
             currentPVAnalysis.mateVerification = {
                 originalMate: shortestMate,
                 iterations: 1,
                 startDepth: currentPVAnalysis.depth
             };
-            addLog('adaptation', `Mate M${shortestMate} detectado en ${mateEvals.length} PVs → iniciando verificación (prof+${MATE_VERIFICATION_DEPTH}, MultiPV=${MATE_VERIFICATION_MULTIPV})`);
+            addLog('adaptation', `Mate M${shortestMate} detectado en ${mateEvals.length} PVs → verificación (${MATE_VERIFICATION_ITERS} iter, prof+${MATE_VERIFICATION_DEPTH})`);
             currentPVAnalysis.ramseyDecision = {
                 action: 'VERIFY_MATE',
                 multiPV: MATE_VERIFICATION_MULTIPV,
                 depthDelta: MATE_VERIFICATION_DEPTH
             };
             return false; // NO cortar, iniciar verificación
-        }
-
-        // MATE FANTASMA: solo si prof es baja Y mate no es inmediato
-        const isPhantom = currentPVAnalysis.depth < 12 && shortestMate >= 4;
-        const isUncertain = currentPVAnalysis.depth >= 12 && currentPVAnalysis.depth < PHANTOM_MATE_MIN_DEPTH && shortestMate > 3;
-
-        decision.phantomMate = isPhantom || isUncertain;
-        if (decision.phantomMate) {
-            addLog('adaptation', `Mate posible M${shortestMate} a prof ${currentPVAnalysis.depth} → verificando...`);
-            return false; // NO cortar: verificar
         }
     }
 
@@ -1929,8 +1932,13 @@ function commitPVSnapshot() {
     if (!lastStats || !lastStats.pvs || !lastStats.pvUCIs) return null;
     const snapshot = [];
     const keys = Object.keys(lastStats.pvs).map(Number).sort((a,b)=>a-b);
+    // DIAGNÓSTICO: mostrar qué evaluaciones se leen para cada PV
+    let diag = 'Ramsey-PV diag: ';
     for (const pvNum of keys) {
         const uciMoves = lastStats.pvUCIs[pvNum];
+        const ev = lastStats.pvEvaluations ? lastStats.pvEvaluations[pvNum] : null;
+        const evStr = ev ? (ev.type === 'mate' ? `M${ev.value}` : `${ev.value}cp`) : 'none';
+        diag += `[${pvNum}:${evStr}] `;
         if (!uciMoves || uciMoves.length === 0) continue;
         const vector = simulatePVVector(uciMoves);
         if (vector) {
@@ -1940,6 +1948,7 @@ function commitPVSnapshot() {
             snapshot.push(vector);
         }
     }
+    addLog('info', diag);
     lastPVSnapshot = snapshot;
     return snapshot;
 }
@@ -2163,6 +2172,45 @@ function detectChessChaos(components, M) {
 
 function analyzePVConsistency() {
     const snapshot = commitPVSnapshot();
+    const allEvals = Object.values(lastStats.pvEvaluations || {});
+
+    // === CRITERIO PRIORITARIO: Evaluación unánime y fuerte ===
+    // Si TODAS las PVs convergen en ventaja enorme para el mismo color,
+    // profundizar agresivamente para confirmar/corregir el mate.
+    if (allEvals.length >= 2) {
+        const signs = allEvals.map(ev => Math.sign(ev.type === 'mate' ? ev.value : ev.value));
+        const allSameSign = signs.every(s => s === signs[0]) && signs[0] !== 0;
+        const hasStrongEval = allEvals.some(ev =>
+            (ev.type === 'mate') ||
+            (ev.type !== 'mate' && Math.abs(ev.value) >= 1500)  // +15 peones o más
+        );
+        const allStrong = allEvals.every(ev =>
+            (ev.type === 'mate') ||
+            (ev.type !== 'mate' && Math.abs(ev.value) >= 800)  // Todas > 8 peones
+        );
+
+        if (allSameSign && (hasStrongEval || allStrong)) {
+            const side = signs[0] > 0 ? 'blancas' : 'negras';
+            const best = allEvals.find(ev => ev.type === 'mate') || allEvals.reduce((a, b) => Math.abs(a.value) > Math.abs(b.value) ? a : b);
+            const str = best.type === 'mate' ? `M${best.value}` : `${Math.round(best.value / 100)}p`;
+
+            const graph = buildPVCompatGraph(snapshot);
+            const redComponents = findPVComponents(graph.adjRed);
+            const blueComponents = findPVComponents(graph.adjBlue);
+            const chaos = detectChessChaos(redComponents, snapshot.length);
+
+            const action = 'DEEPEN_FORCE';
+            const multiPV = 6;
+            const depthDelta = 5;  // +5 de profundidad = agresivo
+            const reason = `Eval unánime fuerte (${str} ${side}) → prof+${depthDelta}`;
+            const badge = 'safe';
+
+            const display = renderPVCompatDisplay(graph, redComponents, blueComponents, snapshot, chaos);
+            addLog('adaptation', `Ramsey-PV: ${reason}`);
+            return { action, multiPV, depthDelta, reason, badge, display };
+        }
+    }
+
     if (!snapshot || snapshot.length < 3) {
         return { action: 'STANDARD', multiPV: 6, depthDelta: 0, reason: 'Insuficientes PVs para Ramsey', badge: 'gray', display: null };
     }
