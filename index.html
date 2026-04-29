@@ -422,6 +422,18 @@ const PV_MAX_MOVES_TO_SIMULATE = 8;
 let lastPVSnapshot = null;
 let currentPVRamseyDecision = null;
 
+// ===================== VARIABLES CONFIGURABLES DEL CORTE INTELIGENTE =====================
+// Ajusta estas 8 variables para tunear el comportamiento de Ramsey-PV:
+
+const MAX_ITERATIONS_HARD = 15;          // 1. Límite absoluto de seguridad (más iteraciones)
+const PHANTOM_MATE_THRESHOLD = 5;        // 2. Mate ±N se considera "fantasma" si prof < esta
+const PHANTOM_MATE_MIN_DEPTH = 25;       // 3. Profundidad mínima para confiar en mates cortos
+const CHAOS_PERSISTENCE_LIMIT = 3;       // 4. Iteraciones consecutivas de caos antes de cortar
+const CHAOS_MIN_DEPTH_TO_CUT = 15;       // 5. Profundidad mínima para cortar por caos persistente
+const EVAL_JUMP_THRESHOLD = 80;          // 6. Cambio de eval >N centipeones = inestabilidad
+const CONSENSUS_EARLY_DEPTH = 16;        // 7. Profundidad mínima para corte por consenso temprano
+const DIVERGENCE_MIN_PVS = 4;            // 8. Mínimo de PVs divergentes para expandir búsqueda
+
 // ===================== SISTEMA DE LOGS =====================
 let logs = [];
 let logsPaused = false;
@@ -857,7 +869,7 @@ let pvObserver = null;
 
 function resetStats() {
     lastStats = { nps:0, nodes:0, time:0, depth:0, pv:'', pvs:{}, pvEvaluations:{}, pvUCIs:{}, evaluation:null, bestMove:'', bestMoveSan:'', lastUpdateTimestamp:Date.now(), analysisMode:'standard', totalPVsReceived:0, adaptiveMetrics:{ iterationsCompleted:0, bestEquilibriumFound:Infinity, searchStartTime:null, totalVariantsAnalyzed:0, fallbacksUsed:0 } };
-    currentPVAnalysis = { pvCount:6, depth:8, targetEvaluation:0, searchInProgress:false, adaptationActive:false, iterationCount:0, lastIterationTime:null, bestResultSoFar:null, convergenceHistory:[], ramseyDecision:null };
+    currentPVAnalysis = { pvCount:6, depth:8, targetEvaluation:0, searchInProgress:false, adaptationActive:false, iterationCount:0, lastIterationTime:null, bestResultSoFar:null, convergenceHistory:[], ramseyDecision:null, chaosHistory:[], prevBestEval:null };
     lastPVSnapshot = null;
     addLog('info', 'Estadísticas y estado adaptativo reiniciados');
 }
@@ -995,6 +1007,8 @@ function startProgressivePVSearch() {
     currentPVAnalysis.depth = 8;
     currentPVAnalysis.iterationCount = 0;
     currentPVAnalysis.ramseyDecision = null;
+    currentPVAnalysis.chaosHistory = [];
+    currentPVAnalysis.prevBestEval = null;
     addLog('adaptation', `Búsqueda progresiva PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth} (Ramsey-PV activo)`);
     executeProgressiveStep();
 }
@@ -1148,20 +1162,21 @@ function handleEngineMessage(msg) {
                 addLog('adaptation', 'Ramsey-PV: corte por consenso abrumador.');
                 document.getElementById('engineStatus').textContent = 'Análisis completado (consenso Ramsey)';
                 document.getElementById('engineStatus').style.borderLeftColor = '#27ae60';
-            } else if (currentPVAnalysis.iterationCount < 4) {
+            } else if (!shouldStopIterating(decision)) {
                 currentPVAnalysis.ramseyDecision = decision;
                 currentPVAnalysis.iterationCount++;
                 setTimeout(() => {
                     if (currentPVAnalysis.searchInProgress) executeProgressiveStep();
                 }, 50);
-                document.getElementById('engineStatus').textContent = `Ramsey-PV: ${decision.reason}`;
+                document.getElementById('engineStatus').textContent = `Ramsey-PV: ${decision.reason} [iter=${currentPVAnalysis.iterationCount}]`;
                 document.getElementById('engineStatus').style.borderLeftColor = decision.badge === 'safe' ? '#27ae60' : (decision.badge === 'danger' ? '#e74c3c' : '#f39c12');
                 updateButtonStates();
                 return;
             } else {
                 currentPVAnalysis.searchInProgress = false;
-                addLog('adaptation', 'Ramsey-PV: límite de iteraciones alcanzado.');
-                document.getElementById('engineStatus').textContent = 'Análisis completado (límite iteraciones)';
+                const stopReason = currentPVAnalysis.iterationCount >= MAX_ITERATIONS_HARD ? 'límite absoluto' : (decision.phantomMate ? 'mate fantasma sanado' : 'convergencia estable');
+                addLog('adaptation', `Ramsey-PV: corte inteligente → ${stopReason} (${currentPVAnalysis.iterationCount} iter).`);
+                document.getElementById('engineStatus').textContent = `Análisis completado (${stopReason})`;
                 document.getElementById('engineStatus').style.borderLeftColor = '#ffc107';
             }
         } else {
@@ -1767,6 +1782,63 @@ function analyzePieceVulnerability(boardArr, color) {
 
 // ===================== RAMSEY-PV: MOTOR DE CONSISTENCIA =====================
 
+// ===================== CORTE INTELIGENTE DE ITERACIONES =====================
+
+function shouldStopIterating(decision) {
+    // 1. Corte por consenso abrumador (ya existente)
+    if (decision.action === 'CUT_CONFIDENT') return true;
+
+    // 2. Mate fantasma: si alguna PV reporta mate ±N a prof baja, seguir buscando
+    const hasPhantomMate = Object.values(lastStats.pvEvaluations || {}).some(
+        ev => ev.type === 'mate' && Math.abs(ev.value) <= PHANTOM_MATE_THRESHOLD
+    );
+    decision.phantomMate = hasPhantomMate;
+    if (hasPhantomMate && currentPVAnalysis.depth < PHANTOM_MATE_MIN_DEPTH) {
+        addLog('adaptation', `Mate fantasma detectado (≤M${PHANTOM_MATE_THRESHOLD}), prof=${currentPVAnalysis.depth} < ${PHANTOM_MATE_MIN_DEPTH} → continuando...`);
+        return false; // NO cortar
+    }
+
+    // 3. Caos persistente: sin cliques en N iteraciones consecutivas
+    if (!currentPVAnalysis.chaosHistory) currentPVAnalysis.chaosHistory = [];
+    currentPVAnalysis.chaosHistory.push(decision.badge === 'warning' || decision.badge === 'gray');
+    if (currentPVAnalysis.chaosHistory.length > CHAOS_PERSISTENCE_LIMIT) {
+        currentPVAnalysis.chaosHistory.shift();
+    }
+    const recentChaos = currentPVAnalysis.chaosHistory;
+    const chaosStreak = recentChaos.length >= CHAOS_PERSISTENCE_LIMIT && recentChaos.every(Boolean);
+    if (chaosStreak && currentPVAnalysis.depth >= CHAOS_MIN_DEPTH_TO_CUT) {
+        addLog('adaptation', `Caos persistente (${CHAOS_PERSISTENCE_LIMIT} iter) a prof ${currentPVAnalysis.depth} → corte.`);
+        return true; // cortar
+    }
+
+    // 4. Salto brusco de evaluación entre iteraciones = inestabilidad
+    if (!currentPVAnalysis.prevBestEval) currentPVAnalysis.prevBestEval = null;
+    const bestEval = lastStats.pvEvaluations?.[1]?.value ?? null;
+    if (bestEval !== null && currentPVAnalysis.prevBestEval !== null) {
+        const jump = Math.abs(bestEval - currentPVAnalysis.prevBestEval);
+        if (jump > EVAL_JUMP_THRESHOLD) {
+            addLog('adaptation', `Salto de eval ${jump}cp > ${EVAL_JUMP_THRESHOLD} → continuando...`);
+            currentPVAnalysis.prevBestEval = bestEval;
+            return false; // NO cortar
+        }
+    }
+    if (bestEval !== null) currentPVAnalysis.prevBestEval = bestEval;
+
+    // 5. Consenso temprano: K3 rojo a prof baja sigue siendo sospechoso
+    if (decision.action === 'DEEPEN_RED' && currentPVAnalysis.depth < CONSENSUS_EARLY_DEPTH) {
+        addLog('adaptation', `Consenso temprano a prof ${currentPVAnalysis.depth} < ${CONSENSUS_EARLY_DEPTH} → verificando...`);
+        return false; // NO cortar
+    }
+
+    // 6. Límite absoluto de seguridad
+    if (currentPVAnalysis.iterationCount >= MAX_ITERATIONS_HARD) {
+        return true; // cortar
+    }
+
+    // 7. Por defecto: seguir iterando si hay espacio
+    return false;
+}
+
 function commitPVSnapshot() {
     if (!lastStats || !lastStats.pvs || !lastStats.pvUCIs) return null;
     const snapshot = [];
@@ -2036,13 +2108,16 @@ function analyzePVConsistency() {
             action = 'CUT_CONFIDENT';
             reason = `Consenso abrumador (${mainRed.length} PVs) → corte posible`;
         }
-    } else if (bigBlue.length > 0) {
+    } else if (bigBlue.length > 0 && bigBlue[0].length >= DIVERGENCE_MIN_PVS) {
         const bluePVNums = bigBlue[0].map(idx => snapshot[idx].pvNum);
         action = 'EXPAND_BLUE';
         multiPV = 8;
         depthDelta = 0;
-        reason = `K₃ azul (PVs ${bluePVNums.join(',')}) → divergencia real`;
+        reason = `K₃ azul (${bluePVNums.length} PVs ≥ min ${DIVERGENCE_MIN_PVS}) → divergencia real`;
         badge = 'danger';
+    } else if (bigBlue.length > 0) {
+        reason = `Divergencia parcial (${bigBlue[0].length} PVs < min ${DIVERGENCE_MIN_PVS}) → mixto`;
+        badge = 'neutral';
     } else {
         reason = 'Mixto: sin cliques estructurales claros';
         badge = 'neutral';
