@@ -230,8 +230,16 @@
         .pv-compat-red { background:#fadbd8; color:#c0392b; }
         .pv-compat-blue { background:#d6eaf8; color:#2980b9; }
         .pv-compat-gray { background:#f8f9fa; color:#868e96; }
-        .pv-components { display:flex; gap:4px; flex-wrap:wrap; margin-top:4px; }
-        .pv-component-badge { padding:1px 5px; border-radius:3px; font-size:0.68rem; font-weight:600; }
+        /* ====== COPILOTO: Stack de Posiciones ====== */
+        .copilot-stack { margin-top:6px; font-size:0.72rem; }
+        .copilot-level { display:flex; align-items:center; gap:4px; padding:2px 4px; border-radius:3px; margin-bottom:2px; }
+        .copilot-level-active { background:#d5f5e3; border-left:3px solid #27ae60; }
+        .copilot-level-fallback { background:#fdebd0; border-left:3px solid #d35400; }
+        .copilot-level-done { background:#e9ecef; border-left:3px solid #adb5bd; }
+        .copilot-level-num { font-weight:700; width:20px; }
+        .copilot-level-move { font-weight:600; }
+        .copilot-level-eval { margin-left:auto; font-size:0.65rem; }
+        .copilot-history { margin-top:6px; font-size:0.68rem; color:#555; max-height:80px; overflow-y:auto; }
 
         @media (max-width: 1200px) {
             .main-layout { flex-direction: column; }
@@ -250,7 +258,6 @@
             .right-panel { width: 100%; }
         }
     </style>
-<base target="_blank">
 <base target="_blank">
 </head>
 <body>
@@ -357,6 +364,8 @@
                             <div id="pvCompatMatrix" style="margin-top:6px;"></div>
                             <div id="pvCompatComponents" style="margin-top:4px;"></div>
                             <div id="pvCompatAction" style="margin-top:4px;font-size:0.75rem;color:#555;"></div>
+                            <!-- COPILOTO: Stack de posiciones -->
+                            <div id="copilotStack" class="copilot-stack" style="display:none;"></div>
                         </div>
                     </div>
                 </div>
@@ -421,6 +430,19 @@ const PV_COMPAT_TAU_BLUE = 4.0;
 const PV_MAX_MOVES_TO_SIMULATE = 8;
 let lastPVSnapshot = null;
 let currentPVRamseyDecision = null;
+
+// ===================== MODO RAMSEY-PV: EVALUACIÓN POR VARIANTE =====================
+// Para cada PV, Ramsey evalúa la estructura de la posición final y asigna un score propio.
+const PV_EVAL_CONFIG = {
+    MULTIPV: 6,               // Número de PVs a evaluar
+    SIM_MOVES: 8,              // Movimientos a simular por PV
+    WEIGHT_KING_SAFETY: 0.25,  // Peso king safety en score
+    WEIGHT_MATERIAL: 0.20,      // Peso material
+    WEIGHT_CONTROL: 0.20,       // Peso control territorial
+    WEIGHT_K4_THREAT: -0.15,    // Penalización K4 rival cerca del rey
+    WEIGHT_PAWN_STRUCT: 0.10,    // Peso estructura de peones
+    WEIGHT_CENTRAL: 0.10       // Peso control central
+};
 
 // ===================== VARIABLES CONFIGURABLES DEL CORTE INTELIGENTE =====================
 // Ajusta estas 8 variables para tunear el comportamiento de Ramsey-PV:
@@ -1008,7 +1030,7 @@ function startAdaptiveAnalysis() {
 function startProgressivePVSearch() {
     currentPVAnalysis.searchInProgress = true;
     currentPVAnalysis.adaptationActive = true;
-    currentPVAnalysis.pvCount = 6;
+    currentPVAnalysis.pvCount = PV_EVAL_CONFIG.MULTIPV;
     currentPVAnalysis.depth = 8;
     currentPVAnalysis.iterationCount = 0;
     currentPVAnalysis.ramseyDecision = null;
@@ -1016,27 +1038,19 @@ function startProgressivePVSearch() {
     currentPVAnalysis.prevBestEval = null;
     currentPVAnalysis.autoStopped = false;
     currentPVAnalysis.mateVerification = null;
-    addLog('adaptation', `Búsqueda progresiva PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth} (Ramsey-PV activo)`);
+    addLog('adaptation', `Ramsey-PV: Evaluación por variante PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth}`);
     executeProgressiveStep();
 }
 
 function executeProgressiveStep() {
     if (!currentPVAnalysis.searchInProgress || !chess) return;
 
-    // Aplicar decisión Ramsey-PV si existe
     if (currentPVAnalysis.ramseyDecision) {
         const dec = currentPVAnalysis.ramseyDecision;
         if (dec.multiPV > 0) currentPVAnalysis.pvCount = Math.min(dec.multiPV, 8);
         if (dec.depthDelta !== 0) currentPVAnalysis.depth = Math.max(1, currentPVAnalysis.depth + dec.depthDelta);
         addLog('adaptation', `Ramsey-PV → ${dec.reason} | PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth}`);
         currentPVAnalysis.ramseyDecision = null;
-    }
-
-    // Fase de verificación de mate: forzar MultiPV y profundidad
-    if (currentPVAnalysis.mateVerification) {
-        currentPVAnalysis.pvCount = MATE_VERIFICATION_MULTIPV;
-        currentPVAnalysis.depth += MATE_VERIFICATION_DEPTH;
-        addLog('adaptation', `FVM: Verificación de mate → PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth}`);
     }
 
     const fen = chess.fen();
@@ -1048,8 +1062,8 @@ function executeProgressiveStep() {
     stockfish.postMessage(`go depth ${currentPVAnalysis.depth}`);
     isAnalyzing = true;
     updateButtonStates();
-    document.getElementById('engineStatus').textContent = `Búsqueda progresiva PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth}...`;
-    addLog('info', `Analizando ${currentPVAnalysis.pvCount} líneas a profundidad ${currentPVAnalysis.depth}...`);
+    document.getElementById('engineStatus').textContent = `Ramsey-PV PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth}...`;
+    addLog('info', `Analizando ${currentPVAnalysis.pvCount} variantes a profundidad ${currentPVAnalysis.depth}...`);
 }
 
 function startStandardAnalysis() {
@@ -1167,30 +1181,39 @@ function handleEngineMessage(msg) {
         if (stockfishResolve) stockfishResolve();
         isAnalyzing = false;
 
-        // RAMSEY-PV: meta-filtro post-iteración
+        // RAMSEY-PV: evaluación por variante post-iteración
         if (currentPVAnalysis.adaptationActive && currentPVAnalysis.searchInProgress) {
-            const decision = analyzePVConsistency();
-            applyPVCompatDisplay(decision);
-            if (decision.action === 'CUT_CONFIDENT') {
-                currentPVAnalysis.searchInProgress = false;
-                addLog('adaptation', 'Ramsey-PV: corte por consenso abrumador.');
-                document.getElementById('engineStatus').textContent = 'Análisis completado (consenso Ramsey)';
-                document.getElementById('engineStatus').style.borderLeftColor = '#27ae60';
-            } else if (!shouldStopIterating(decision)) {
-                currentPVAnalysis.ramseyDecision = decision;
+            
+            // === MODO RAMSEY-PV: Ranking por estructura de cada PV ===
+            const pvResults = evaluatePVStructures();
+            renderPVEvaluation(pvResults);
+            
+            if (pvResults && pvResults.length >= 2) {
+                const bestRamsey = pvResults[0];
+                const bestMotor = pvResults.reduce((a, b) => b.motorValue > a.motorValue ? b : a);
+                const divergence = bestRamsey.pvNum !== bestMotor.pvNum;
+                
+                addLog('adaptation', `Ramsey-PV: Ranking completo (${pvResults.length} PVs) | 👑 PV#${bestRamsey.pvNum}=${bestRamsey.ramseyScore}pts | Motor PV#${bestMotor.pvNum}=${bestMotor.motorEval}`);
+                
+                // Si hay divergencia interesante, log adicional
+                if (divergence) {
+                    addLog('warning', `Ramsey-PV: DIVERGENCIA → Motor dice PV#${bestMotor.pvNum}, Ramsey dice PV#${bestRamsey.pvNum}`);
+                }
+            }
+            
+            // Continuar iteraciones si no se alcanzó límite
+            if (currentPVAnalysis.iterationCount < MAX_ITERATIONS_HARD) {
                 currentPVAnalysis.iterationCount++;
                 setTimeout(() => {
                     if (currentPVAnalysis.searchInProgress) executeProgressiveStep();
                 }, 50);
-                document.getElementById('engineStatus').textContent = `Ramsey-PV: ${decision.reason} [iter=${currentPVAnalysis.iterationCount}]`;
-                document.getElementById('engineStatus').style.borderLeftColor = decision.badge === 'safe' ? '#27ae60' : (decision.badge === 'danger' ? '#e74c3c' : '#f39c12');
+                document.getElementById('engineStatus').textContent = `Ramsey-PV: iteración ${currentPVAnalysis.iterationCount}/${MAX_ITERATIONS_HARD}`;
                 updateButtonStates();
                 return;
             } else {
                 currentPVAnalysis.searchInProgress = false;
-                const stopReason = currentPVAnalysis.iterationCount >= MAX_ITERATIONS_HARD ? 'límite absoluto' : (decision.phantomMate ? 'mate fantasma sanado' : 'convergencia estable');
-                addLog('adaptation', `Ramsey-PV: corte inteligente → ${stopReason} (${currentPVAnalysis.iterationCount} iter).`);
-                document.getElementById('engineStatus').textContent = `Análisis completado (${stopReason})`;
+                addLog('adaptation', `Ramsey-PV: límite de iteraciones alcanzado (${MAX_ITERATIONS_HARD}).`);
+                document.getElementById('engineStatus').textContent = 'Análisis completado (límite iteraciones)';
                 document.getElementById('engineStatus').style.borderLeftColor = '#ffc107';
             }
         } else {
@@ -1801,6 +1824,119 @@ function analyzePieceVulnerability(boardArr, color) {
         maxDanger = Math.max(maxDanger, danger);
     }
     return { totalCollapseRisk, maxDanger, numCollapse };
+}
+
+// ===================== COPILOTO: AVANCE Y FALLBACK =====================
+
+// ===================== RAMSEY-PV: EVALUACIÓN POR VARIANTE =====================
+
+function evaluatePVStructures() {
+    if (!lastStats || !lastStats.pvs || !lastStats.pvUCIs) return null;
+    const results = [];
+    const keys = Object.keys(lastStats.pvs).map(Number).sort((a,b)=>a-b);
+
+    for (const pvNum of keys) {
+        const uciMoves = lastStats.pvUCIs[pvNum];
+        if (!uciMoves || uciMoves.length === 0) continue;
+        const ev = lastStats.pvEvaluations?.[pvNum] || null;
+
+        // Simular PV
+        const vector = simulatePVVector(uciMoves);
+        if (!vector) continue;
+
+        // Calcular score estructural Ramsey
+        const ramseyScore = computeRamseyScore(vector);
+        const motorEval = ev ? (ev.type === 'mate' ? `M${ev.value}` : `${(ev.value/100).toFixed(2)}`) : '--';
+
+        results.push({
+            pvNum,
+            san: lastStats.pvs[pvNum],
+            uci: uciMoves,
+            motorEval,
+            motorValue: ev ? (ev.type === 'mate' ? ev.value * 300 : ev.value) : 0,
+            ramseyScore,
+            vector
+        });
+    }
+
+    // Ordenar por score Ramsey descendente
+    results.sort((a, b) => b.ramseyScore - a.ramseyScore);
+    return results;
+}
+
+function computeRamseyScore(vec) {
+    if (!vec) return 0;
+    // Normalizar componentes a escala 0-100
+    const kingSafetyNorm = Math.min(vec.kingSafety || 50, 100) / 100;
+    const materialNorm = Math.min(Math.abs(vec.materialDiff) / 15, 1);
+    const materialSign = vec.materialDiff >= 0 ? 1 : -1;
+    const controlNorm = Math.min((vec.disputed || 0) / 20, 1);
+    const k4Penalty = Math.min((vec.rivalK4NearKing || 0) / 4, 1);
+    const pawnNorm = (vec.pawnStructure || 0) > 0 ? 1 : (1 + (vec.pawnStructure || 0) / 3); // peones doblados penalizan
+    const centralNorm = Math.min(Math.abs(vec.centralControl || 0) / 5, 1);
+
+    const score = (
+        kingSafetyNorm * PV_EVAL_CONFIG.WEIGHT_KING_SAFETY +
+        materialNorm * materialSign * PV_EVAL_CONFIG.WEIGHT_MATERIAL +
+        controlNorm * PV_EVAL_CONFIG.WEIGHT_CONTROL +
+        (-k4Penalty) * Math.abs(PV_EVAL_CONFIG.WEIGHT_K4_THREAT) +
+        pawnNorm * PV_EVAL_CONFIG.WEIGHT_PAWN_STRUCT +
+        centralNorm * PV_EVAL_CONFIG.WEIGHT_CENTRAL
+    );
+
+    return Math.round(score * 100); // 0-100
+}
+
+function renderPVEvaluation(results) {
+    const matrixEl = document.getElementById('pvCompatMatrix');
+    const compEl = document.getElementById('pvCompatComponents');
+    const actionEl = document.getElementById('pvCompatAction');
+    const badgeEl = document.getElementById('pvCompatBadge');
+    if (!matrixEl || !compEl || !actionEl || !badgeEl) return;
+
+    if (!results || results.length === 0) {
+        matrixEl.innerHTML = '<div style="font-size:0.75rem;color:#868e96;">Esperando variantes...</div>';
+        compEl.innerHTML = '';
+        actionEl.textContent = '';
+        badgeEl.textContent = '--';
+        return;
+    }
+
+    // Renderizar tabla de ranking
+    let html = '<div style="font-size:0.7rem;font-weight:700;color:#495057;margin-bottom:4px;">Ranking Ramsey por Variante</div>';
+    html += '<div style="display:grid;grid-template-columns:30px 1fr 50px 50px;gap:2px;font-size:0.65rem;">';
+    html += '<div style="font-weight:600;">#</div><div style="font-weight:600;">PV</div><div style="font-weight:600;text-align:right;">Motor</div><div style="font-weight:600;text-align:right;">Ramsey</div>';
+
+    results.forEach((r, idx) => {
+        const isTop = idx === 0;
+        const bg = isTop ? '#d5f5e3' : (idx === 1 ? '#eafaf1' : 'transparent');
+        const color = isTop ? '#27ae60' : '#495057';
+        const crown = isTop ? '👑 ' : '';
+        html += `<div style="background:${bg};border-radius:2px;padding:1px 3px;text-align:center;font-weight:600;color:${color}">${r.pvNum}</div>`;
+        html += `<div style="background:${bg};border-radius:2px;padding:1px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${color}">${crown}${r.san.substring(0,25)}</div>`;
+        html += `<div style="background:${bg};border-radius:2px;padding:1px 3px;text-align:right;color:${color}">${r.motorEval}</div>`;
+        html += `<div style="background:${bg};border-radius:2px;padding:1px 3px;text-align:right;font-weight:700;color:${color}">${r.ramseyScore}</div>`;
+    });
+    html += '</div>';
+    matrixEl.innerHTML = html;
+
+    // Badge de mejor según Ramsey
+    const best = results[0];
+    const bestMotor = results.reduce((a, b) => b.motorValue > a.motorValue ? b : a);
+    const divergence = best.pvNum !== bestMotor.pvNum;
+
+    badgeEl.style.background = divergence ? '#fdebd0' : '#d5f5e3';
+    badgeEl.style.color = divergence ? '#d35400' : '#27ae60';
+    badgeEl.textContent = divergence ? 'DIVERGENCIA' : 'CONSENSO';
+
+    compEl.innerHTML = `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">
+        <span style="background:#d5f5e3;color:#27ae60;padding:1px 5px;border-radius:3px;font-size:0.68rem;font-weight:600;">👑 Ramsey PV#${best.pvNum}</span>
+        <span style="background:#d6eaf8;color:#2980b9;padding:1px 5px;border-radius:3px;font-size:0.68rem;font-weight:600;">Motor PV#${bestMotor.pvNum}</span>
+    </div>`;
+
+    actionEl.textContent = divergence
+        ? `Ramsey prefiere PV#${best.pvNum} (${best.ramseyScore} pts) vs Motor PV#${bestMotor.pvNum} (${bestMotor.motorEval})`
+        : `Motor y Ramsey coinciden: PV#${best.pvNum} es la mejor`;
 }
 
 // ===================== RAMSEY-PV: MOTOR DE CONSISTENCIA =====================
