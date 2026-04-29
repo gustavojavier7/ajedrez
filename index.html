@@ -304,14 +304,13 @@
                             <div class="section-title"><i class="fas fa-microchip"></i> Motor de Análisis</div>
                             <div class="engine-controls">
                                 <button onclick="toggleEngine()" id="engineToggleBtn" class="btn btn-secondary"><i class="fas fa-plug"></i> Conectar Motor</button>
-                                <button onclick="toggleAnalysis()" id="analysisToggleBtn" class="btn btn-success"><i class="fas fa-play"></i> Analizar</button>
-                                <button onclick="runMBDeepScan()" id="ramseyToggleBtn" class="btn btn-ramsey"><i class="fas fa-radar"></i> Escanear</button>
+                                <button onclick="startStockfishInfinite()" id="stockfishAnalyzeBtn" class="btn btn-success"><i class="fas fa-play"></i> Analizar</button>
+                                <button onclick="startRamseyIterative()" id="ramseyAnalyzeBtn" class="btn btn-ramsey"><i class="fas fa-brain"></i> Análisis estructural</button>
+                                <button onclick="stopAnyAnalysis()" id="stopBtn" class="btn btn-danger" disabled><i class="fas fa-stop"></i> Detener</button>
                                 <button onclick="forceBestMove()" id="forceMoveBtn" class="btn btn-warning" style="display:none;"><i class="fas fa-forward"></i> Forzar</button>
                             </div>
                             <div id="engineStatus" class="engine-status">Motor no conectado</div>
-                            <div class="adaptive-config">
-                                <label id="adaptiveLabel"><input type="checkbox" id="adaptiveToggle"><span>Modo adaptativo</span></label>
-                            </div>
+                            <div id="analysisModeBadge" style="font-size:0.7rem;margin-top:4px;color:#868e96;">Ningún análisis activo</div>
                         </div>
                         <div class="analysis-section evaluation-section">
                             <div class="section-title"><i class="fas fa-balance-scale"></i> Evaluación Stockfish</div>
@@ -496,8 +495,6 @@ function toggleLogsPause() {
 
 // ===================== SISTEMA DE REPORTE ADAPTATIVO =====================
 function reportAdaptiveModeStatus() {
-    const adaptiveToggle = document.getElementById('adaptiveToggle');
-    const adaptiveEnabled = adaptiveToggle ? adaptiveToggle.checked : true;
     const modeLabels = { edit:'Edición y análisis', human:'Humano vs Humano', cpu:'Versus CPU' };
     if (gameMode === 'human') {
         addLog('info', `Modo: ${modeLabels[gameMode]} | Adaptativo: NO APLICABLE`);
@@ -508,14 +505,11 @@ function reportAdaptiveModeStatus() {
     }
 }
 function updateAdaptiveControlState() {
-    const adaptiveToggle = document.getElementById('adaptiveToggle');
     const adaptiveLabel = document.getElementById('adaptiveLabel');
     if (gameMode === 'human') {
-        adaptiveToggle.disabled = true;
         adaptiveLabel.classList.add('disabled');
         adaptiveLabel.title = 'El modo adaptativo no se aplica en partidas humano vs humano';
     } else {
-        adaptiveToggle.disabled = false;
         adaptiveLabel.classList.remove('disabled');
         adaptiveLabel.title = '';
     }
@@ -524,32 +518,36 @@ function updateAdaptiveControlState() {
 // ===================== FUNCIONES PRINCIPALES DE INTERFAZ =====================
 function updateButtonStates() {
     const engineToggleBtn = document.getElementById('engineToggleBtn');
-    const analysisToggleBtn = document.getElementById('analysisToggleBtn');
-    const showMovesBtn = document.getElementById('showMovesBtn');
+    const stockfishAnalyzeBtn = document.getElementById('stockfishAnalyzeBtn');
+    const ramseyAnalyzeBtn = document.getElementById('ramseyAnalyzeBtn');
+    const stopBtn = document.getElementById('stopBtn');
     const forceMoveBtn = document.getElementById('forceMoveBtn');
-    if (isEngineConnected) {
-        engineToggleBtn.innerHTML = '<i class="fas fa-power-off"></i> Desconectar';
-        engineToggleBtn.className = 'btn btn-warning';
-    } else {
-        engineToggleBtn.innerHTML = '<i class="fas fa-plug"></i> Conectar Motor';
-        engineToggleBtn.className = 'btn btn-secondary';
+    
+    if (engineToggleBtn) {
+        if (isEngineConnected) {
+            engineToggleBtn.innerHTML = '<i class="fas fa-power-off"></i> Desconectar';
+            engineToggleBtn.className = 'btn btn-warning';
+        } else {
+            engineToggleBtn.innerHTML = '<i class="fas fa-plug"></i> Conectar Motor';
+            engineToggleBtn.className = 'btn btn-secondary';
+        }
     }
-    if (isAnalyzing) {
-        analysisToggleBtn.innerHTML = '<i class="fas fa-stop"></i> Detener';
-        analysisToggleBtn.className = 'btn btn-danger';
-        analysisToggleBtn.disabled = false;
-    } else {
-        analysisToggleBtn.innerHTML = '<i class="fas fa-play"></i> Analizar';
-        analysisToggleBtn.className = 'btn btn-success';
-        analysisToggleBtn.disabled = !isEngineConnected || (chess?.game_over() ?? false);
+    
+    if (stockfishAnalyzeBtn) {
+        stockfishAnalyzeBtn.disabled = !isEngineConnected || isAnalyzing || (chess?.game_over() ?? false);
     }
-    if (showMovesBtn) showMovesBtn.disabled = chess?.game_over() ?? false;
+    if (ramseyAnalyzeBtn) {
+        ramseyAnalyzeBtn.disabled = isAnalyzing || (chess?.game_over() ?? false);
+    }
+    if (stopBtn) {
+        stopBtn.disabled = !isAnalyzing;
+    }
+    
     if (forceMoveBtn) {
         const cpuTurn = gameMode === 'cpu' && chess && chess.turn() !== (playerColor === 'white' ? 'w' : 'b');
         forceMoveBtn.style.display = (gameMode === 'cpu' && (isAnalyzing || cpuTurn)) ? 'inline-flex' : 'none';
         forceMoveBtn.disabled = !isAnalyzing && !lastStats.bestMoveSan;
     }
-    updateAdaptiveControlState();
 }
 
 function parseFEN(fen) {
@@ -878,7 +876,10 @@ function makeMove(move) {
         if (isEngineConnected && !chess.game_over()) {
             setTimeout(() => {
                 const cpuTurn = gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b');
-                if (cpuTurn) startAdaptiveAnalysis();
+                if (cpuTurn) {
+                    // Modo CPU: esperar a que usuario pulse "Analizar" o "Análisis estructural"
+                    addLog('info', 'Turno de CPU. Pulse Analizar o Análisis estructural para jugar.');
+                }
             }, 500);
         }
         updateMemoryStats();
@@ -970,30 +971,6 @@ function highlightBestLine() {
 
 // ===================== MOTOR DE ANÁLISIS CON ADAPTACIÓN Y FILTRO RAMSEY =====================
 
-function toggleAnalysis() {
-    if (isAnalyzing) { stopAnalysis(); return; }
-    addLog('info', 'Inicio de análisis solicitado desde el botón "Analizar"');
-    prepareAnalysisOutput();
-    // === INTEGRACIÓN RAMSEY: Filtro pre-análisis ===
-    runRamseyFilter();
-    refreshEscapeAnalysis();
-    const esc = chess.turn() === 'w' ? lastEscapeAnalysis.black : lastEscapeAnalysis.white;
-    ramseyOverlays = true;
-    updateBoard();
-    if (esc && esc.score >= 95) {
-        addLog('warning', '⚠ Ramsey: Mate estructural detectado. Búsqueda profunda omitida.');
-        document.getElementById('engineStatus').textContent = 'Mate estructural (Ramsey) — Motor no requerido';
-        document.getElementById('engineStatus').style.borderLeftColor = '#c0392b';
-        return;
-    }
-    if (esc && esc.score >= 70) {
-        addLog('adaptation', `Ramsey: Rey expuesto (score ${esc.score.toFixed(0)}). Priorizando búsqueda profunda...`);
-    }
-    // === FIN INTEGRACIÓN RAMSEY ===
-    if (gameMode === 'cpu') startEngineTurnIfNeeded();
-    else startAdaptiveAnalysis();
-}
-
 function runMBDeepScan() {
     if (!chess) return;
     const fen = chess.fen();
@@ -1011,94 +988,231 @@ function runMBDeepScan() {
     addLog('ramsey', `MB-Scanner: ${totalPlys} niveles escaneados (${prunedPlys} podados por Turán) en ${result.timeMs.toFixed(1)}ms`);
 }
 
-function startEngineTurnIfNeeded() {
-    if (!chess) return;
-    const cpuTurn = gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b');
-    if (!cpuTurn || chess.game_over()) return;
-    if (isEngineConnected) startAdaptiveAnalysis();
-    else connectEngine();
-}
+// ===================== MODO STOCKFISH: ANÁLISIS INFINITO PURO =====================
 
-function startAdaptiveAnalysis() {
-    if (!isEngineConnected || isAnalyzing || !chess || chess.game_over()) return;
-    const adaptiveToggle = document.getElementById('adaptiveToggle');
-    const adaptiveEnabled = adaptiveToggle ? adaptiveToggle.checked : true;
-    if (adaptiveEnabled && (gameMode === 'cpu' || gameMode === 'edit')) startProgressivePVSearch();
-    else startStandardAnalysis();
-}
+let activeAnalysisMode = 'none'; // 'none' | 'stockfish' | 'ramsey'
+let ramseyIterativeInterval = null;
+let bestRamseyFEN = null;
+let bestRamseyScore = -Infinity;
 
-function startProgressivePVSearch() {
-    currentPVAnalysis.searchInProgress = true;
-    currentPVAnalysis.adaptationActive = true;
-    currentPVAnalysis.pvCount = PV_EVAL_CONFIG.MULTIPV;
-    currentPVAnalysis.depth = 8;
-    currentPVAnalysis.iterationCount = 0;
-    currentPVAnalysis.ramseyDecision = null;
-    currentPVAnalysis.chaosHistory = [];
-    currentPVAnalysis.prevBestEval = null;
-    currentPVAnalysis.autoStopped = false;
-    currentPVAnalysis.mateVerification = null;
-    addLog('adaptation', `Ramsey-PV: Evaluación por variante PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth}`);
-    executeProgressiveStep();
-}
-
-function executeProgressiveStep() {
-    if (!currentPVAnalysis.searchInProgress || !chess) return;
-
-    if (currentPVAnalysis.ramseyDecision) {
-        const dec = currentPVAnalysis.ramseyDecision;
-        if (dec.multiPV > 0) currentPVAnalysis.pvCount = Math.min(dec.multiPV, 8);
-        if (dec.depthDelta !== 0) currentPVAnalysis.depth = Math.max(1, currentPVAnalysis.depth + dec.depthDelta);
-        addLog('adaptation', `Ramsey-PV → ${dec.reason} | PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth}`);
-        currentPVAnalysis.ramseyDecision = null;
-    }
-
-    const fen = chess.fen();
-    lastStats.pvs = {};
-    lastStats.pvEvaluations = {};
-    lastStats.pvUCIs = {};
-    stockfish.postMessage(`setoption name MultiPV value ${currentPVAnalysis.pvCount}`);
-    stockfish.postMessage(`position fen ${fen}`);
-    stockfish.postMessage(`go depth ${currentPVAnalysis.depth}`);
+function startStockfishInfinite() {
+    if (!isEngineConnected || isAnalyzing) return;
+    if (!chess || chess.game_over()) return;
+    
+    activeAnalysisMode = 'stockfish';
     isAnalyzing = true;
-    updateButtonStates();
-    document.getElementById('engineStatus').textContent = `Ramsey-PV PV=${currentPVAnalysis.pvCount} Prof=${currentPVAnalysis.depth}...`;
-    addLog('info', `Analizando ${currentPVAnalysis.pvCount} variantes a profundidad ${currentPVAnalysis.depth}...`);
-}
-
-function startStandardAnalysis() {
-    if (!isEngineConnected || isAnalyzing || !chess || chess.game_over()) return;
+    document.getElementById('analysisModeBadge').textContent = 'Modo: Stockfish infinite';
+    document.getElementById('analysisModeBadge').style.color = '#28a745';
+    
+    resetStats();
+    prepareAnalysisOutput();
+    
     const fen = chess.fen();
-    lastStats.pvs = {};
     stockfish.postMessage('setoption name MultiPV value 1');
     stockfish.postMessage(`position fen ${fen}`);
     stockfish.postMessage('go infinite');
-    isAnalyzing = true;
-    document.getElementById('engineStatus').textContent = 'Análisis estándar en progreso (profundidad infinita)...';
-    document.getElementById('engineStatus').style.borderLeftColor = '#007bff';
-    updateButtonStates();
-    document.getElementById('pvLine').textContent = 'Analizando...';
-    addLog('info', 'Análisis estándar iniciado en profundidad infinita');
+    
+    document.getElementById('engineStatus').textContent = 'Stockfish analizando (go infinite)...';
+    document.getElementById('engineStatus').style.borderLeftColor = '#28a745';
+    document.getElementById('stockfishAnalyzeBtn').disabled = true;
+    document.getElementById('ramseyAnalyzeBtn').disabled = true;
+    document.getElementById('stopBtn').disabled = false;
+    
+    addLog('info', 'Stockfish: go infinite iniciado');
 }
 
-function forceBestMove() {
-    if (!chess) return;
-    addLog('warning', 'Forzando movimiento de CPU...');
-    if (stockfish) stockfish.postMessage('stop');
-    setTimeout(() => {
-        if (lastStats.bestMoveSan) makeMove(lastStats.bestMoveSan);
-        else {
-            const legalMoves = chess.moves();
-            if (legalMoves.length > 0) {
-                const randomMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
-                makeMove(randomMove);
-                addLog('warning', `Movimiento aleatorio: ${randomMove}`);
+// ===================== MODO RAMSEY: MOTOR ESTRUCTURAL ITERATIVO =====================
+
+function startRamseyIterative() {
+    if (isAnalyzing) return;
+    if (!chess || chess.game_over()) return;
+    
+    activeAnalysisMode = 'ramsey';
+    isAnalyzing = true;
+    bestRamseyFEN = chess.fen();
+    bestRamseyScore = -Infinity;
+    
+    document.getElementById('analysisModeBadge').textContent = 'Modo: Ramsey estructural iterativo';
+    document.getElementById('analysisModeBadge').style.color = '#e74c3c';
+    
+    document.getElementById('engineStatus').textContent = 'Ramsey: motor estructural iniciado';
+    document.getElementById('engineStatus').style.borderLeftColor = '#e74c3c';
+    document.getElementById('stockfishAnalyzeBtn').disabled = true;
+    document.getElementById('ramseyAnalyzeBtn').disabled = true;
+    document.getElementById('stopBtn').disabled = false;
+    
+    addLog('ramsey', 'Motor estructural Ramsey iniciado. Iterando jugadas legales...');
+    
+    ramseyIterativeStep(1);
+}
+
+function ramseyIterativeStep(stepNumber) {
+    if (!isAnalyzing || activeAnalysisMode !== 'ramsey') return;
+    if (!chess || chess.game_over()) {
+        stopAnyAnalysis();
+        return;
+    }
+    
+    const legalMoves = chess.moves({ verbose: true });
+    if (legalMoves.length === 0) {
+        addLog('ramsey', 'Ramsey: Sin jugadas legales. Fin.');
+        stopAnyAnalysis();
+        return;
+    }
+    
+    // Evaluar cada jugada legal con Ramsey
+    let bestMove = null;
+    let bestScore = -Infinity;
+    let bestFEN = null;
+    const evaluations = [];
+    
+    for (const move of legalMoves) {
+        const tempChess = new Chess(chess.fen());
+        tempChess.move(move);
+        
+        const boardArr = parseFENtoBoardArr(tempChess.fen());
+        const turn = tempChess.turn();
+        const side = turn === 'w' ? 'white' : 'black';
+        const playingSide = move.color === 'w' ? 'white' : 'black';
+        
+        // Evaluación Ramsey estructural
+        const esc = analyzeEscape(boardArr, playingSide);
+        const kingSafety = esc ? esc.score : 50;
+        
+        const data = buildControlData(boardArr);
+        const myKing = findKingSquare(boardArr, playingSide);
+        const rivalGraph = playingSide === 'white' ? data.Gblack : data.Gwhite;
+        const turanCheck = evaluateTuranK4Prune(rivalGraph);
+        const turanPruned = turanCheck.shouldPrune;
+        const rivalK4 = turanPruned ? [] : findCliques(rivalGraph, 4);
+        let rivalK4NearKing = 0;
+        const rivalPieces = playingSide === 'white' ? data.blackPieces : data.whitePieces;
+        if (myKing) {
+            const [kr, kc] = myKing;
+            for (const clique of rivalK4) {
+                for (const idx of clique) {
+                    const { r, c } = rivalPieces[idx];
+                    if (Math.max(Math.abs(r - kr), Math.abs(c - kc)) <= 2) {
+                        rivalK4NearKing++;
+                        break;
+                    }
+                }
             }
         }
-        isAnalyzing = false;
-        currentPVAnalysis.searchInProgress = false;
-        updateButtonStates();
-    }, 200);
+        
+        let materialWhite = 0, materialBlack = 0;
+        for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+            const p = boardArr[r][c];
+            if (p) {
+                const w = PIECE_WEIGHTS[p] || 0;
+                if (p === p.toUpperCase()) materialWhite += w; else materialBlack += w;
+            }
+        }
+        const materialDiff = (playingSide === 'white' ? materialWhite - materialBlack : materialBlack - materialWhite);
+        
+        // Score Ramsey para esta jugada
+        const score = computeRamseyScore({
+            kingSafety,
+            rivalK4NearKing,
+            materialDiff,
+            disputed: data.disputed.size,
+            pawnStructure: 0, // simplificado
+            centralControl: 0 // simplificado
+        });
+        
+        evaluations.push({
+            san: move.san,
+            score,
+            fen: tempChess.fen()
+        });
+        
+        if (score > bestScore) {
+            bestScore = score;
+            bestMove = move;
+            bestFEN = tempChess.fen();
+        }
+    }
+    
+    // Ordenar para mostrar ranking
+    evaluations.sort((a, b) => b.score - a.score);
+    const top3 = evaluations.slice(0, 3).map(e => `${e.san}=${e.score}`).join(', ');
+    
+    addLog('ramsey', `Paso ${stepNumber}: ${legalMoves.length} jugadas evaluadas | Top: ${top3}`);
+    
+    // Aplicar mejor jugada al tablero real
+    if (bestMove) {
+        chess.move(bestMove);
+        board = parseFENtoBoardArr(chess.fen());
+        updateBoard();
+        
+        // Trackear mejor FEN global
+        if (bestScore > bestRamseyScore) {
+            bestRamseyScore = bestScore;
+            bestRamseyFEN = chess.fen();
+        }
+        
+        document.getElementById('engineStatus').textContent = `Ramsey paso ${stepNumber}: ${bestMove.san} (score ${bestScore})`;
+        document.getElementById('evaluation').textContent = bestScore;
+        document.getElementById('bestMove').textContent = bestMove.san;
+        document.getElementById('engineStats').textContent = `${legalMoves.length} ops evaluadas`;
+        
+        // Mostrar top 3 en pvLine
+        const pvLine = document.getElementById('pvLine');
+        if (pvLine) {
+            pvLine.innerHTML = evaluations.slice(0, 5).map((e, i) => 
+                `<div style="color:${i===0?'#27ae60':'#666'}">${i+1}. ${e.san} — Ramsey ${e.score} pts</div>`
+            ).join('');
+        }
+    }
+    
+    // Siguiente paso con delay para no bloquear UI
+    ramseyIterativeInterval = setTimeout(() => {
+        ramseyIterativeStep(stepNumber + 1);
+    }, 300);
+}
+
+function stopAnyAnalysis() {
+    if (activeAnalysisMode === 'stockfish') {
+        stockfish.postMessage('stop');
+        addLog('info', 'Stockfish: análisis detenido');
+    } else if (activeAnalysisMode === 'ramsey') {
+        if (ramseyIterativeInterval) {
+            clearTimeout(ramseyIterativeInterval);
+            ramseyIterativeInterval = null;
+        }
+        addLog('ramsey', 'Ramsey: motor estructural detenido');
+        
+        // Mostrar FEN de la mejor evaluación
+        if (bestRamseyFEN) {
+            addLog('ramsey', `MEJOR FEN: ${bestRamseyFEN}`);
+            // Mostrar en modal o en un elemento destacado
+            const modalHtml = `
+                <div style="background:#d5f5e3;border:2px solid #27ae60;border-radius:6px;padding:12px;margin-top:10px;">
+                    <div style="font-size:0.75rem;font-weight:700;color:#27ae60;margin-bottom:6px;">🏆 Mejor posición según Ramsey</div>
+                    <div style="font-family:monospace;font-size:0.7rem;word-break:break-all;background:#fff;padding:6px;border-radius:3px;border:1px solid #dee2e6;">${bestRamseyFEN}</div>
+                    <div style="font-size:0.65rem;color:#666;margin-top:4px;">Copiá esta FEN y pegala en el campo FEN para comparar con Stockfish</div>
+                </div>
+            `;
+            const pvLine = document.getElementById('pvLine');
+            if (pvLine) {
+                pvLine.innerHTML = modalHtml + pvLine.innerHTML;
+            }
+        }
+    }
+    
+    activeAnalysisMode = 'none';
+    isAnalyzing = false;
+    currentPVAnalysis.searchInProgress = false;
+    
+    document.getElementById('engineStatus').textContent = 'Análisis detenido';
+    document.getElementById('engineStatus').style.borderLeftColor = '#6c757d';
+    document.getElementById('analysisModeBadge').textContent = 'Ningún análisis activo';
+    document.getElementById('analysisModeBadge').style.color = '#868e96';
+    document.getElementById('stockfishAnalyzeBtn').disabled = false;
+    document.getElementById('ramseyAnalyzeBtn').disabled = false;
+    document.getElementById('stopBtn').disabled = true;
+    
+    updateButtonStates();
 }
 
 // ===================== STOCKFISH =====================
@@ -1124,7 +1238,7 @@ async function connectEngine() {
         updateButtonStates();
         addLog('success', 'Motor Stockfish conectado');
         if (chess && gameMode === 'cpu' && chess.turn() !== (playerColor === 'white' ? 'w' : 'b') && !chess.game_over()) {
-            setTimeout(() => startAdaptiveAnalysis(), 500);
+            setTimeout(() => { console.log('Motor conectado'); }, 500);
         }
     } catch (error) {
         document.getElementById('engineStatus').textContent = 'Error: ' + error.message;
@@ -1181,59 +1295,19 @@ function handleEngineMessage(msg) {
         if (stockfishResolve) stockfishResolve();
         isAnalyzing = false;
 
-        // RAMSEY-PV: evaluación por variante post-iteración
-        if (currentPVAnalysis.adaptationActive && currentPVAnalysis.searchInProgress) {
-            
-            // === MODO RAMSEY-PV: Ranking por estructura de cada PV ===
-            const pvResults = evaluatePVStructures();
-            renderPVEvaluation(pvResults);
-            
-            if (pvResults && pvResults.length >= 2) {
-                const bestRamsey = pvResults[0];
-                const bestMotor = pvResults.reduce((a, b) => b.motorValue > a.motorValue ? b : a);
-                const divergence = bestRamsey.pvNum !== bestMotor.pvNum;
-                
-                addLog('adaptation', `Ramsey-PV: Ranking completo (${pvResults.length} PVs) | 👑 PV#${bestRamsey.pvNum}=${bestRamsey.ramseyScore}pts | Motor PV#${bestMotor.pvNum}=${bestMotor.motorEval}`);
-                
-                if (divergence) {
-                    addLog('warning', `Ramsey-PV: DIVERGENCIA → Motor dice PV#${bestMotor.pvNum}, Ramsey dice PV#${bestRamsey.pvNum}`);
-                }
-                
-                // === DECIDIR SIGUIENTE ITERACIÓN ===
-                const decision = decideNextIteration(pvResults);
-                
-                if (decision.action === 'CUT') {
-                    currentPVAnalysis.searchInProgress = false;
-                    addLog('adaptation', `Ramsey-PV: ${decision.reason}`);
-                    document.getElementById('engineStatus').textContent = `Análisis completado (${decision.reason})`;
-                    document.getElementById('engineStatus').style.borderLeftColor = '#27ae60';
-                } else if (currentPVAnalysis.iterationCount < MAX_ITERATIONS_HARD) {
-                    currentPVAnalysis.ramseyDecision = {
-                        action: decision.action,
-                        multiPV: PV_EVAL_CONFIG.MULTIPV,
-                        depthDelta: decision.depthDelta,
-                        reason: decision.reason
-                    };
-                    currentPVAnalysis.iterationCount++;
-                    setTimeout(() => {
-                        if (currentPVAnalysis.searchInProgress) executeProgressiveStep();
-                    }, 50);
-                    document.getElementById('engineStatus').textContent = `Ramsey-PV: ${decision.reason} [${currentPVAnalysis.iterationCount}/${MAX_ITERATIONS_HARD}]`;
-                    document.getElementById('engineStatus').style.borderLeftColor = decision.badge === 'safe' ? '#27ae60' : '#f39c12';
-                    updateButtonStates();
-                    return;
-                } else {
-                    currentPVAnalysis.searchInProgress = false;
-                    addLog('adaptation', `Ramsey-PV: límite de iteraciones alcanzado (${MAX_ITERATIONS_HARD}).`);
-                    document.getElementById('engineStatus').textContent = 'Análisis completado (límite iteraciones)';
-                    document.getElementById('engineStatus').style.borderLeftColor = '#ffc107';
-                }
-            } else {
-                currentPVAnalysis.searchInProgress = false;
-                addLog('adaptation', `Ramsey-PV: límite de iteraciones alcanzado (${MAX_ITERATIONS_HARD}).`);
-                document.getElementById('engineStatus').textContent = 'Análisis completado (límite iteraciones)';
-                document.getElementById('engineStatus').style.borderLeftColor = '#ffc107';
-            }
+        // En modo stockfish, bestmove solo llega tras 'stop'
+        if (activeAnalysisMode === 'stockfish') {
+            isAnalyzing = false;
+            activeAnalysisMode = 'none';
+            currentPVAnalysis.searchInProgress = false;
+            addLog('info', 'Stockfish: análisis finalizado');
+            document.getElementById('engineStatus').textContent = 'Análisis completado';
+            document.getElementById('engineStatus').style.borderLeftColor = '#28a745';
+            document.getElementById('analysisModeBadge').textContent = 'Ningún análisis activo';
+            document.getElementById('analysisModeBadge').style.color = '#868e96';
+            document.getElementById('stockfishAnalyzeBtn').disabled = false;
+            document.getElementById('ramseyAnalyzeBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
         } else {
             currentPVAnalysis.searchInProgress = false;
             document.getElementById('engineStatus').textContent = 'Análisis completado';
@@ -2531,7 +2605,6 @@ window.addEventListener('load', function() {
     updateButtonStates();
     setupPVObserver();
     document.getElementById('modeSelect').addEventListener('change', e => setGameMode(e.target.value));
-    document.getElementById('adaptiveToggle').addEventListener('change', e => {
         addLog('info', `Modo adaptativo ${e.target.checked ? 'activado' : 'desactivado'}`);
         setTimeout(reportAdaptiveModeStatus, 100);
     });
@@ -2549,7 +2622,9 @@ window.drawBoard = drawBoard;
 window.showLegalMoves = showLegalMoves;
 window.hideLegalMoves = hideLegalMoves;
 window.toggleEngine = toggleEngine;
-window.toggleAnalysis = toggleAnalysis;
+window.startStockfishInfinite = startStockfishInfinite;
+window.startRamseyIterative = startRamseyIterative;
+window.stopAnyAnalysis = stopAnyAnalysis;
 window.forceBestMove = forceBestMove;
 window.handleSquareClick = handleSquareClick;
 window.clearLogs = clearLogs;
