@@ -2091,7 +2091,7 @@ function parseInfoLine(message) {
   const pvIdx = parts.indexOf('pv');
   if (pvIdx !== -1 && parts.length > pvIdx + 1) {
     const pvMoves = parts.slice(pvIdx + 1);
-    upsertStockfishLine({ depth, multipv, score: evalScore, pv: pvMoves, raw: message });
+    upsertStockfishLine({ depth, multipv, score: evalScore, scoreType: scoreType || null, scoreValue: Number.isFinite(scoreValue) ? scoreValue : null, pv: pvMoves, raw: message });
     const pvContainer = document.getElementById('pv-lines');
     if (pvContainer && activeMode === 'stockfish') {
       pvContainer.innerHTML = `
@@ -2115,14 +2115,17 @@ function upsertStockfishLine(line) {
 
 
 function normalizeStockfishEval(line) {
-  if (!line || typeof line.score !== 'number') return null;
-  return line.score;
+  if (!line) return null;
+  if (line.scoreType === 'mate' && typeof line.scoreValue === 'number') return line.scoreValue > 0 ? 100 : -100;
+  if (line.scoreType === 'cp' && typeof line.scoreValue === 'number') return line.scoreValue / 100;
+  if (typeof line.score === 'number') return line.score;
+  return null;
 }
 
-function runStockfishForFEN({ fen, movetime, multipv, purpose }) {
+function runStockfishForFEN({ fen, movetime, multipv, purpose, clearLastLines = true }) {
   return new Promise((resolve, reject) => {
     if (!state.stockfish.isConnected || !state.stockfish.worker) { reject(new Error('Stockfish no conectado')); return; }
-    state.stockfish.lastLines = [];
+    if (clearLastLines) state.stockfish.lastLines = [];
     state.stockfish.busy = true;
     log(`Stockfish [${purpose}] movetime=${movetime}ms multipv=${multipv}`, 'info');
     const timeout = setTimeout(() => {
@@ -2137,7 +2140,8 @@ function runStockfishForFEN({ fen, movetime, multipv, purpose }) {
       if (typeof msg === 'string' && msg.startsWith('bestmove')) {
         clearTimeout(timeout);
         state.stockfish.worker.onmessage = originalHandler;
-        resolve();
+        state.stockfish.busy = false;
+        setTimeout(() => resolve(), 0);
       }
     };
     state.stockfish.worker.postMessage(`position fen ${fen}`);
@@ -2204,13 +2208,17 @@ async function buildNextRamseyHypothesis() {
 
 async function verifyHypothesisWithStockfish(hypothesis) {
   log(`Stockfish verifica hipótesis ${hypothesis.id}`, 'info');
-  await runStockfishForFEN({ fen: hypothesis.focusFEN, movetime: state.combined.verifyMovetime, multipv: 1, purpose: 'combined-verify' });
+  state.stockfish.lastLines = [];
+  await runStockfishForFEN({ fen: hypothesis.focusFEN, movetime: state.combined.verifyMovetime, multipv: 1, purpose: 'combined-verify', clearLastLines: false });
   const best = state.stockfish.lastLines?.[0];
   if (!best) return { ok: false, eval: null, reason: 'Sin respuesta Stockfish' };
   return { ok: true, eval: normalizeStockfishEval(best), line: best };
 }
 
-function isEvaluationImproved(baseEval, newEval, delta = 0.20) { return newEval > baseEval + delta; }
+function isEvaluationImproved(baseEval, newEval, sideToMove, delta = 0.20) {
+  if (sideToMove === 'b') return newEval < baseEval - delta;
+  return newEval > baseEval + delta;
+}
 
 function renderCombinedResult(hypothesis, verifiedLine) {
   const pvContainer = document.getElementById('pv-lines');
@@ -2237,7 +2245,8 @@ function applyCombinedDecision(hypothesis, verification) {
     log(`Hipótesis ${hypothesis.id} rechazada: ${verification.reason}`, 'warn'); return;
   }
   hypothesis.newEval = verification.eval;
-  const improved = isEvaluationImproved(hypothesis.baseEval, hypothesis.newEval, state.combined.minImprovement);
+  const sideToMove = (hypothesis.baseFEN || currentFEN || '').split(' ')[1] || 'w';
+  const improved = isEvaluationImproved(hypothesis.baseEval, hypothesis.newEval, sideToMove, state.combined.minImprovement);
   if (improved) { hypothesis.status = 'accepted'; state.combined.accepted.push(hypothesis); log(`Hipótesis ${hypothesis.id} aceptada`, 'success'); log(`Eval base: ${hypothesis.baseEval} → nueva eval: ${hypothesis.newEval}`, 'success'); promoteCombinedLine(hypothesis, verification.line); }
   else { hypothesis.status = 'rejected'; state.combined.rejected.push(hypothesis); log(`Hipótesis ${hypothesis.id} rechazada`, 'warn'); log(`Eval base: ${hypothesis.baseEval} → nueva eval: ${hypothesis.newEval}`, 'warn'); }
 }
@@ -2306,6 +2315,7 @@ function startStockfishAnalysis() {
 
 function stopAnyAnalysis() {
   const mode = activeMode;
+  activeMode = 'idle';
   if (mode === 'stockfish') {
     if (state.stockfish.worker) state.stockfish.worker.postMessage('stop');
     log('Stockfish: analisis detenido', 'info');
