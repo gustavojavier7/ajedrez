@@ -2,11 +2,11 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RASP-FEN Analyzer v0.2 — Análisis Adaptativo con Certificación Ramsey</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>RASP-FEN Analyzer | Windows 95 Edition</title>
 <style>
   /* ============================================
-     WINDOWS 95 CHIC — RASP-FEN Analyzer
+     WINDOWS 95 — Paleta con variables
      ============================================ */
   :root {
     --w95-bg:       #c0c0c0;
@@ -16,6 +16,7 @@
     --w95-dark:     #404040;
     --w95-black:    #000000;
     --w95-blue:     #000080;
+    --w95-teal:     #008080;
     --w95-white:    #ffffff;
     --w95-text:     #000000;
     --w95-gray:     #808080;
@@ -25,219 +26,146 @@
     --w95-board-dark:  #b58863;
   }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
 
   body {
-    font-family: 'MS Sans Serif', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: var(--w95-bg);
+    font-family: "MS Sans Serif", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    background: var(--w95-teal);
     color: var(--w95-text);
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
     padding: 8px;
   }
 
   /* ===== VENTANA PRINCIPAL ===== */
-  .w95-window {
+  .win95-window {
     background: var(--w95-bg);
-    border: 2px solid var(--w95-light);
-    border-right-color: var(--w95-dark);
-    border-bottom-color: var(--w95-dark);
-    box-shadow: 1px 1px 0 var(--w95-black);
+    border-top: 2px solid var(--w95-light);
+    border-left: 2px solid var(--w95-light);
+    border-right: 2px solid var(--w95-dark);
+    border-bottom: 2px solid var(--w95-dark);
+    padding: 2px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
   }
-  .w95-title-bar {
+
+  /* ===== BARRA DE TÍTULO (estilo opción 1 refinado) ===== */
+  .title-bar {
     background: linear-gradient(90deg, var(--w95-blue), #1084d0);
-    color: var(--w95-white);
-    padding: 3px 6px;
-    font-weight: bold;
-    font-size: 0.85em;
+    padding: 4px 8px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    font-weight: bold;
+    font-size: 14px;
+    color: white;
     letter-spacing: 0.5px;
   }
-  .w95-title-bar .title-buttons {
-    display: flex;
-    gap: 3px;
-  }
-  .w95-title-btn {
-    width: 16px; height: 14px;
+  .title-bar-text { display: flex; gap: 12px; }
+  .title-bar-controls { display: flex; gap: 4px; }
+  .title-bar-controls button {
     background: var(--w95-bg);
-    border: 2px solid var(--w95-light);
-    border-right-color: var(--w95-dark);
-    border-bottom-color: var(--w95-dark);
-    font-size: 9px; line-height: 10px;
-    text-align: center; color: var(--w95-black);
+    border: none;
+    width: 20px; height: 20px;
+    font-size: 12px; font-weight: bold;
+    text-align: center; line-height: 18px;
+    border-top: 1px solid var(--w95-light);
+    border-left: 1px solid var(--w95-light);
+    border-right: 1px solid var(--w95-dark);
+    border-bottom: 1px solid var(--w95-dark);
     cursor: pointer;
+    color: var(--w95-text);
   }
-  .w95-title-btn:active {
-    border: 2px solid var(--w95-dark);
-    border-right-color: var(--w95-light);
-    border-bottom-color: var(--w95-light);
+  .title-bar-controls button:active {
+    border-top: 1px solid var(--w95-dark);
+    border-left: 1px solid var(--w95-dark);
+    border-right: 1px solid var(--w95-light);
+    border-bottom: 1px solid var(--w95-light);
   }
 
-  /* ===== PANELES ===== */
+  /* ===== LAYOUT PRINCIPAL ===== */
   .main-grid {
     display: grid;
-    grid-template-columns: 1fr 420px;
-    gap: 0;
-    max-width: 1400px;
-    margin: 0 auto;
-    border: 2px solid var(--w95-light);
-    border-right-color: var(--w95-dark);
-    border-bottom-color: var(--w95-dark);
+    grid-template-columns: 430px 1fr;
+    gap: 6px;
+    flex: 1;
+    min-height: 0;
+    padding: 6px 4px 4px 4px;
   }
-  @media (max-width: 1000px) {
-    .main-grid { grid-template-columns: 1fr; }
+  @media (max-width: 900px) {
+    .main-grid { grid-template-columns: 1fr; overflow-y: auto; }
+    body { overflow: auto; }
   }
 
+  /* ===== PANEL IZQUIERDO: TABLERO FIJO ===== */
   .board-panel {
     background: var(--w95-bg);
+    border-top: 2px solid var(--w95-light);
+    border-left: 2px solid var(--w95-light);
     border-right: 2px solid var(--w95-dark);
     border-bottom: 2px solid var(--w95-dark);
-    border-left: 2px solid var(--w95-light);
-    border-top: 2px solid var(--w95-light);
-    padding: 12px;
-    margin: 4px;
-  }
-
-  .analysis-panel {
+    padding: 8px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 8px;
+    height: 100%;
+    overflow: hidden;
   }
 
-  /* ===== TARJETAS / GRUPOS ===== */
-  .card {
-    background: var(--w95-bg);
-    border: 2px solid var(--w95-light);
-    border-right-color: var(--w95-dark);
-    border-bottom-color: var(--w95-dark);
-    padding: 10px;
-    margin-bottom: 6px;
-  }
-  .card-title {
-    background: var(--w95-bg);
-    border: 1px solid var(--w95-light);
-    border-right-color: var(--w95-dark);
-    border-bottom-color: var(--w95-dark);
-    padding: 3px 6px;
-    font-size: 0.8em;
-    font-weight: bold;
-    color: var(--w95-text);
-    margin-bottom: 8px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .card-title .icon { font-size: 1.1em; }
-
-  /* ===== BOTONES WINDOWS 95 ===== */
-  .btn {
-    padding: 4px 10px;
-    background: var(--w95-bg);
-    border: 2px solid var(--w95-light);
-    border-right-color: var(--w95-dark);
-    border-bottom-color: var(--w95-dark);
-    color: var(--w95-text);
-    font-family: inherit;
-    font-size: 0.75em;
-    font-weight: 600;
-    cursor: pointer;
-    outline: none;
-    box-shadow: 1px 1px 0 var(--w95-black);
-    min-height: 24px;
-  }
-  .btn:active, .btn.pressed {
-    border: 2px solid var(--w95-dark);
-    border-right-color: var(--w95-light);
-    border-bottom-color: var(--w95-light);
-    box-shadow: none;
-    transform: translate(1px, 1px);
-  }
-  .btn:disabled {
-    color: var(--w95-gray);
-    border-color: var(--w95-shadow);
-    box-shadow: none;
-    cursor: not-allowed;
-  }
-  .btn-primary {
-    background: var(--w95-bg);
-    border: 2px solid var(--w95-light);
-    border-right-color: var(--w95-dark);
-    border-bottom-color: var(--w95-dark);
-  }
-  .btn-ramsey {
-    background: var(--w95-bg);
-    border: 2px solid var(--w95-light);
-    border-right-color: var(--w95-dark);
-    border-bottom-color: var(--w95-dark);
-  }
-  .btn-secondary {
-    background: var(--w95-bg);
-    border: 2px solid var(--w95-light);
-    border-right-color: var(--w95-dark);
-    border-bottom-color: var(--w95-dark);
-  }
-
-  .action-buttons {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px;
-    margin-top: 8px;
-  }
-
-  /* ===== INPUTS ===== */
-  .fen-input-area { margin-bottom: 12px; }
-  .fen-input-area label {
-    display: block;
-    color: var(--w95-text);
-    font-size: 0.75em;
-    margin-bottom: 4px;
-    font-weight: bold;
+  .fen-area { margin-bottom: 8px; }
+  .fen-area label {
+    font-size: 12px; font-weight: bold;
+    display: block; margin-bottom: 2px;
   }
   #fen-input {
     width: 100%;
+    background: white;
+    border-top: 2px solid var(--w95-dark);
+    border-left: 2px solid var(--w95-dark);
+    border-right: 2px solid var(--w95-light);
+    border-bottom: 2px solid var(--w95-light);
     padding: 4px 6px;
-    background: var(--w95-white);
-    border: 2px solid var(--w95-dark);
-    border-right-color: var(--w95-light);
-    border-bottom-color: var(--w95-light);
-    color: var(--w95-text);
     font-family: 'Courier New', monospace;
-    font-size: 0.8em;
+    font-size: 12px;
+    color: var(--w95-text);
   }
   #fen-input:focus { outline: 1px dotted var(--w95-black); outline-offset: -2px; }
 
-  .fen-presets {
+  .fen-buttons {
     display: flex;
     gap: 6px;
     margin-top: 6px;
     flex-wrap: wrap;
   }
+
   .preset-btn {
-    padding: 3px 8px;
     background: var(--w95-bg);
-    border: 2px solid var(--w95-light);
-    border-right-color: var(--w95-dark);
-    border-bottom-color: var(--w95-dark);
-    color: var(--w95-text);
-    font-size: 0.7em;
+    border-top: 2px solid var(--w95-light);
+    border-left: 2px solid var(--w95-light);
+    border-right: 2px solid var(--w95-dark);
+    border-bottom: 2px solid var(--w95-dark);
+    padding: 3px 8px;
+    font-size: 11px;
     cursor: pointer;
     font-family: inherit;
+    color: var(--w95-text);
   }
   .preset-btn:active {
-    border: 2px solid var(--w95-dark);
-    border-right-color: var(--w95-light);
-    border-bottom-color: var(--w95-light);
+    border-top: 2px solid var(--w95-dark);
+    border-left: 2px solid var(--w95-dark);
+    border-right: 2px solid var(--w95-light);
+    border-bottom: 2px solid var(--w95-light);
   }
 
-  /* ===== TABLERO ===== */
   .board-container {
     display: flex;
     justify-content: center;
-    margin: 10px 0;
+    align-items: center;
+    margin: 8px 0;
+    flex-shrink: 0;
   }
   #chessboard-svg {
+    width: 400px; height: 400px;
     border: 2px solid var(--w95-dark);
     border-right-color: var(--w95-light);
     border-bottom-color: var(--w95-light);
@@ -255,67 +183,174 @@
     font-weight: bold;
   }
 
-  /* ===== EVALUACIÓN ===== */
-  .eval-container { margin-bottom: 8px; }
-  .eval-bar-bg {
-    height: 20px;
-    background: linear-gradient(to right, #000 50%, #fff 50%);
-    border: 2px solid var(--w95-dark);
-    border-right-color: var(--w95-light);
-    border-bottom-color: var(--w95-light);
-    position: relative;
+  /* ===== PANEL DERECHO COMPACTO ===== */
+  .analysis-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    height: 100%;
     overflow: hidden;
+    min-width: 0;
+  }
+
+  /* ===== TARJETAS / CARDS ===== */
+  .card {
+    background: var(--w95-bg);
+    border-top: 2px solid var(--w95-light);
+    border-left: 2px solid var(--w95-light);
+    border-right: 2px solid var(--w95-dark);
+    border-bottom: 2px solid var(--w95-dark);
+    padding: 8px;
+    flex-shrink: 0;
+  }
+  .card-title {
+    font-weight: bold; font-size: 12px;
+    background: var(--w95-bg);
+    margin-bottom: 8px;
+    padding: 3px 6px;
+    border-bottom: 1px solid var(--w95-shadow);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .card-title .icon { font-size: 1.1em; }
+
+  /* ===== EVALUACIÓN ===== */
+  .eval-bar-bg {
+    height: 24px;
+    background: #ffffff;
+    position: relative;
+    border-top: 2px solid var(--w95-dark);
+    border-left: 2px solid var(--w95-dark);
+    border-right: 2px solid var(--w95-light);
+    border-bottom: 2px solid var(--w95-light);
+    margin: 6px 0;
   }
   .eval-marker {
     position: absolute;
-    top: 0; bottom: 0;
-    width: 3px;
+    width: 4px;
     background: #ff0000;
-    z-index: 2;
-  }
-  .eval-labels {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.65em;
-    color: var(--w95-gray);
-    margin-top: 2px;
+    height: 100%;
+    top: 0;
+    transition: left 0.2s;
   }
   .eval-score {
-    text-align: center;
-    font-size: 1.6em;
+    font-size: 28px;
     font-weight: bold;
-    color: var(--w95-text);
-    margin: 6px 0;
+    text-align: center;
     font-family: 'Courier New', monospace;
+    margin: 4px 0;
+    color: var(--w95-text);
   }
   .eval-signature {
-    text-align: center;
-    padding: 2px 8px;
-    border: 1px solid var(--w95-dark);
-    border-right-color: var(--w95-light);
-    border-bottom-color: var(--w95-light);
-    font-size: 0.75em;
-    font-weight: bold;
     display: inline-block;
+    padding: 2px 12px;
     background: var(--w95-bg);
+    border: 1px solid var(--w95-shadow);
+    font-size: 11px;
+    font-weight: bold;
   }
   .sig-win-w { background: #e0ffe0; color: var(--w95-green); }
   .sig-win-b { background: #ffe0e0; color: var(--w95-red); }
   .sig-draw  { background: #ffffe0; color: #808000; }
   .sig-unclear { background: var(--w95-bg); color: var(--w95-gray); }
 
+  /* ===== BOTONES WIN95 (refinados opción 1) ===== */
+  .btn {
+    background: var(--w95-bg);
+    color: var(--w95-text);
+    border-top: 2px solid var(--w95-light);
+    border-left: 2px solid var(--w95-light);
+    border-right: 2px solid var(--w95-dark);
+    border-bottom: 2px solid var(--w95-dark);
+    padding: 5px 12px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: normal;
+    cursor: pointer;
+    text-transform: none;
+    outline: none;
+    min-height: 26px;
+  }
+  .btn:active, .btn.pressed {
+    border-top: 2px solid var(--w95-dark);
+    border-left: 2px solid var(--w95-dark);
+    border-right: 2px solid var(--w95-light);
+    border-bottom: 2px solid var(--w95-light);
+    box-shadow: inset 1px 1px 0 var(--w95-shadow);
+  }
+  .btn:disabled {
+    color: var(--w95-gray);
+    text-shadow: 1px 1px 0 var(--w95-light);
+    cursor: not-allowed;
+  }
+  .btn-primary { font-weight: bold; }
+  .btn-danger { font-weight: bold; }
+
+  .action-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* ===== STATUS ===== */
+  .status-row {
+    display: flex;
+    gap: 8px;
+    margin: 8px 0 4px;
+  }
+  .status-pill {
+    background: var(--w95-bg);
+    border: 1px solid var(--w95-shadow);
+    border-top-color: var(--w95-dark);
+    border-left-color: var(--w95-dark);
+    padding: 4px 6px;
+    font-size: 11px;
+    flex: 1;
+    text-align: center;
+    font-family: 'Courier New', monospace;
+  }
+  .status-pill.active {
+    border-color: var(--w95-blue);
+    background: #e0e0ff;
+    color: var(--w95-blue);
+    font-weight: bold;
+  }
+  .status-pill.certified {
+    border-color: var(--w95-green);
+    background: #e0ffe0;
+    color: var(--w95-green);
+    font-weight: bold;
+  }
+
+  /* ===== SELECTOR DE MODO ===== */
+  .select-mode {
+    width: 100%;
+    background: var(--w95-bg);
+    border-top: 2px solid var(--w95-dark);
+    border-left: 2px solid var(--w95-dark);
+    border-right: 2px solid var(--w95-light);
+    border-bottom: 2px solid var(--w95-light);
+    padding: 4px;
+    margin-bottom: 8px;
+    font-family: inherit;
+    font-size: 12px;
+    color: var(--w95-text);
+  }
+
   /* ===== PARÁMETROS ===== */
   .param-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 6px;
+    gap: 8px;
+    margin-bottom: 6px;
   }
   .param-item {
     background: var(--w95-bg);
-    padding: 6px 8px;
-    border: 2px solid var(--w95-light);
-    border-right-color: var(--w95-dark);
-    border-bottom-color: var(--w95-dark);
+    border: 1px solid var(--w95-shadow);
+    border-top-color: var(--w95-dark);
+    border-left-color: var(--w95-dark);
+    padding: 6px;
+    font-size: 11px;
   }
   .param-label {
     font-size: 0.65em;
@@ -349,19 +384,72 @@
     cursor: pointer;
   }
 
+  /* ===== PESTAÑAS ===== */
+  .tab-container {
+    background: var(--w95-bg);
+    border-top: 2px solid var(--w95-light);
+    border-left: 2px solid var(--w95-light);
+    border-right: 2px solid var(--w95-dark);
+    border-bottom: 2px solid var(--w95-dark);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .tab-bar {
+    display: flex;
+    background: var(--w95-bg);
+    padding: 3px 0 0 4px;
+    gap: 2px;
+    border-bottom: 1px solid var(--w95-shadow);
+    flex-shrink: 0;
+  }
+  .tab-btn {
+    background: var(--w95-bg);
+    border-top: 2px solid var(--w95-light);
+    border-left: 2px solid var(--w95-light);
+    border-right: 1px solid var(--w95-dark);
+    border-bottom: none;
+    padding: 5px 14px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--w95-text);
+  }
+  .tab-btn.active {
+    background: var(--w95-bg);
+    border-bottom: 2px solid var(--w95-bg);
+    margin-bottom: -1px;
+    font-weight: bold;
+  }
+  .tab-btn:active {
+    border-top: 2px solid var(--w95-dark);
+    border-left: 2px solid var(--w95-dark);
+  }
+  .tab-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    background: var(--w95-bg);
+    min-height: 0;
+  }
+  .tab-pane { display: none; }
+  .tab-pane.active-pane { display: block; }
+
   /* ===== LÍNEAS PV ===== */
   .pv-lines {
-    max-height: 160px;
+    max-height: 100%;
     overflow-y: auto;
+    background: white;
     border: 2px solid var(--w95-dark);
     border-right-color: var(--w95-light);
     border-bottom-color: var(--w95-light);
-    background: var(--w95-white);
   }
   .pv-line {
     padding: 4px 6px;
     border-bottom: 1px solid #d4d0c8;
-    font-size: 0.75em;
+    font-size: 12px;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -387,55 +475,29 @@
     font-family: 'Courier New', monospace;
   }
 
-  /* ===== LOG ===== */
-  .system-log {
-    background: var(--w95-white);
-    border: 2px solid var(--w95-dark);
-    border-right-color: var(--w95-light);
-    border-bottom-color: var(--w95-light);
-    padding: 6px;
-    font-family: 'Courier New', monospace;
-    font-size: 0.7em;
-    max-height: 200px;
-    overflow-y: auto;
-    line-height: 1.4;
-    color: var(--w95-text);
-  }
-  .log-entry {
-    padding: 1px 0;
-    padding-left: 6px;
-    margin: 1px 0;
-    border-left: 2px solid transparent;
-  }
-  .log-info { border-left-color: var(--w95-blue); color: var(--w95-text); }
-  .log-ramsey { border-left-color: var(--w95-red); color: var(--w95-red); }
-  .log-success { border-left-color: var(--w95-green); color: var(--w95-green); }
-  .log-warn { border-left-color: #ff8000; color: #ff8000; }
-  .log-timestamp { color: var(--w95-gray); margin-right: 4px; }
-
   /* ===== CLUSTER ===== */
   .cluster-grid {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    gap: 4px;
+    gap: 5px;
     margin-top: 6px;
   }
   .cluster-node {
-    aspect-ratio: 1;
     background: var(--w95-bg);
     border: 2px solid var(--w95-light);
     border-right-color: var(--w95-dark);
     border-bottom-color: var(--w95-dark);
+    text-align: center;
+    padding: 6px 2px;
+    font-size: 10px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    font-size: 0.6em;
+    aspect-ratio: 1;
   }
   .cluster-node.active {
     border: 2px solid var(--w95-red);
-    border-right-color: var(--w95-red);
-    border-bottom-color: var(--w95-red);
     background: #ffe0e0;
   }
   .cluster-node .node-hash {
@@ -449,40 +511,50 @@
     font-weight: bold;
   }
 
-  /* ===== STATUS ===== */
-  .status-row {
+  /* ===== LOG (refinado opción 1) ===== */
+  .system-log {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    background: white;
+    border: 2px solid var(--w95-dark);
+    border-right-color: var(--w95-light);
+    border-bottom-color: var(--w95-light);
+    padding: 6px;
+    max-height: 100%;
+    overflow-y: auto;
+    line-height: 1.4;
+    color: var(--w95-text);
+  }
+  .log-entry {
+    padding: 2px 0;
+    padding-left: 6px;
+    margin: 1px 0;
+    border-left: 2px solid transparent;
+    font-size: 11px;
+  }
+  .log-info { border-left-color: var(--w95-blue); color: var(--w95-text); }
+  .log-ramsey { border-left-color: var(--w95-red); color: var(--w95-red); }
+  .log-success { border-left-color: var(--w95-green); color: var(--w95-green); }
+  .log-warn { border-left-color: #ff8000; color: #ff8000; }
+  .log-timestamp { color: var(--w95-gray); margin-right: 4px; }
+
+  /* ===== PGN (fila superior) ===== */
+  .pgn-bar {
     display: flex;
     gap: 6px;
-    margin-top: 6px;
-  }
-  .status-pill {
-    flex: 1;
-    text-align: center;
-    padding: 4px;
-    font-size: 0.7em;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 4px 6px;
     background: var(--w95-bg);
-    border: 2px solid var(--w95-light);
-    border-right-color: var(--w95-dark);
-    border-bottom-color: var(--w95-dark);
-    color: var(--w95-text);
-    font-family: 'Courier New', monospace;
+    border-top: 2px solid var(--w95-light);
+    border-left: 2px solid var(--w95-light);
+    border-right: 2px solid var(--w95-dark);
+    border-bottom: 2px solid var(--w95-dark);
+    margin: 4px;
+    flex-shrink: 0;
   }
-  .status-pill.active {
-    border: 2px solid var(--w95-blue);
-    border-right-color: var(--w95-blue);
-    border-bottom-color: var(--w95-blue);
-    background: #e0e0ff;
-    color: var(--w95-blue);
-    font-weight: bold;
-  }
-  .status-pill.certified {
-    border: 2px solid var(--w95-green);
-    border-right-color: var(--w95-green);
-    border-bottom-color: var(--w95-green);
-    background: #e0ffe0;
-    color: var(--w95-green);
-    font-weight: bold;
-  }
+  .pgn-nav { display: flex; gap: 3px; }
+  .pgn-nav button { min-width: 28px; padding: 2px 6px; font-size: 0.7em; }
 
   /* ===== SPINNER ===== */
   .spinner {
@@ -490,40 +562,19 @@
     width: 12px; height: 12px;
     border: 2px solid var(--w95-gray);
     border-top-color: var(--w95-black);
-    border-radius: 0;
     animation: spin 0.6s steps(8) infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ===== PGN ===== */
-  .pgn-loader-section { max-width: 1400px; margin: 0 auto 6px; }
-  .pgn-loader-section .card { padding: 8px 10px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .pgn-nav { display: flex; gap: 3px; }
-  .pgn-nav button { min-width: 28px; padding: 2px 6px; font-size: 0.7em; }
-
-  /* ===== LABORATORIO ===== */
-  .lab-section { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--w95-shadow); }
-  .lab-section:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
-  .lab-label { font-size: 0.75em; font-weight: bold; color: var(--w95-text); margin-bottom: 6px; display: flex; align-items: center; gap: 4px; }
-
-  #engine-status-text {
-    font-size: 0.75em;
-    color: var(--w95-text);
-    margin-bottom: 6px;
-    padding: 4px 8px;
-    background: var(--w95-white);
-    border: 1px solid var(--w95-dark);
-    border-right-color: var(--w95-light);
-    border-bottom-color: var(--w95-light);
+  /* ===== DIFICULTAD ===== */
+  .difficulty-indicator {
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: bold;
     font-family: 'Courier New', monospace;
-  }
-  #engine-status-text.connected { border-color: var(--w95-green); color: var(--w95-green); font-weight: bold; }
-  #engine-status-text.error { border-color: var(--w95-red); color: var(--w95-red); font-weight: bold; }
-  #btn-connect.connected { border-color: var(--w95-green); }
-
-  @media (max-width: 600px) {
-    .param-grid { grid-template-columns: 1fr; }
-    .action-buttons { grid-template-columns: 1fr; }
+    border: 1px solid var(--w95-shadow);
+    background: var(--w95-bg);
   }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chess.js@0.10.3/chess.min.js"></script>
@@ -531,238 +582,174 @@
 </head>
 <body>
 
-<!-- VENTANA PRINCIPAL WINDOWS 95 -->
-<div class="w95-window" style="max-width:1400px; margin:0 auto;">
-  <div class="w95-title-bar">
-    <span>🔬 RASP-FEN Analyzer v0.2</span>
-    <div class="title-buttons">
-      <span class="w95-title-btn">_</span>
-      <span class="w95-title-btn">□</span>
-      <span class="w95-title-btn">×</span>
+<!-- VENTANA PRINCIPAL -->
+<div class="win95-window">
+
+  <!-- BARRA DE TÍTULO -->
+  <div class="title-bar">
+    <div class="title-bar-text">🔬 RASP-FEN Analyzer - [<span id="title-fen-short">Posición inicial</span>]</div>
+    <div class="title-bar-controls">
+      <button aria-label="Minimize">_</button>
+      <button aria-label="Maximize">□</button>
+      <button aria-label="Close">✕</button>
     </div>
   </div>
 
-<div class="pgn-loader-section">
-  <div class="card">
+  <!-- BARRA PGN -->
+  <div class="pgn-bar">
     <input type="file" id="pgn-file" accept=".pgn" style="display:none;">
-    <button class="btn btn-secondary" onclick="document.getElementById('pgn-file').click()">📁 Cargar PGN</button>
-    <span id="pgn-info" style="font-size:0.85em; color:#404040;">Ninguna partida cargada</span>
+    <button class="btn" onclick="document.getElementById('pgn-file').click()">📁 Cargar PGN</button>
+    <span id="pgn-info" style="font-size:11px; color:#404040;">Ninguna partida cargada</span>
     <div class="pgn-nav">
-      <button class="btn btn-secondary" onclick="pgnFirst()">|&lt;&lt;</button>
-      <button class="btn btn-secondary" onclick="pgnPrev()">&lt;</button>
-      <button class="btn btn-secondary" onclick="pgnNext()">&gt;</button>
-      <button class="btn btn-secondary" onclick="pgnLast()">&gt;&gt;|</button>
+      <button class="btn" onclick="pgnFirst()">|&lt;&lt;</button>
+      <button class="btn" onclick="pgnPrev()">&lt;</button>
+      <button class="btn" onclick="pgnNext()">&gt;</button>
+      <button class="btn" onclick="pgnLast()">&gt;&gt;|</button>
     </div>
-    <span id="pgn-move-display" style="font-size:0.85em; color:#000000; font-family:'Courier New',monospace;">—</span>
-  </div>
-</div>
-
-<div class="main-grid">
-  <div class="board-panel">
-    <div class="fen-input-area">
-      <label>Posición FEN</label>
-      <input type="text" id="fen-input" value="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" 
-             placeholder="Ingrese posición FEN..." onclick="this.select()">
-      <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
-        <button class="btn btn-primary" id="btn-load-fen" onclick="loadCustomFEN()" disabled style="flex:0 0 auto;font-size:0.8em;padding:6px 12px;">📥 Cargar FEN</button>
-        <span id="fen-status" style="font-size:0.75em;color:#404040;"></span>
-      </div>
-      <div class="fen-presets">
-        <button class="preset-btn" onclick="loadFEN('start')">Inicial</button>
-        <button class="preset-btn" onclick="loadFEN('sicilian')">Siciliana</button>
-        <button class="preset-btn" onclick="loadFEN('spanish')">Ruy López</button>
-        <button class="preset-btn" onclick="loadFEN('friedliver')">Fried Liver</button>
-        <button class="preset-btn" onclick="loadFEN('endgame')">Final RR+P</button>
-        <button class="preset-btn" onclick="loadFEN('puzzle')">Puzzle Táctico</button>
-      </div>
-    </div>
-
-    <div class="board-container">
-      <svg id="chessboard-svg" width="400" height="400" viewBox="0 0 400 400"></svg>
-    </div>
-
-    <div style="text-align:center; margin-top:10px; font-size:0.8em; color:#404040;">
-      <span style="color:#0000ff">■</span> Mejor jugada 
-      <span style="color:#ff0000; margin-left:10px">■</span> Cluster Ramsey 
-      <span style="color:#008000; margin-left:10px">■</span> Poda certificada
-    </div>
+    <span id="pgn-move-display" style="font-size:11px; color:#000; font-family:'Courier New',monospace;">—</span>
   </div>
 
-  <div class="analysis-panel">
-    <div class="card">
-      <div class="card-title"><span class="icon">📊</span> Evaluación Adaptativa</div>
-      <div class="eval-container">
-        <div class="eval-bar-bg">
-          <div class="eval-marker" id="eval-marker" style="left:50%"></div>
+  <!-- LAYOUT PRINCIPAL -->
+  <div class="main-grid">
+
+    <!-- COLUMNA IZQUIERDA: TABLERO -->
+    <div class="board-panel">
+      <div class="fen-area">
+        <label>📟 Notación FEN</label>
+        <input type="text" id="fen-input" value="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+               placeholder="Ingrese posición FEN..." onclick="this.select()">
+        <div class="fen-buttons">
+          <button class="btn" id="btn-load-fen" onclick="loadCustomFEN()" disabled>📥 Cargar FEN</button>
+          <span id="fen-status" style="font-size:10px; color:#404040; align-self:center;"></span>
         </div>
-        <div class="eval-labels">
-          <span>-5.00 (Negras)</span>
-          <span>0.00</span>
-          <span>+5.00 (Blancas)</span>
+        <div class="fen-buttons" style="margin-top:4px;">
+          <button class="preset-btn" onclick="loadFEN('start')">Inicial</button>
+          <button class="preset-btn" onclick="loadFEN('sicilian')">Siciliana</button>
+          <button class="preset-btn" onclick="loadFEN('spanish')">Ruy López</button>
+          <button class="preset-btn" onclick="loadFEN('friedliver')">Fried Liver</button>
+          <button class="preset-btn" onclick="loadFEN('endgame')">Final</button>
+          <button class="preset-btn" onclick="loadFEN('puzzle')">Táctica</button>
         </div>
       </div>
-      <div class="eval-score" id="eval-score">0.00</div>
-      <div style="text-align:center;">
-        <span class="eval-signature sig-unclear" id="eval-signature">INCIERTA</span>
+
+      <div class="board-container">
+        <svg id="chessboard-svg" width="400" height="400" viewBox="0 0 400 400"></svg>
       </div>
-      <div class="status-row">
-        <div class="status-pill" id="status-engine">Engine: Standby</div>
-        <div class="status-pill" id="status-ramsey">Ramsey: Inactivo</div>
+
+      <div style="font-size: 10px; text-align: center; margin-top: 6px;">
+        <span style="background:#0000ff; display:inline-block; width:12px; height:12px; border:1px solid #404040;"></span> Mejor &nbsp;|&nbsp;
+        <span style="background:#ff0000; display:inline-block; width:12px; height:12px; border:1px solid #404040;"></span> Cluster &nbsp;|&nbsp;
+        <span style="background:#008000; display:inline-block; width:12px; height:12px; border:1px solid #404040;"></span> Poda
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-title"><span class="icon">⚙️</span> Parámetros RASP</div>
-      <div class="param-grid">
-        <div class="param-item">
-          <div class="param-label">Primo p</div>
-          <div class="param-value" id="param-p">1019</div>
-          <input type="range" class="param-slider" id="slider-p" min="100" max="5000" value="1019">
-        </div>
-        <div class="param-item">
-          <div class="param-label">Cluster k</div>
-          <div class="param-value" id="param-k">5</div>
-          <input type="range" class="param-slider" id="slider-k" min="3" max="10" value="5">
-        </div>
-        <div class="param-item">
-          <div class="param-label">Profundidad d</div>
-          <div class="param-value" id="param-d">4</div>
-          <input type="range" class="param-slider" id="slider-d" min="2" max="8" value="4">
-        </div>
-        <div class="param-item">
-          <div class="param-label">Dificultad</div>
-          <div class="param-value" id="param-diff">--</div>
-        </div>
-      </div>
-      <div class="param-grid" style="margin-top:10px;">
-        <div class="param-item">
-          <div class="param-label">Hash h_p</div>
-          <div class="param-value" id="param-hash" style="font-size:0.9em">--</div>
-        </div>
-        <div class="param-item">
-          <div class="param-label">Cliques G(p)</div>
-          <div class="param-value" id="param-cliques">--</div>
-        </div>
-      </div>
-    </div>
+    <!-- COLUMNA DERECHA: PANEL COMPACTO -->
+    <div class="analysis-panel">
 
-    <div class="card">
-      <div class="card-title"><span class="icon">⛏️</span> Laboratorio de Análisis</div>
-
-      <!-- Stockfish -->
-      <div class="lab-section">
-        <div class="lab-label">♟️ Stockfish — Evaluación ajedrecística</div>
-        <div id="engine-status-text">Motor no conectado</div>
-        <div class="action-buttons" style="grid-template-columns: 1fr 1fr; margin-top:8px;">
-          <button class="btn btn-secondary" id="btn-connect" onclick="toggleEngine()">🔌 Conectar</button>
-          <button class="btn btn-primary" id="btn-analyze-stockfish" onclick="startStockfishAnalysis()" disabled>Evaluar posición</button>
+      <!-- Evaluación -->
+      <div class="card">
+        <div class="card-title"><span class="icon">📊</span> Evaluación adaptativa</div>
+        <div class="eval-bar-bg"><div class="eval-marker" id="eval-marker" style="left:50%"></div></div>
+        <div class="eval-score" id="eval-score">+0.00</div>
+        <div style="text-align:center"><span class="eval-signature" id="eval-signature">INCIERTA</span></div>
+        <div class="status-row">
+          <div class="status-pill" id="status-engine">Engine: Standby</div>
+          <div class="status-pill" id="status-ramsey">Ramsey: inactivo</div>
         </div>
       </div>
 
-      <!-- Ramsey -->
-      <div class="lab-section ramsey-border">
-        <div class="lab-label">🔴 Ramsey — Análisis estructural / certificación</div>
-        <div class="action-buttons" style="grid-template-columns: 1fr 1fr; margin-top:8px;">
-          <button class="btn btn-ramsey" id="btn-analyze-ramsey" onclick="startRamseyIterative()" disabled>Análisis estructural</button>
-          <button class="btn btn-ramsey" id="btn-stop-analysis" onclick="stopAnyAnalysis()" disabled>⏹ Detener</button>
+      <!-- Modo de análisis (selector único) -->
+      <div class="card">
+        <div class="card-title"><span class="icon">🎮</span> Modo de análisis</div>
+        <select id="analysis-mode" class="select-mode">
+          <option value="stockfish">♟️ Evaluación directa (Stockfish)</option>
+          <option value="ramsey-iterative">🔴 Descubrimiento Ramsey</option>
+          <option value="ramsey-mining">⛏️ Minería Ramsey</option>
+          <option value="ramsey-zk">📜 Certificación ZK</option>
+          <option value="ramsey-poda">✂️ Poda certificada</option>
+        </select>
+        <div class="action-buttons">
+          <button class="btn btn-primary" id="btn-execute-mode" onclick="executeCurrentMode()">▶ Ejecutar</button>
+          <button class="btn" id="btn-stop-action" onclick="stopAnyAnalysis()">⏹ Detener</button>
+          <button class="btn" id="btn-connect-engine" onclick="connectStockfish()">🔌 Conectar SF</button>
         </div>
-        <div style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(248,81,73,0.2);">
-          <div style="font-size:0.72em; color:#404040; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">Herramientas de certificación</div>
-          <div class="action-buttons" style="grid-template-columns: 1fr 1fr 1fr;">
-            <button class="btn btn-secondary" onclick="mineRamseyCluster()">🔴 Minería</button>
-            <button class="btn btn-secondary" onclick="certifyZKProof()">📜 ZK</button>
-            <button class="btn btn-secondary" onclick="applyCertifiedPoda()">✂️ Poda</button>
+        <div id="engine-status-text" style="font-size:11px; margin-top:6px; background:white; border:1px solid #808080; border-top-color:#404040; border-left-color:#404040; padding:3px 6px; font-family:'Courier New',monospace;">Motor: desconectado</div>
+      </div>
+
+      <!-- Parámetros -->
+      <div class="card">
+        <div class="card-title"><span class="icon">⚙️</span> Parámetros RASP</div>
+        <div class="param-grid">
+          <div class="param-item">
+            <div class="param-label">Primo p</div>
+            <div class="param-value" id="param-p">1019</div>
+            <input type="range" class="param-slider" id="slider-p" min="100" max="5000" value="1019">
+          </div>
+          <div class="param-item">
+            <div class="param-label">Cluster k</div>
+            <div class="param-value" id="param-k">5</div>
+            <input type="range" class="param-slider" id="slider-k" min="3" max="10" value="5">
+          </div>
+          <div class="param-item">
+            <div class="param-label">Profundidad d</div>
+            <div class="param-value" id="param-d">4</div>
+            <input type="range" class="param-slider" id="slider-d" min="2" max="8" value="4">
+          </div>
+          <div class="param-item">
+            <div class="param-label">Dificultad</div>
+            <div class="param-value" id="param-diff">--</div>
+          </div>
+        </div>
+        <div style="font-size:10px; margin-top:4px; font-family:'Courier New',monospace;">
+          Hash h_p: <span id="param-hash">--</span> | Cliques: <span id="param-cliques">0</span>
+        </div>
+      </div>
+
+      <!-- Pestañas -->
+      <div class="tab-container">
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="pv" onclick="switchTab('pv')">📈 Líneas</button>
+          <button class="tab-btn" data-tab="ramsey-tab" onclick="switchTab('ramsey-tab')">🕸️ Clusters</button>
+          <button class="tab-btn" data-tab="log" onclick="switchTab('log')">📝 Log</button>
+        </div>
+        <div class="tab-content">
+          <div class="tab-pane active-pane" id="tab-pv">
+            <div id="pv-lines" class="pv-lines" style="max-height:220px;">
+              <div class="pv-line" style="color:#404040; text-align:center; padding:20px;">— Inicie análisis —</div>
+            </div>
+          </div>
+          <div class="tab-pane" id="tab-ramsey-tab">
+            <div id="cluster-grid" class="cluster-grid" style="min-height:120px;"></div>
+            <div style="margin-top:8px;">
+              <button class="btn" id="mine-cluster-btn" onclick="mineRamseyCluster()" style="width:100%">🔍 Forzar minería</button>
+            </div>
+          </div>
+          <div class="tab-pane" id="tab-log">
+            <div id="system-log" class="system-log" style="height:180px; overflow-y:auto;"></div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="card">
-      <div class="card-title"><span class="icon">📈</span> Líneas de Análisis (MultiPV)</div>
-      <div class="pv-lines" id="pv-lines">
-        <div class="pv-line" style="color:#404040; text-align:center; padding:20px;">
-          Inicie el análisis para ver líneas principales
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title"><span class="icon">🕸️</span> Clusters Ramsey Detectados</div>
-      <div class="cluster-grid" id="cluster-grid"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-title"><span class="icon">📝</span> Log del Sistema</div>
-      <div class="system-log" id="system-log">
-        <div class="log-entry log-info">
-          <span class="log-timestamp">[09:39:00]</span> Sistema RASP-FEN Analyzer v0.2 iniciado
-        </div>
-      </div>
     </div>
   </div>
 </div>
 
 <script>
-
 // ============================================================
-// RASP-FEN ANALYZER v0.2 - Motor de Ajedrez con Certificación Ramsey
+// CONSTANTES Y CONFIGURACIÓN
 // ============================================================
-
 const PIECE_UNICODE = {
   'P':'♙','N':'♘','B':'♗','R':'♖','Q':'♕','K':'♔',
   'p':'♟','n':'♞','b':'♝','r':'♜','q':'♛','k':'♚'
 };
 const PIECE_VALUES = { p:100, n:320, b:330, r:500, q:900, k:20000 };
-
 const PST = {
-  p: [  0,  0,  0,  0,  0,  0,  0,  0,
-       50, 50, 50, 50, 50, 50, 50, 50,
-       10, 10, 20, 30, 30, 20, 10, 10,
-        5,  5, 10, 25, 25, 10,  5,  5,
-        0,  0,  0, 20, 20,  0,  0,  0,
-        5, -5,-10,  0,  0,-10, -5,  5,
-        5, 10, 10,-20,-20, 10, 10,  5,
-        0,  0,  0,  0,  0,  0,  0,  0],
-  n: [-50,-40,-30,-30,-30,-30,-40,-50,
-      -40,-20,  0,  0,  0,  0,-20,-40,
-      -30,  0, 10, 15, 15, 10,  0,-30,
-      -30,  5, 15, 20, 20, 15,  5,-30,
-      -30,  0, 15, 20, 20, 15,  0,-30,
-      -30,  5, 10, 15, 15, 10,  5,-30,
-      -40,-20,  0,  5,  5,  0,-20,-40,
-      -50,-40,-30,-30,-30,-30,-40,-50],
-  b: [-20,-10,-10,-10,-10,-10,-10,-20,
-      -10,  0,  0,  0,  0,  0,  0,-10,
-      -10,  0, 10, 10, 10, 10,  0,-10,
-      -10,  5,  5, 10, 10,  5,  5,-10,
-      -10,  0,  5, 10, 10,  5,  0,-10,
-      -10, 10, 10, 10, 10, 10, 10,-10,
-      -10,  5,  0,  0,  0,  0,  5,-10,
-      -20,-10,-10,-10,-10,-10,-10,-20],
-  r: [  0,  0,  0,  5,  5,  0,  0,  0,
-        5, 10, 10, 10, 10, 10, 10,  5,
-       -5,  0,  0,  0,  0,  0,  0, -5,
-       -5,  0,  0,  0,  0,  0,  0, -5,
-       -5,  0,  0,  0,  0,  0,  0, -5,
-       -5,  0,  0,  0,  0,  0,  0, -5,
-       -5,  0,  0,  0,  0,  0,  0, -5,
-        0,  0,  0,  0,  0,  0,  0,  0],
-  q: [-20,-10,-10, -5, -5,-10,-10,-20,
-      -10,  0,  0,  0,  0,  0,  0,-10,
-      -10,  0,  5,  5,  5,  5,  0,-10,
-       -5,  0,  5,  5,  5,  5,  0, -5,
-        0,  0,  5,  5,  5,  5,  0, -5,
-      -10,  5,  5,  5,  5,  5,  0,-10,
-      -10,  0,  5,  0,  0,  0,  0,-10,
-      -20,-10,-10, -5, -5,-10,-10,-20],
-  k: [-30,-40,-40,-50,-50,-40,-40,-30,
-      -30,-40,-40,-50,-50,-40,-40,-30,
-      -30,-40,-40,-50,-50,-40,-40,-30,
-      -30,-40,-40,-50,-50,-40,-40,-30,
-      -20,-30,-30,-40,-40,-30,-30,-20,
-      -10,-20,-20,-20,-20,-20,-20,-10,
-       20, 20,  0,  0,  0,  0, 20, 20,
-       20, 30, 10,  0,  0, 10, 30, 20]
+  p: [  0,  0,  0,  0,  0,  0,  0,  0, 50, 50, 50, 50, 50, 50, 50, 50, 10, 10, 20, 30, 30, 20, 10, 10, 5,  5, 10, 25, 25, 10,  5,  5, 0,  0,  0, 20, 20,  0,  0,  0, 5, -5,-10,  0,  0,-10, -5,  5, 5, 10, 10,-20,-20, 10, 10,  5, 0,  0,  0,  0,  0,  0,  0,  0],
+  n: [-50,-40,-30,-30,-30,-30,-40,-50, -40,-20,  0,  0,  0,  0,-20,-40, -30,  0, 10, 15, 15, 10,  0,-30, -30,  5, 15, 20, 20, 15,  5,-30, -30,  0, 15, 20, 20, 15,  0,-30, -30,  5, 10, 15, 15, 10,  5,-30, -40,-20,  0,  5,  5,  0,-20,-40, -50,-40,-30,-30,-30,-30,-40,-50],
+  b: [-20,-10,-10,-10,-10,-10,-10,-20, -10,  0,  0,  0,  0,  0,  0,-10, -10,  0, 10, 10, 10, 10,  0,-10, -10,  5,  5, 10, 10,  5,  5,-10, -10,  0,  5, 10, 10,  5,  0,-10, -10, 10, 10, 10, 10, 10, 10,-10, -10,  5,  0,  0,  0,  0,  5,-10, -20,-10,-10,-10,-10,-10,-10,-20],
+  r: [  0,  0,  0,  5,  5,  0,  0,  0, 5, 10, 10, 10, 10, 10, 10,  5, -5,  0,  0,  0,  0,  0,  0, -5, -5,  0,  0,  0,  0,  0,  0, -5, -5,  0,  0,  0,  0,  0,  0, -5, -5,  0,  0,  0,  0,  0,  0, -5, -5,  0,  0,  0,  0,  0,  0, -5,  0,  0,  0,  0,  0,  0,  0,  0],
+  q: [-20,-10,-10, -5, -5,-10,-10,-20, -10,  0,  0,  0,  0,  0,  0,-10, -10,  0,  5,  5,  5,  5,  0,-10, -5,  0,  5,  5,  5,  5,  0, -5, 0,  0,  5,  5,  5,  5,  0, -5, -10,  5,  5,  5,  5,  5,  0,-10, -10,  0,  5,  0,  0,  0,  0,-10, -20,-10,-10, -5, -5,-10,-10,-20],
+  k: [-30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -20,-30,-30,-40,-40,-30,-30,-20, -10,-20,-20,-20,-20,-20,-20,-10,  20, 20,  0,  0,  0,  0, 20, 20,  20, 30, 10,  0,  0, 10, 30, 20]
 };
 
 let currentBoard = [];
@@ -775,9 +762,9 @@ let fullmoveNumber = 1;
 let params = { p: 1019, k: 5, d: 4 };
 
 // ============================================================
-// MAQUINA DE ESTADO UNICA — activeMode es la unica fuente de verdad
+// MAQUINA DE ESTADO UNICA
 // ============================================================
-let activeMode = 'idle'; // 'idle' | 'stockfish' | 'ramsey-iterative' | 'ramsey-mining' | 'ramsey-zk' | 'ramsey-poda'
+let activeMode = 'idle';
 const MODE_LABELS = {
   'idle': 'Standby',
   'stockfish': 'Stockfish',
@@ -787,25 +774,28 @@ const MODE_LABELS = {
   'ramsey-poda': 'Poda Certificada'
 };
 
-// --- Estado por modo (aislado) ---
 const state = {
   stockfish: { isConnected: false, worker: null, blobURL: null, busy: false, lastStats: {} },
   ramsey:    { mining: false, interval: null, bestFEN: null, bestScore: -Infinity, overlays: false, lastResult: null, lastEscape: null, certifiedClusters: [], pendingCluster: null }
 };
 
-const FEN_PRESETS = {
-  start: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-  sicilian: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2',
-  spanish: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3',
-  friedliver: 'r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4',
-  endgame: '8/8/8/3k4/4r3/8/4K3/8 w - - 0 1',
-  puzzle: 'r1bqk2r/pppp1ppp/2n2n2/4p3/1bB1P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 6 5'
-};
+let chess = null; // chess.js instance for Ramsey iterative
 
+// ============================================================
+// PGN ESTADO
+// ============================================================
+let pgnGame = null;
+let pgnCurrentMove = -1;
+let chessPGN = null;
+
+// ============================================================
+// HELPERS
+// ============================================================
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
 function log(msg, type = 'info') {
   const logArea = document.getElementById('system-log');
+  if (!logArea) return;
   const entry = document.createElement('div');
   entry.className = 'log-entry log-' + type;
   const time = new Date().toLocaleTimeString('es-AR', { hour12: false });
@@ -814,80 +804,53 @@ function log(msg, type = 'info') {
   logArea.scrollTop = logArea.scrollHeight;
 }
 
-function init() {
-  parseFEN(document.getElementById('fen-input').value);
-  renderBoardSVG();
-  setupSliders();
-  updateParamsDisplay();
-  log('Sistema RASP-FEN Analyzer v0.2 listo', 'info');
-  log('Motor adaptativo con certificación Ramsey-Primo activado', 'ramsey');
-
-  document.getElementById('pgn-file').addEventListener('change', function(e) {
-    if (e.target.files.length > 0) handlePGNFile(e.target.files[0]);
-  });
-}
-
-function loadFEN(preset) {
-  const fen = FEN_PRESETS[preset] || FEN_PRESETS.start;
-  document.getElementById('fen-input').value = fen;
-  parseFEN(fen);
-  renderBoardSVG();
-  clearHighlights();
-  updateHashDisplay();
-  updateEvaluation(evaluateBoard(), getSignature(evaluateBoard()));
-  log(`Posición cargada: ${preset}`, 'info');
-  document.getElementById('btn-load-fen').disabled = true;
-  document.getElementById('fen-status').textContent = '';
-}
-
-function loadCustomFEN() {
-  const fen = document.getElementById('fen-input').value.trim();
-  if (!fen) { log('FEN vacío', 'warn'); return; }
-  if (parseFEN(fen)) {
-    renderBoardSVG();
-    clearHighlights();
-    updateHashDisplay();
-    updateEvaluation(evaluateBoard(), getSignature(evaluateBoard()));
-    log('FEN cargado manualmente', 'success');
-    document.getElementById('btn-load-fen').disabled = true;
-    document.getElementById('fen-status').textContent = '';
-  } else {
-    log('No se pudo cargar el FEN', 'warn');
-  }
-}
-
-// --- PARSING FEN ---
-function parseFEN(fen) {
-  const parts = fen.trim().split(/\s+/);
-  if (parts.length < 4) { log('FEN inválido: mínimo 4 campos', 'warn'); return false; }
-
-  currentBoard = [];
-  const ranks = parts[0].split('/');
-  for (const rank of ranks) {
-    for (const char of rank) {
-      if (/\d/.test(char)) {
-        for (let i = 0; i < parseInt(char); i++) currentBoard.push(' ');
-      } else {
-        currentBoard.push(char);
-      }
-    }
-  }
-
-  if (currentBoard.length !== 64) {
-    log(`Error: ${currentBoard.length} casillas (esperadas 64)`, 'warn');
+// ============================================================
+// MAQUINA DE ESTADO — canStart / enterMode / exitMode
+// ============================================================
+function canStart(mode) {
+  if (activeMode === 'idle') return true;
+  if (activeMode === mode) {
+    log(`${MODE_LABELS[mode]} ya esta activo`, 'warn');
     return false;
   }
+  log(`No se puede iniciar ${MODE_LABELS[mode]}: ${MODE_LABELS[activeMode]} esta ocupando el laboratorio`, 'warn');
+  return false;
+}
 
-  isWhiteToMove = parts[1] === 'w';
-  castlingRights = { w: { K: false, Q: false }, b: { k: false, q: false } };
-  if (parts[2] !== '-') {
-    for (const c of parts[2]) {
-      if (c === 'K') castlingRights.w.K = true;
-      if (c === 'Q') castlingRights.w.Q = true;
-      if (c === 'k') castlingRights.b.k = true;
-      if (c === 'q') castlingRights.b.q = true;
+function enterMode(mode) {
+  activeMode = mode;
+  document.getElementById('status-engine').textContent = `Engine: ${MODE_LABELS[mode]}`;
+  document.getElementById('status-engine').classList.add('active');
+  log(`${MODE_LABELS[mode]} iniciado`, mode.startsWith('ramsey') ? 'ramsey' : 'info');
+}
+
+function exitMode() {
+  const prev = activeMode;
+  activeMode = 'idle';
+  document.getElementById('btn-connect-engine').disabled = false;
+  document.getElementById('status-engine').textContent = 'Engine: Standby';
+  document.getElementById('status-engine').classList.remove('active');
+  document.getElementById('status-ramsey').classList.remove('active', 'certified');
+  if (prev !== 'idle') log(`${MODE_LABELS[prev]} finalizado`, 'info');
+}
+
+// ============================================================
+// PARSING FEN
+// ============================================================
+function parseFEN(fen) {
+  const parts = fen.split(' ');
+  if (parts.length < 6) { log('FEN invalido', 'warn'); return false; }
+  currentBoard = Array(64).fill(' ');
+  const rows = parts[0].split('/');
+  for (let row = 0; row < 8; row++) {
+    let col = 0;
+    for (const char of rows[row]) {
+      if (/\d/.test(char)) { col += parseInt(char); }
+      else { currentBoard[(7 - row) * 8 + col] = char; col++; }
     }
   }
+  isWhiteToMove = parts[1] === 'w';
+  castlingRights = { w: { K: parts[2].includes('K'), Q: parts[2].includes('Q') }, b: { k: parts[2].includes('k'), q: parts[2].includes('q') } };
   enPassant = parts[3] === '-' ? null : algebraicToIndex(parts[3]);
   halfmoveClock = parseInt(parts[4]) || 0;
   fullmoveNumber = parseInt(parts[5]) || 1;
@@ -903,24 +866,23 @@ function algebraicToIndex(alg) {
   return (8 - parseInt(alg[1])) * 8 + (alg.charCodeAt(0) - 'a'.charCodeAt(0));
 }
 
-// --- RENDERIZADO SVG ---
+// ============================================================
+// RENDERIZADO SVG
+// ============================================================
 function renderBoardSVG() {
   const svg = document.getElementById('chessboard-svg');
   const sq = 50;
   let content = '';
-
   for (let i = 0; i < 8; i++) {
     content += `<text x="${i * sq + 5}" y="395" class="coord-text">${'abcdefgh'[i]}</text>`;
     content += `<text x="2" y="${i * sq + 15}" class="coord-text">${8 - i}</text>`;
   }
-
   for (let rank = 0; rank < 8; rank++) {
     for (let file = 0; file < 8; file++) {
       const idx = rank * 8 + file;
       const x = file * sq, y = rank * sq;
       const cls = ((rank + file) % 2 === 0) ? 'square-light' : 'square-dark';
       content += `<rect x="${x}" y="${y}" width="${sq}" height="${sq}" class="${cls}" id="sq-${idx}" />`;
-
       const piece = currentBoard[idx];
       if (piece !== ' ') {
         const unicode = PIECE_UNICODE[piece];
@@ -943,11 +905,15 @@ function clearHighlights() {
   });
 }
 
-// --- EVALUACIÓN DEL MOTOR ---
+// ============================================================
+// EVALUACION DEL MOTOR
+// ============================================================
 function evaluateBoard(board = currentBoard, whiteToMove = isWhiteToMove) {
   let materialScore = 0, positionalScore = 0, mobilityScore = 0;
   let kingSafetyScore = 0, pawnStructureScore = 0;
   const wPieces = [], bPieces = [];
+  const wPawns = [], bPawns = [];
+  let wKingIdx = -1, bKingIdx = -1;
 
   for (let i = 0; i < 64; i++) {
     const p = board[i];
@@ -957,37 +923,23 @@ function evaluateBoard(board = currentBoard, whiteToMove = isWhiteToMove) {
     const val = PIECE_VALUES[piece];
     const sqIdx = isWhite ? (63 - i) : i;
     const pstVal = PST[piece] ? PST[piece][sqIdx] : 0;
-
     if (isWhite) {
       materialScore += val; positionalScore += pstVal;
       wPieces.push({ piece, idx: i });
+      if (piece === 'p') wPawns.push(i);
+      if (piece === 'k') wKingIdx = i;
     } else {
       materialScore -= val; positionalScore -= pstVal;
       bPieces.push({ piece, idx: i });
+      if (piece === 'p') bPawns.push(i);
+      if (piece === 'k') bKingIdx = i;
     }
   }
-
   mobilityScore = (wPieces.length - bPieces.length) * 10;
-
-  const wk = wPieces.find(p => p.piece === 'k');
-  const bk = bPieces.find(p => p.piece === 'k');
-  if (wk) {
-    const dist = Math.abs((wk.idx % 8) - 3.5) + Math.abs(Math.floor(wk.idx / 8) - 3.5);
-    kingSafetyScore -= dist * 15;
-  }
-  if (bk) {
-    const dist = Math.abs((bk.idx % 8) - 3.5) + Math.abs(Math.floor(bk.idx / 8) - 3.5);
-    kingSafetyScore += dist * 15;
-  }
-
-  pawnStructureScore = evaluatePawnStructure(
-    wPieces.filter(p => p.piece === 'p').map(p => p.idx),
-    bPieces.filter(p => p.piece === 'p').map(p => p.idx)
-  );
-
-  const totalScore = materialScore + positionalScore * 0.1 + mobilityScore + 
-                     kingSafetyScore + pawnStructureScore;
-  return whiteToMove ? totalScore / 100 : -totalScore / 100;
+  pawnStructureScore = evaluatePawnStructure(wPawns, bPawns);
+  const clusterBonus = state.ramsey.certifiedClusters.length > 0 ? 0.8 : 1.0;
+  const totalScore = (materialScore + positionalScore + mobilityScore + kingSafetyScore + pawnStructureScore) * clusterBonus / 100;
+  return whiteToMove ? totalScore : -totalScore;
 }
 
 function evaluatePawnStructure(wPawns, bPawns) {
@@ -1014,12 +966,12 @@ function getSignature(evalScore) {
   return { label: 'INCIERTA', class: 'sig-unclear', value: null };
 }
 
-// --- HASH POSICIONAL h_p SOBRE F_p ---
+// ============================================================
+// HASH POSICIONAL
+// ============================================================
 function hashPosition(p, board) {
   let h = 0n;
   const Fp = BigInt(p);
-
-  // Material balance con pesos posicionales
   for (let i = 0; i < 64; i++) {
     const piece = board[i];
     if (piece === ' ') continue;
@@ -1028,8 +980,6 @@ function hashPosition(p, board) {
     const posWeight = BigInt((i + 1) * (i % 8 + 1));
     h = (h + sign * val * posWeight) % Fp;
   }
-
-  // Estructura de peones
   let pawnHash = 0n;
   for (let file = 0; file < 8; file++) {
     let fileVal = 0n;
@@ -1043,8 +993,6 @@ function hashPosition(p, board) {
     pawnHash = (pawnHash + fileVal * BigInt(file + 1)) % Fp;
   }
   h = (h + pawnHash * 1000n) % Fp;
-
-  // Seguridad del rey
   const wkIdx = board.indexOf('K');
   const bkIdx = board.indexOf('k');
   if (wkIdx !== -1) {
@@ -1055,19 +1003,18 @@ function hashPosition(p, board) {
     const dist = Math.abs((bkIdx % 8) - 3.5) + Math.abs(Math.floor(bkIdx / 8) - 3.5);
     h = (h + BigInt(Math.round(dist * 50))) % Fp;
   }
-
-  // Derechos de enroque como semilla
   let castleSeed = 0;
   if (castlingRights.w.K) castleSeed += 1;
   if (castlingRights.w.Q) castleSeed += 2;
   if (castlingRights.b.k) castleSeed += 4;
   if (castlingRights.b.q) castleSeed += 8;
   h = (h + BigInt(castleSeed * 13)) % Fp;
-
   return Number(((h % Fp) + Fp) % Fp);
 }
 
-// --- GRAFO DE PALEY G(p) ---
+// ============================================================
+// GRAFO DE PALEY
+// ============================================================
 function isQuadraticResidue(a, p) {
   if (a === 0) return false;
   const exp = BigInt((p - 1) / 2);
@@ -1086,88 +1033,78 @@ function buildPaleyAdjacency(p) {
   for (let i = 0; i < p; i++) {
     for (let j = i + 1; j < p; j++) {
       const diff = ((j - i) % p + p) % p;
-      if (isQuadraticResidue(diff, p)) {
-        adj[i].add(j);
-        adj[j].add(i);
-      }
+      if (isQuadraticResidue(diff, p)) { adj[i].add(j); adj[j].add(i); }
     }
   }
   return adj;
 }
 
-function findMaxClique(adj, vertices, minSize) {
-  const result = [];
-  const V = [...vertices].sort((a, b) => a - b);
+function findMaxClique(adj, candidates, k) {
+  if (k <= 0) return [];
+  const cliques = findCliques(adj, k);
+  return cliques.length > 0 ? cliques[0] : null;
+}
 
-  function bk(R, P, X) {
+function findCliques(G, k) {
+  const cliques = [];
+  const V = G.map((_, i) => i);
+  function bronKerbosch(R, P, X) {
     if (P.length === 0 && X.length === 0) {
-      if (R.length >= minSize) result.push([...R]);
+      if (R.length >= k) cliques.push([...R]);
       return;
     }
-    const union = [...P, ...X];
-    let u = union[0], maxDeg = adj[u] ? adj[u].size : 0;
-    for (const v of union) {
-      if (adj[v] && adj[v].size > maxDeg) { u = v; maxDeg = adj[v].size; }
-    }
-    const candidates = P.filter(v => !adj[u] || !adj[u].has(v));
-    for (const v of candidates) {
-      const newR = [...R, v];
-      const newP = P.filter(w => adj[v] && adj[v].has(w));
-      const newX = X.filter(w => adj[v] && adj[v].has(w));
-      bk(newR, newP, newX);
-      P = P.filter(w => w !== v);
+    const u = [...P, ...X].reduce((max, v) => G[v].size > G[max].size ? v : max, [...P, ...X][0] || 0);
+    const uNeighbors = new Set(G[u]);
+    const Pu = P.filter(v => !uNeighbors.has(v));
+    for (const v of Pu) {
+      const neighbors = new Set(G[v]);
+      bronKerbosch([...R, v], P.filter(u => neighbors.has(u)), X.filter(u => neighbors.has(u)));
+      P = P.filter(u => u !== v);
       X.push(v);
     }
   }
-
-  bk([], V, []);
-  return result.length > 0 ? result[0] : null;
+  bronKerbosch([], V, []);
+  return cliques;
 }
 
-// --- GENERADOR DE MOVIMIENTOS ---
-function generateMoves(board, whiteToMove, epSquare) {
+// ============================================================
+// GENERACIÓN DE MOVIMIENTOS (para alpha-beta)
+// ============================================================
+function generateMoves(board, whiteToMove) {
   const moves = [];
-
   for (let i = 0; i < 64; i++) {
     const p = board[i];
     if (p === ' ') continue;
-    if (whiteToMove && p !== p.toUpperCase()) continue;
-    if (!whiteToMove && p === p.toUpperCase()) continue;
-
+    const isWhite = p === p.toUpperCase();
+    if (whiteToMove !== isWhite) continue;
     const piece = p.toLowerCase();
     const from = i;
-
     if (piece === 'p') {
       const dir = whiteToMove ? -8 : 8;
       const startRank = whiteToMove ? 6 : 1;
-
-      const to1 = from + dir;
-      if (to1 >= 0 && to1 < 64 && board[to1] === ' ') {
-        moves.push({ from, to: to1, piece: p, flags: (to1 < 8 || to1 >= 56) ? 'promotion' : '' });
-        if (Math.floor(from / 8) === startRank) {
-          const to2 = from + 2 * dir;
-          if (to2 >= 0 && to2 < 64 && board[to2] === ' ') {
-            moves.push({ from, to: to2, piece: p, flags: 'double' });
-          }
+      const to = from + dir;
+      if (to >= 0 && to < 64 && board[to] === ' ') {
+        moves.push({ from, to, piece: p });
+        if (Math.floor(from / 8) === startRank && board[to + dir] === ' ') {
+          moves.push({ from, to: to + dir, piece: p, flags: 'double' });
         }
       }
-
-      const captures = [dir - 1, dir + 1];
-      for (const cap of captures) {
-        const to = from + cap;
-        if (to < 0 || to >= 64) continue;
-        if (Math.abs((from % 8) - (to % 8)) !== 1) continue;
-
-        if (board[to] !== ' ' && (whiteToMove ? board[to] === board[to].toLowerCase() : board[to] === board[to].toUpperCase())) {
-          moves.push({ from, to, piece: p, capture: board[to], flags: (to < 8 || to >= 56) ? 'promotion' : '' });
+      const capFiles = [from + dir - 1, from + dir + 1];
+      for (const cap of capFiles) {
+        if (cap >= 0 && cap < 64 && Math.abs((from % 8) - (cap % 8)) === 1 && board[cap] !== ' ' && (whiteToMove ? board[cap] === board[cap].toLowerCase() : board[cap] === board[cap].toUpperCase())) {
+          moves.push({ from, to: cap, piece: p, capture: board[cap] });
         }
-        if (epSquare === to && board[to] === ' ') {
-          moves.push({ from, to, piece: p, capture: whiteToMove ? 'p' : 'P', flags: 'enpassant' });
+      }
+      if (enPassant !== null) {
+        const epIdx = enPassant;
+        const epRank = whiteToMove ? 3 : 4;
+        if (Math.floor(from / 8) === epRank && Math.abs((from % 8) - (epIdx % 8)) === 1) {
+          moves.push({ from, to: epIdx, piece: p, flags: 'enpassant', capture: whiteToMove ? 'p' : 'P' });
         }
       }
     }
     else if (piece === 'n') {
-      const offsets = [-17, -15, -10, -6, 6, 10, 15, 17];
+      const offsets = [-17,-15,-10,-6,6,10,15,17];
       for (const off of offsets) {
         const to = from + off;
         if (to < 0 || to >= 64) continue;
@@ -1178,9 +1115,7 @@ function generateMoves(board, whiteToMove, epSquare) {
       }
     }
     else if (piece === 'b' || piece === 'r' || piece === 'q') {
-      const directions = piece === 'b' ? [-9, -7, 7, 9] :
-                        piece === 'r' ? [-8, -1, 1, 8] :
-                        [-9, -8, -7, -1, 1, 7, 8, 9];
+      const directions = piece === 'b' ? [-9,-7,7,9] : piece === 'r' ? [-8,-1,1,8] : [-9,-8,-7,-1,1,7,8,9];
       for (const dir of directions) {
         let to = from + dir;
         while (to >= 0 && to < 64) {
@@ -1201,7 +1136,7 @@ function generateMoves(board, whiteToMove, epSquare) {
       }
     }
     else if (piece === 'k') {
-      const offsets = [-9, -8, -7, -1, 1, 7, 8, 9];
+      const offsets = [-9,-8,-7,-1,1,7,8,9];
       for (const off of offsets) {
         const to = from + off;
         if (to < 0 || to >= 64) continue;
@@ -1210,26 +1145,16 @@ function generateMoves(board, whiteToMove, epSquare) {
           moves.push({ from, to, piece: p, capture: board[to] !== ' ' ? board[to] : null });
         }
       }
-
       if (whiteToMove && from === 60) {
-        if (castlingRights.w.K && board[61] === ' ' && board[62] === ' ') {
-          moves.push({ from, to: 62, piece: p, flags: 'castle-k' });
-        }
-        if (castlingRights.w.Q && board[59] === ' ' && board[58] === ' ' && board[57] === ' ') {
-          moves.push({ from, to: 58, piece: p, flags: 'castle-q' });
-        }
+        if (castlingRights.w.K && board[61] === ' ' && board[62] === ' ') moves.push({ from, to: 62, piece: p, flags: 'castle-k' });
+        if (castlingRights.w.Q && board[59] === ' ' && board[58] === ' ' && board[57] === ' ') moves.push({ from, to: 58, piece: p, flags: 'castle-q' });
       }
       if (!whiteToMove && from === 4) {
-        if (castlingRights.b.k && board[5] === ' ' && board[6] === ' ') {
-          moves.push({ from, to: 6, piece: p, flags: 'castle-k' });
-        }
-        if (castlingRights.b.q && board[3] === ' ' && board[2] === ' ' && board[1] === ' ') {
-          moves.push({ from, to: 2, piece: p, flags: 'castle-q' });
-        }
+        if (castlingRights.b.k && board[5] === ' ' && board[6] === ' ') moves.push({ from, to: 6, piece: p, flags: 'castle-k' });
+        if (castlingRights.b.q && board[3] === ' ' && board[2] === ' ' && board[1] === ' ') moves.push({ from, to: 2, piece: p, flags: 'castle-q' });
       }
     }
   }
-
   return moves;
 }
 
@@ -1237,528 +1162,229 @@ function applyMove(board, move) {
   const newBoard = [...board];
   newBoard[move.to] = move.piece;
   newBoard[move.from] = ' ';
-
-  if (move.flags === 'enpassant') {
-    newBoard[move.to + (move.piece === 'P' ? 8 : -8)] = ' ';
-  }
-  if (move.flags === 'castle-k') {
-    newBoard[move.to - 1] = newBoard[move.to + 1];
-    newBoard[move.to + 1] = ' ';
-  }
-  if (move.flags === 'castle-q') {
-    newBoard[move.to + 1] = newBoard[move.to - 2];
-    newBoard[move.to - 2] = ' ';
-  }
-  if (move.flags === 'promotion') {
-    newBoard[move.to] = move.piece === 'P' ? 'Q' : 'q';
-  }
-
+  if (move.flags === 'enpassant') newBoard[move.to + (move.piece === 'P' ? 8 : -8)] = ' ';
+  if (move.flags === 'castle-k') { newBoard[move.to - 1] = newBoard[move.to + 1]; newBoard[move.to + 1] = ' '; }
+  if (move.flags === 'castle-q') { newBoard[move.to + 1] = newBoard[move.to - 2]; newBoard[move.to - 2] = ' '; }
   return newBoard;
 }
 
-// --- BÚSQUEDA ALPHA-BETA ---
+// ============================================================
+// ALPHA-BETA (archivado — no se usa en UI actual)
+// ============================================================
 function search(board, whiteToMove, depth, alpha, beta) {
-  if (depth === 0) {
-    return { score: evaluateBoard(board, whiteToMove), pv: [] };
-  }
-
+  if (depth === 0) return { score: evaluateBoard(board, whiteToMove), pv: [] };
   const moves = generateMoves(board, whiteToMove);
-  if (moves.length === 0) {
-    return { score: whiteToMove ? -9999 : 9999, pv: [] };
-  }
-
-  // Ordenamiento MVV-LVA
-  moves.sort((a, b) => {
-    if (a.capture && !b.capture) return -1;
-    if (!a.capture && b.capture) return 1;
-    if (a.capture && b.capture) {
-      return PIECE_VALUES[b.capture.toLowerCase()] - PIECE_VALUES[a.capture.toLowerCase()];
-    }
-    return 0;
-  });
-
-  let bestScore = whiteToMove ? -Infinity : Infinity;
-  let bestPv = [];
-  let legalMoves = 0;
-
+  if (moves.length === 0) return { score: evaluateBoard(board, whiteToMove), pv: [] };
+  let best = { score: -Infinity, pv: [] };
   for (const move of moves) {
-    const newBoard = applyMove(board, move);
-    const result = search(newBoard, !whiteToMove, depth - 1, alpha, beta);
-    legalMoves++;
-
-    if (whiteToMove) {
-      if (result.score > bestScore) {
-        bestScore = result.score;
-        bestPv = [move, ...result.pv];
-      }
-      alpha = Math.max(alpha, result.score);
-    } else {
-      if (result.score < bestScore) {
-        bestScore = result.score;
-        bestPv = [move, ...result.pv];
-      }
-      beta = Math.min(beta, result.score);
+    const nextBoard = applyMove(board, move);
+    const result = search(nextBoard, !whiteToMove, depth - 1, -beta, -alpha);
+    const score = -result.score;
+    if (score > best.score) {
+      best = { score, pv: [move, ...result.pv] };
+      alpha = Math.max(alpha, score);
+      if (alpha >= beta) break;
     }
-
-    if (beta <= alpha) break; // Poda
   }
-
-  if (legalMoves === 0) return { score: 0, pv: [] };
-
-  return { score: bestScore, pv: bestPv };
+  return best;
 }
 
 function searchMultiPV(board, whiteToMove, depth, numLines) {
   const lines = [];
-  let alpha = -Infinity, beta = Infinity;
-
-  for (let line = 0; line < numLines; line++) {
-    const result = search(board, whiteToMove, depth, alpha, beta);
-    if (result.pv.length === 0) break;
-
-    lines.push({
-      score: result.score,
-      pv: result.pv,
-      depth: depth,
-      isRamsey: false
-    });
-
-    if (result.pv.length > 0) {
-      alpha = result.score + (whiteToMove ? 0.01 : -0.01);
+  const moves = generateMoves(board, whiteToMove);
+  let alpha = -Infinity;
+  for (let i = 0; i < Math.min(numLines, moves.length); i++) {
+    let bestMove = null, bestScore = -Infinity, bestPV = [];
+    for (const move of moves) {
+      if (lines.some(l => l.pv.length > 0 && l.pv[0].from === move.from && l.pv[0].to === move.to)) continue;
+      const nextBoard = applyMove(board, move);
+      const result = search(nextBoard, !whiteToMove, depth - 1, -Infinity, -alpha);
+      const score = -result.score;
+      if (score > bestScore) { bestScore = score; bestMove = move; bestPV = result.pv; }
     }
+    if (!bestMove) break;
+    lines.push({ score: bestScore, pv: [bestMove, ...bestPV], depth, isRamsey: false });
+    if (bestPV.length > 0) alpha = bestScore + (whiteToMove ? 0.01 : -0.01);
   }
-
   return lines;
 }
 
-// --- ANÁLISIS ADAPTATIVO (ARCHIVADO — no expuesto en UI) ---
 async function startAnalysis() {
   log('Motor Alpha-Beta local archivado. Use Stockfish o Ramsey.', 'warn');
 }
 
+// ============================================================
+// DIFICULTAD
+// ============================================================
+function updateDifficulty() {
+  const n = state.ramsey.certifiedClusters.length;
+  const diffEl = document.getElementById('param-diff');
+  if (!diffEl) return;
+  if (n === 0) { diffEl.textContent = '--'; diffEl.style.color = '#808080'; return; }
+  if (n <= 2) { diffEl.textContent = 'LEVE'; diffEl.style.color = '#008000'; }
+  else if (n <= 5) { diffEl.textContent = 'MODERADA'; diffEl.style.color = '#000080'; }
+  else if (n <= 10) { diffEl.textContent = 'SEVERA'; diffEl.style.color = '#ff8000'; }
+  else { diffEl.textContent = 'CRITICA'; diffEl.style.color = '#800000'; }
+}
+
+// ============================================================
+// UPDATE EVALUACIÓN / HASH
+// ============================================================
 function updateEvaluation(score, sig) {
-  document.getElementById('eval-score').textContent = (score > 0 ? '+' : '') + score.toFixed(2);
-
+  const el = document.getElementById('eval-score');
+  if (el) el.textContent = (score > 0 ? '+' : '') + score.toFixed(2);
   const marker = document.getElementById('eval-marker');
-  const pct = 50 + Math.max(-5, Math.min(5, score)) * 10;
-  marker.style.left = pct + '%';
-
+  if (marker) {
+    const pct = 50 + Math.max(-5, Math.min(5, score)) * 10;
+    marker.style.left = pct + '%';
+  }
   const sigEl = document.getElementById('eval-signature');
-  sigEl.textContent = sig.label;
-  sigEl.className = 'eval-signature ' + sig.class;
-
+  if (sigEl) {
+    sigEl.textContent = sig.label;
+    sigEl.className = 'eval-signature ' + sig.class;
+  }
   updateHashDisplay();
 }
 
 function updateHashDisplay() {
   const h = hashPosition(params.p, currentBoard);
-  document.getElementById('param-hash').textContent = h;
+  const el = document.getElementById('param-hash');
+  if (el) el.textContent = h;
 }
 
-// --- MINERÍA RAMSEY ---
-async function mineRamseyCluster() {
-  if (!canStart('ramsey-mining')) return;
-  enterMode('ramsey-mining');
+// ============================================================
+// PGN
+// ============================================================
+function handlePGNFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => { parsePGN(e.target.result); };
+  reader.readAsText(file);
+}
 
-  document.getElementById('status-ramsey').textContent = 'Ramsey: Minando';
-  document.getElementById('status-ramsey').classList.add('active');
-
-  log(`Iniciando minería Ramsey: p=${params.p}, k=${params.k}, d=${params.d}`, 'ramsey');
-
-  const positions = generateSubtreePositions(params.d);
-  log(`Subárbol generado: ${positions.length} posiciones`, 'info');
-
-  const hashedPositions = positions.map(pos => {
-    const h = hashPosition(params.p, pos.board);
-    const evalScore = evaluateBoard(pos.board, pos.whiteToMove);
-    const sig = getSignature(evalScore);
-    return { ...pos, hash: h, eval: evalScore, sig: sig.value, sigLabel: sig.label };
-  });
-
-  const bySig = {};
-  for (const hp of hashedPositions) {
-    if (hp.sig === null) continue;
-    if (!bySig[hp.sig]) bySig[hp.sig] = [];
-    bySig[hp.sig].push(hp);
+function parsePGN(text) {
+  const clean = text.replace(/\{[^}]*\}/g, '').replace(/\([^)]*\)/g, '');
+  const headers = {};
+  const headerMatches = text.match(/\[([^\s"]+)\s+"([^"]*)"\]/g);
+  if (headerMatches) {
+    headerMatches.forEach(h => {
+      const m = h.match(/\[([^\s"]+)\s+"([^"]*)"\]/);
+      if (m) headers[m[1]] = m[2];
+    });
   }
-
-  log(`Distribución: ${Object.entries(bySig).map(([k,v]) => `${k}:${v.length}`).join(', ')}`, 'info');
-
-  const adj = buildPaleyAdjacency(params.p);
-  let foundCluster = null;
-
-  for (const [sig, group] of Object.entries(bySig)) {
-    if (group.length < params.k) continue;
-    const vertices = group.map(g => g.hash);
-    log(`Buscando clique k=${params.k} en firma ${sig} (${vertices.length} vértices)...`, 'info');
-
-    await sleep(500);
-
-    const clique = findMaxClique(adj, vertices, params.k);
-    if (clique) {
-      foundCluster = {
-        signature: parseInt(sig),
-        clique: clique,
-        positions: group.filter(g => clique.includes(g.hash)),
-        p: params.p,
-        k: params.k,
-        d: params.d,
-        timestamp: Date.now()
-      };
-      break;
-    }
+  let moveText = clean.replace(/\[.*?\]/g, '').replace(/\r?\n/g, ' ').trim();
+  moveText = moveText.replace(/\s*(1-0|0-1|1\/2-1\/2|\*)\s*$/, '');
+  const moves = [];
+  const tokens = moveText.split(/\s+/);
+  for (const token of tokens) {
+    if (/^\d+\./.test(token)) continue;
+    if (token && !/^\d+$/.test(token)) moves.push(token);
   }
+  pgnGame = { headers, moves };
+  pgnCurrentMove = -1;
+  chessPGN = new Chess();
+  const infoEl = document.getElementById('pgn-info');
+  if (infoEl) infoEl.textContent = `${headers.White || '?'} vs ${headers.Black || '?'} | ${moves.length} jugadas`;
+  updatePGNDisplay();
+  loadPGNPosition();
+  log(`PGN cargado: ${moves.length} jugadas`, 'success');
+}
 
-  const clusterGrid = document.getElementById('cluster-grid');
-  clusterGrid.innerHTML = '';
-
-  if (foundCluster) {
-    log(`✅ CLUSTER RAMSEY: |C|=${foundCluster.clique.length}, firma=${foundCluster.signature}`, 'ramsey');
-
-    for (let i = 0; i < Math.min(10, foundCluster.clique.length); i++) {
-      const node = document.createElement('div');
-      node.className = 'cluster-node' + (i < params.k ? ' active' : '');
-      const pos = foundCluster.positions[i];
-      node.innerHTML = `
-        <div class="node-hash">${foundCluster.clique[i].toString(16).substring(0,6)}</div>
-        <div class="node-sig" style="color:${pos?.sig > 0 ? '#3fb950' : pos?.sig < 0 ? '#f85149' : '#d29922'}">${pos?.sigLabel?.charAt(0) || '?'}</div>
-      `;
-      clusterGrid.appendChild(node);
-    }
-
-    state.ramsey.pendingCluster = foundCluster;
-
+function loadPGNPosition() {
+  if (!chessPGN) return;
+  const fen = chessPGN.fen();
+  document.getElementById('fen-input').value = fen;
+  if (parseFEN(fen)) {
+    renderBoardSVG();
     clearHighlights();
-    for (const pos of foundCluster.positions.slice(0, 3)) {
-      if (pos.lastMove) highlightSquare(pos.lastMove.to, 'ramsey');
-    }
-  } else {
-    log(`❌ No se encontró cluster de tamaño ≥${params.k}`, 'warn');
-    for (let i = 0; i < 10; i++) {
-      const node = document.createElement('div');
-      node.className = 'cluster-node';
-      node.innerHTML = '<div style="color:#808080">—</div>';
-      clusterGrid.appendChild(node);
-    }
-  }
-
-  document.getElementById('status-ramsey').textContent = foundCluster ? 'Ramsey: Cluster encontrado' : 'Ramsey: Inactivo';
-  document.getElementById('status-ramsey').classList.remove('active');
-  if (foundCluster) document.getElementById('status-ramsey').classList.add('certified');
-
-  exitMode();
-}
-
-function generateSubtreePositions(depth) {
-  const positions = [];
-  const maxPositions = Math.min(80, 15 * depth);
-
-  for (let i = 0; i < maxPositions; i++) {
-    let tempBoard = [...currentBoard];
-    let tempWhiteToMove = isWhiteToMove;
-    let lastMove = null;
-    let valid = true;
-
-    for (let moveNum = 0; moveNum < depth; moveNum++) {
-      const moves = generateMoves(tempBoard, tempWhiteToMove);
-      if (moves.length === 0) { valid = false; break; }
-
-      const captureMoves = moves.filter(m => m.capture);
-      const selectedMove = captureMoves.length > 0 && Math.random() < 0.3 
-        ? captureMoves[Math.floor(Math.random() * captureMoves.length)]
-        : moves[Math.floor(Math.random() * moves.length)];
-
-      tempBoard = applyMove(tempBoard, selectedMove);
-      lastMove = selectedMove;
-      tempWhiteToMove = !tempWhiteToMove;
-    }
-
-    if (valid) {
-      positions.push({ board: tempBoard, whiteToMove: tempWhiteToMove, lastMove });
-    }
-  }
-
-  return positions;
-}
-
-// --- CERTIFICACIÓN ZK-PROOF ---
-function certifyZKProof() {
-  if (!canStart('ramsey-zk')) return;
-  if (!state.ramsey.pendingCluster) {
-    log('No hay cluster pendiente. Mine primero.', 'warn');
-    return;
-  }
-
-  enterMode('ramsey-zk');
-  const cluster = state.ramsey.pendingCluster;
-  log('Construyendo ZK-Proof de reducción estratégica...', 'ramsey');
-
-  const proof = {
-    type: 'ZK-RAMSEY-REDUCTION',
-    p: cluster.p,
-    k: cluster.k,
-    d: cluster.d,
-    signature: cluster.signature,
-    cliqueHash: hashClique(cluster.clique, cluster.p),
-    reductionRoot: merkleRoot(cluster.positions.map(p => JSON.stringify(p.board))),
-    timestamp: Date.now(),
-    nonce: Math.floor(Math.random() * 1e9)
-  };
-
-  const verified = verifyProof(proof, cluster);
-
-  if (verified) {
-    proof.status = 'CERTIFIED';
-    state.ramsey.certifiedClusters.push({ ...cluster, proof });
-    log(`📜 ZK-PROOF CERTIFICADA: ${proof.cliqueHash}`, 'ramsey');
-    log(`   Reducción anclada a ${cluster.positions.length} posiciones`, 'success');
-    updateDifficulty();
-    document.getElementById('param-cliques').textContent = state.ramsey.certifiedClusters.length;
-  } else {
-    log('❌ Verificación ZK fallida', 'warn');
-  }
-  exitMode();
-}
-
-function hashClique(clique, p) {
-  let h = 0;
-  for (const v of clique.sort((a,b) => a - b)) {
-    h = (h * 31 + v) % p;
-  }
-  return h.toString(16).padStart(8, '0');
-}
-
-function merkleRoot(items) {
-  if (items.length === 0) return '0';
-  let hashes = items.map(s => {
-    let h = 0;
-    for (let i = 0; i < s.length; i++) {
-      h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-    }
-    return Math.abs(h).toString(16);
-  });
-  while (hashes.length > 1) {
-    const next = [];
-    for (let i = 0; i < hashes.length; i += 2) {
-      const combined = hashes[i] + (hashes[i+1] || hashes[i]);
-      let h = 0;
-      for (let j = 0; j < combined.length; j++) {
-        h = ((h << 5) - h + combined.charCodeAt(j)) | 0;
-      }
-      next.push(Math.abs(h).toString(16));
-    }
-    hashes = next;
-  }
-  return hashes[0];
-}
-
-function verifyProof(proof, cluster) {
-  const cliqueRecomputed = hashClique(cluster.clique, cluster.p);
-  const paramsValid = proof.p === cluster.p && proof.k === cluster.k && proof.d === cluster.d;
-  const hashValid = proof.cliqueHash === cliqueRecomputed;
-  const sizeValid = cluster.clique.length >= cluster.k;
-  return paramsValid && hashValid && sizeValid;
-}
-
-// --- APLICAR PODA CERTIFICADA ---
-function applyCertifiedPoda() {
-  if (!canStart('ramsey-poda')) return;
-  if (state.ramsey.certifiedClusters.length === 0) {
-    log('No hay clusters certificados para poda.', 'warn');
-    return;
-  }
-
-  enterMode('ramsey-poda');
-  const currentHash = hashPosition(params.p, currentBoard);
-  const currentEval = evaluateBoard();
-  const currentSig = getSignature(currentEval).value;
-
-  let appliedCluster = null;
-  for (const cc of state.ramsey.certifiedClusters) {
-    if (cc.clique.includes(currentHash) && cc.signature === currentSig) {
-      appliedCluster = cc;
-      break;
-    }
-  }
-
-  if (appliedCluster) {
-    log(`✂️ PODA CERTIFICADA APLICADA`, 'ramsey');
-    log(`   Firma: ${appliedCluster.signature > 0 ? 'GANA BLANCAS' : 'GANA NEGRAS'}`, 'success');
-    log(`   Cluster: ${appliedCluster.proof.cliqueHash}`, 'info');
-
-    clearHighlights();
-    for (let i = 0; i < 64; i++) {
-      const sqHash = hashPosition(params.p, simulatePositionAt(i));
-      if (appliedCluster.clique.includes(sqHash)) {
-        highlightSquare(i, 'ramsey');
-      }
-    }
-  } else {
-    log('ℹ️ Posición actual no en cluster certificado. Exploración normal.', 'info');
-  }
-  exitMode();
-}
-
-function simulatePositionAt(idx) {
-  // Simular posición con pieza en casilla idx movida
-  const sim = [...currentBoard];
-  if (sim[idx] !== ' ') {
-    // Movimiento simulado simple
-    const targets = [idx - 8, idx - 7, idx - 9, idx + 8, idx + 7, idx + 9].filter(t => t >= 0 && t < 64);
-    if (targets.length > 0) {
-      const target = targets[0];
-      sim[target] = sim[idx];
-      sim[idx] = ' ';
-    }
-  }
-  return sim;
-}
-
-// --- SLIDERS Y CONTROLES ---
-function setupSliders() {
-  document.getElementById('slider-p').oninput = function() {
-    params.p = nextPrime(parseInt(this.value));
-    this.value = params.p;
-    document.getElementById('param-p').textContent = params.p;
     updateHashDisplay();
-    updateDifficulty();
-  };
+    updateEvaluation(evaluateBoard(), getSignature(evaluateBoard()));
+  }
+}
 
-  document.getElementById('slider-k').oninput = function() {
-    params.k = parseInt(this.value);
-    document.getElementById('param-k').textContent = params.k;
-    updateDifficulty();
-  };
+function pgnFirst() { if (!pgnGame) return; chessPGN = new Chess(); pgnCurrentMove = -1; loadPGNPosition(); updatePGNDisplay(); }
+function pgnPrev() { if (!pgnGame || pgnCurrentMove < 0) return; chessPGN.undo(); pgnCurrentMove--; loadPGNPosition(); updatePGNDisplay(); }
+function pgnNext() { if (!pgnGame || pgnCurrentMove >= pgnGame.moves.length - 1) return; chessPGN.move(pgnGame.moves[pgnCurrentMove + 1]); pgnCurrentMove++; loadPGNPosition(); updatePGNDisplay(); }
+function pgnLast() { if (!pgnGame) return; chessPGN = new Chess(); for (let i = 0; i < pgnGame.moves.length; i++) chessPGN.move(pgnGame.moves[i]); pgnCurrentMove = pgnGame.moves.length - 1; loadPGNPosition(); updatePGNDisplay(); }
 
-  document.getElementById('slider-d').oninput = function() {
-    params.d = parseInt(this.value);
-    document.getElementById('param-d').textContent = params.d;
-    updateDifficulty();
-  };
+function updatePGNDisplay() {
+  const el = document.getElementById('pgn-move-display');
+  if (!el) return;
+  if (!pgnGame) { el.textContent = '--'; return; }
+  if (pgnCurrentMove < 0) { el.textContent = 'Pos. inicial'; return; }
+  const move = pgnGame.moves[pgnCurrentMove];
+  const num = Math.floor(pgnCurrentMove / 2) + 1;
+  const isWhite = pgnCurrentMove % 2 === 0;
+  el.textContent = `${num}.${isWhite ? '' : '...'} ${move} (${pgnCurrentMove + 1}/${pgnGame.moves.length})`;
+}
 
-  document.getElementById('fen-input').oninput = function() {
-    document.getElementById('btn-load-fen').disabled = false;
-    document.getElementById('fen-status').textContent = 'Pegado detectado — presione Cargar FEN para aplicar';
-  };
+// ============================================================
+// CARGA FEN
+// ============================================================
+function loadCustomFEN() {
+  const fen = document.getElementById('fen-input').value.trim();
+  if (!fen) { log('FEN vacio', 'warn'); return; }
+  if (parseFEN(fen)) {
+    renderBoardSVG();
+    clearHighlights();
+    updateHashDisplay();
+    updateEvaluation(evaluateBoard(), getSignature(evaluateBoard()));
+    log('FEN cargado manualmente', 'success');
+    const btn = document.getElementById('btn-load-fen');
+    if (btn) btn.disabled = true;
+    const status = document.getElementById('fen-status');
+    if (status) status.textContent = '';
+    const titleShort = document.getElementById('title-fen-short');
+    if (titleShort) titleShort.textContent = fen.substring(0, 30) + '...';
+  } else {
+    log('No se pudo cargar el FEN', 'warn');
+  }
+}
 
-  document.getElementById('fen-input').onpaste = function() {
-    document.getElementById('btn-load-fen').disabled = false;
-    document.getElementById('fen-status').textContent = 'Pegado detectado — presione Cargar FEN para aplicar';
-  };
+function loadFEN(preset) {
+  const fen = FEN_PRESETS[preset] || FEN_PRESETS.start;
+  const input = document.getElementById('fen-input');
+  if (input) input.value = fen;
+  if (parseFEN(fen)) {
+    renderBoardSVG();
+    clearHighlights();
+    updateHashDisplay();
+    updateEvaluation(evaluateBoard(), getSignature(evaluateBoard()));
+    log(`Posicion cargada: ${preset}`, 'info');
+    const btn = document.getElementById('btn-load-fen');
+    if (btn) btn.disabled = true;
+    const status = document.getElementById('fen-status');
+    if (status) status.textContent = '';
+    const titleShort = document.getElementById('title-fen-short');
+    if (titleShort) titleShort.textContent = preset;
+  }
+}
 
-  document.getElementById('fen-input').onchange = function() {
-    if (parseFEN(this.value)) {
-      renderBoardSVG();
-      clearHighlights();
-      updateHashDisplay();
-      updateEvaluation(evaluateBoard(), getSignature(evaluateBoard()));
-      log('FEN actualizado manualmente', 'info');
+const FEN_PRESETS = {
+  start: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+  sicilian: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2',
+  spanish: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3',
+  friedliver: 'r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4',
+  endgame: '8/8/8/3k4/4r3/8/4K3/8 w - - 0 1',
+  puzzle: 'r1bqk2r/pppp1ppp/2n2n2/4p3/1bB1P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 6 5'
+};
+
+// ============================================================
+// RAMSEY — funciones de soporte
+// ============================================================
+function parseFENtoBoardArr(fen) {
+  const [position] = fen.split(' ');
+  const rows = position.split('/');
+  const boardArr = Array(8).fill().map(() => Array(8).fill(null));
+  for (let row = 0; row < 8; row++) {
+    let col = 0;
+    const actualRow = 7 - row;
+    for (const char of rows[row]) {
+      if (/\d/.test(char)) col += parseInt(char);
+      else { boardArr[actualRow][col] = char; col++; }
     }
-  };
-}
-
-function updateParamsDisplay() {
-  document.getElementById('param-p').textContent = params.p;
-  document.getElementById('param-k').textContent = params.k;
-  document.getElementById('param-d').textContent = params.d;
-  updateDifficulty();
-  updateHashDisplay();
-}
-
-function updateDifficulty() {
-  const p = params.p;
-  const k = params.k;
-  const d = params.d;
-  const baseDiff = Math.log(p) * k * Math.pow(2, d);
-  const clusterBonus = state.ramsey.certifiedClusters.length > 0 ? 0.8 : 1.0;
-  const diff = (baseDiff * clusterBonus / 1000).toFixed(2);
-  document.getElementById('param-diff').textContent = diff;
-}
-
-// --- UTILIDADES MATEMÁTICAS ---
-function nextPrime(n) {
-  if (n <= 2) return 2;
-  let prime = n;
-  while (!isPrime(prime)) prime++;
-  return prime;
-}
-
-function isPrime(n) {
-  if (n < 2) return false;
-  if (n === 2) return true;
-  if (n % 2 === 0) return false;
-  for (let i = 3; i * i <= n; i += 2) {
-    if (n % i === 0) return false;
   }
-  return true;
+  return boardArr;
 }
-
-// --- INICIALIZACIÓN ---
-
-// ============================================================
-// FUNCIONES INTEGRADAS: PGN, Stockfish, Ramsey Iterativo
-// ============================================================
-
-// --- Estado PGN ---
-let pgnMoves = [];
-let pgnCurrentMove = -1;
-let chessPGN = null;
-
-// chess.js instance for Ramsey iterative (aislado por modo)
-let chess = null;
-
-// ============================================================
-// MAQUINA DE ESTADO — canStart / enterMode / exitMode
-// ============================================================
-
-function canStart(mode) {
-  if (activeMode === 'idle') return true;
-  if (activeMode === mode) {
-    log(`${MODE_LABELS[mode]} ya está activo`, 'warn');
-    return false;
-  }
-  log(`No se puede iniciar ${MODE_LABELS[mode]}: ${MODE_LABELS[activeMode]} está ocupando el laboratorio`, 'warn');
-  return false;
-}
-
-function enterMode(mode) {
-  activeMode = mode;
-  updateAnalysisButtons();
-  document.getElementById('status-engine').textContent = `Engine: ${MODE_LABELS[mode]}`;
-  document.getElementById('status-engine').classList.add('active');
-  log(`${MODE_LABELS[mode]} iniciado`, mode.startsWith('ramsey') ? 'ramsey' : 'info');
-}
-
-function exitMode() {
-  const prev = activeMode;
-  activeMode = 'idle';
-  updateAnalysisButtons();
-  document.getElementById('btn-connect').disabled = false;
-  document.getElementById('status-engine').textContent = 'Engine: Standby';
-  document.getElementById('status-engine').classList.remove('active');
-  if (prev !== 'idle') log(`${MODE_LABELS[prev]} finalizado`, 'info');
-}
-
-// --- PIECE_WEIGHTS para Ramsey ---
-const PIECE_WEIGHTS = {
-  P: 1.0, p: 1.0, N: 3.2, n: 3.2, B: 3.3, b: 3.3,
-  R: 5.0, r: 5.0, Q: 9.0, q: 9.0, K: 2.0, k: 2.0
-};
-
-const PV_EVAL_CONFIG = {
-  MULTIPV: 6,
-  SIM_MOVES: 8,
-  WEIGHT_KING_SAFETY: 0.25,
-  WEIGHT_MATERIAL: 0.20,
-  WEIGHT_CONTROL: 0.20,
-  WEIGHT_K4_THREAT: -0.15,
-  WEIGHT_PAWN_STRUCT: 0.10,
-  WEIGHT_CENTRAL: 0.10
-};
-
-// ============================================================
-// ADAPTADORES DE TABLERO
-// ============================================================
 
 function currentBoardToBoardArr(cb) {
   const arr = Array(8).fill().map(() => Array(8).fill(null));
@@ -1778,407 +1404,258 @@ function boardArrToCurrentBoard(arr) {
   return cb;
 }
 
-function parseFENtoBoardArr(fen) {
-  const [position] = fen.split(' ');
-  const rows = position.split('/');
-  const boardArr = Array(8).fill().map(() => Array(8).fill(null));
-  for (let row = 0; row < 8; row++) {
-    let col = 0;
-    const actualRow = 7 - row;
-    for (const char of rows[row]) {
-      if (/\d/.test(char)) col += parseInt(char);
-      else { boardArr[actualRow][col] = char; col++; }
-    }
-  }
-  return boardArr;
-}
-
-// ============================================================
-// FUNCIONES PGN
-// ============================================================
-
-function handlePGNFile(file) {
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const text = e.target.result;
-    parsePGN(text);
+function buildControlData(boardArr, rowStart, rowEnd, colStart, colEnd) {
+  const data = {
+    whitePieceCount: 0, blackPieceCount: 0,
+    whiteControlled: new Set(), blackControlled: new Set(),
+    kingExposure: { w: 0, b: 0 }, pawnChains: { w: 0, b: 0 },
+    material: { w: 0, b: 0 }, mobility: { w: 0, b: 0 },
+    centerDomination: { w: 0, b: 0 }, kingSafety: { w: 0, b: 0 }
   };
-  reader.readAsText(file);
-}
+  const wKingSquare = findKingSquare(boardArr, 'white');
+  const bKingSquare = findKingSquare(boardArr, 'black');
 
-function parsePGN(text) {
-  if (!window.Chess) { log('Error: chess.js no cargado', 'warn'); return; }
-  try {
-    const tempChess = new Chess();
-    const success = tempChess.load_pgn(text);
-    pgnMoves = tempChess.history();
-    if (!success || pgnMoves.length === 0) {
-      const moveText = text.replace(/\[[^\]]*\]/g, '').replace(/\{[^}]*\}/g, '').replace(/\([^)]*\)/g, '').replace(/\d+\.\.\./g, '').replace(/\d+\./g, '').trim();
-      const manualChess = new Chess();
-      const moves = moveText.split(/\s+/).filter(m => m && !/^\d+$/.test(m) && m !== '*');
-      pgnMoves = [];
-      for (const m of moves) {
-        const result = manualChess.move(m, { sloppy: true });
-        if (result) pgnMoves.push(result.san); else break;
+  for (let r = rowStart; r <= rowEnd; r++) {
+    for (let c = colStart; c <= colEnd; c++) {
+      const piece = boardArr[r][c];
+      if (!piece) continue;
+      const isWhite = piece === piece.toUpperCase();
+      const type = piece.toLowerCase();
+      const color = isWhite ? 'w' : 'b';
+      const opp = isWhite ? 'b' : 'w';
+
+      if (type !== 'k') {
+        data[isWhite ? 'whitePieceCount' : 'blackPieceCount']++;
+        data.material[color] += (PIECE_VALUES[type] || 0);
+      }
+
+      const attacked = getAttackedSquares(boardArr, r, c);
+      data.mobility[color] += attacked.length;
+      for (const sq of attacked) {
+        if (isWhite) data.whiteControlled.add(sq);
+        else data.blackControlled.add(sq);
+      }
+
+      if (type === 'p') {
+        const chainLen = countPawnChain(boardArr, r, c, isWhite);
+        data.pawnChains[color] += chainLen;
+      }
+
+      if (type === 'k') {
+        if (isWhite) data.kingExposure.w = kingExposureMetric(boardArr, r, c, 'white');
+        else data.kingExposure.b = kingExposureMetric(boardArr, r, c, 'black');
+      }
+
+      if (type === 'r' || type === 'q') {
+        const seventhRank = isWhite ? 6 : 1;
+        if (r === seventhRank) data.kingSafety[opp] += 50;
       }
     }
-    chessPGN = new Chess();
-    pgnCurrentMove = -1;
-    const header = tempChess.header ? tempChess.header() : {};
-    const white = header?.White || 'Blancas';
-    const black = header?.Black || 'Negras';
-    const event = header?.Event || 'Partida';
-    document.getElementById('pgn-info').textContent = `${event}: ${white} vs ${black} (${pgnMoves.length} movimientos)`;
-    log(`PGN cargado: ${pgnMoves.length} movimientos`, 'success');
-    updatePGNDisplay();
-    pgnFirst();
-  } catch (error) {
-    log('Error cargando PGN: ' + error.message, 'warn');
   }
-}
-
-function loadPGNPosition() {
-  if (!chessPGN) return;
-  const fen = chessPGN.fen();
-  document.getElementById('fen-input').value = fen;
-  parseFEN(fen);
-  renderBoardSVG();
-  clearHighlights();
-  updateHashDisplay();
-  updateEvaluation(evaluateBoard(), getSignature(evaluateBoard()));
-}
-
-function pgnFirst() {
-  if (!pgnMoves) return;
-  pgnCurrentMove = -1;
-  chessPGN = new Chess();
-  loadPGNPosition();
-  updatePGNDisplay();
-}
-
-function pgnPrev() {
-  if (!pgnMoves || pgnCurrentMove <= -1) {
-    pgnFirst();
-    return;
-  }
-  pgnCurrentMove--;
-  chessPGN = new Chess();
-  for (let i = 0; i <= pgnCurrentMove; i++) {
-    chessPGN.move(pgnMoves[i]);
-  }
-  loadPGNPosition();
-  updatePGNDisplay();
-}
-
-function pgnNext() {
-  if (!pgnMoves || pgnCurrentMove >= pgnMoves.length - 1) return;
-  pgnCurrentMove++;
-  chessPGN = new Chess();
-  for (let i = 0; i <= pgnCurrentMove; i++) {
-    chessPGN.move(pgnMoves[i]);
-  }
-  loadPGNPosition();
-  updatePGNDisplay();
-}
-
-function pgnLast() {
-  if (!pgnMoves) return;
-  pgnCurrentMove = pgnMoves.length - 1;
-  chessPGN = new Chess();
-  for (const move of pgnMoves) {
-    chessPGN.move(move);
-  }
-  loadPGNPosition();
-  updatePGNDisplay();
-}
-
-function updatePGNDisplay() {
-  if (!pgnMoves || pgnMoves.length === 0) {
-    document.getElementById('pgn-move-display').textContent = '—';
-    return;
-  }
-  if (pgnCurrentMove === -1) {
-    document.getElementById('pgn-move-display').textContent = 'Posición inicial';
-  } else if (pgnCurrentMove >= 0 && pgnCurrentMove < pgnMoves.length) {
-    const moveNum = Math.floor(pgnCurrentMove / 2) + 1;
-    const isWhite = pgnCurrentMove % 2 === 0;
-    document.getElementById('pgn-move-display').textContent = `${moveNum}.${isWhite ? '' : '..'} ${pgnMoves[pgnCurrentMove]}`;
-  } else {
-    document.getElementById('pgn-move-display').textContent = 'Final';
-  }
-}
-
-// ============================================================
-// CONTROL DE ESTADO DE BOTONES
-// ============================================================
-
-function updateAnalysisButtons() {
-  const sfBtn = document.getElementById('btn-analyze-stockfish');
-  const ramseyBtn = document.getElementById('btn-analyze-ramsey');
-  const stopBtn = document.getElementById('btn-stop-analysis');
-
-  if (activeMode !== 'idle') {
-    if (sfBtn) sfBtn.disabled = true;
-    if (ramseyBtn) ramseyBtn.disabled = true;
-    if (stopBtn) stopBtn.disabled = false;
-  } else {
-    if (sfBtn) sfBtn.disabled = !state.stockfish.isConnected;
-    if (ramseyBtn) ramseyBtn.disabled = false;
-    if (stopBtn) stopBtn.disabled = true;
-  }
-}
-
-function updateConnectButton() {
-  const btn = document.getElementById('btn-connect');
-  if (!btn) return;
-  if (state.stockfish.isConnected) {
-    btn.textContent = '🔌 Desconectar';
-    btn.classList.add('connected');
-  } else {
-    btn.textContent = '🔌 Conectar';
-    btn.classList.remove('connected');
-  }
-}
-
-function updateEngineStatus(text, type) {
-  const el = document.getElementById('engine-status-text');
-  if (!el) return;
-  el.textContent = text;
-  el.className = '';
-  if (type) el.classList.add(type);
-}
-
-// ============================================================
-// STOCKFISH
-// ============================================================
-
-async function connectEngine() {
-  if (state.stockfish.isConnected) return;
-  try {
-    log('Conectando motor Stockfish...', 'info');
-    const response = await fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
-    if (!response.ok) throw new Error('Error al descargar Stockfish');
-    const workerScript = await response.text();
-    const blob = new Blob([workerScript], { type: 'application/javascript' });
-    state.stockfish.blobURL = URL.createObjectURL(blob);
-    state.stockfish.worker = new Worker(state.stockfish.blobURL);
-    state.stockfish.worker.onmessage = function(event) { handleEngineMessage(event.data); };
-    state.stockfish.worker.postMessage('uci');
-    state.stockfish.worker.postMessage('setoption name MultiPV value 1');
-    state.stockfish.worker.postMessage('setoption name Hash value 128');
-    state.stockfish.worker.postMessage('isready');
-    state.stockfish.isConnected = true;
-    log('Motor Stockfish conectado', 'success');
-    updateEngineStatus('Motor conectado y listo', 'connected');
-    updateConnectButton();
-    updateAnalysisButtons();
-  } catch (error) {
-    log('Error conectando motor: ' + error.message, 'warn');
-    updateEngineStatus('Error: ' + error.message, 'error');
-    state.stockfish.isConnected = false;
-    updateConnectButton();
-  }
-}
-
-function disconnectEngine() {
-  if (!state.stockfish.isConnected) return;
-  if (activeMode === 'stockfish') stopAnyAnalysis();
-  if (state.stockfish.worker) { state.stockfish.worker.terminate(); state.stockfish.worker = null; }
-  if (state.stockfish.blobURL) { URL.revokeObjectURL(state.stockfish.blobURL); state.stockfish.blobURL = null; }
-  state.stockfish.isConnected = false;
-  log('Motor desconectado', 'info');
-  updateEngineStatus('Motor desconectado', '');
-  updateConnectButton();
-  updateAnalysisButtons();
-}
-
-function toggleEngine() {
-  if (state.stockfish.isConnected) disconnectEngine();
-  else connectEngine();
-}
-
-function startStockfishAnalysis() {
-  if (!canStart('stockfish')) return;
-  try {
-    enterMode('stockfish');
-    state.stockfish.busy = true;
-    state.stockfish.lastStats = { nps: 0, depth: 0, nodes: 0, time: 0, pv: '', bestMove: '', evaluation: null };
-    updateEngineStatus('Stockfish analizando (go infinite)...', 'connected');
-    document.getElementById('btn-connect').disabled = true;
-
-    const fen = currentFEN;
-    state.stockfish.worker.postMessage('setoption name MultiPV value 1');
-    state.stockfish.worker.postMessage(`position fen ${fen}`);
-    state.stockfish.worker.postMessage('go infinite');
-  } catch (e) {
-    log('Error en Stockfish: ' + e.message, 'warn');
-    exitMode();
-  }
-}
-
-function stopAnyAnalysis() {
-  const mode = activeMode;
-  if (mode === 'stockfish') {
-    if (state.stockfish.worker) state.stockfish.worker.postMessage('stop');
-    log('Stockfish: análisis detenido', 'info');
-  } else if (mode === 'ramsey-iterative') {
-    if (state.ramsey.interval) {
-      clearTimeout(state.ramsey.interval);
-      state.ramsey.interval = null;
-    }
-    log('Ramsey: motor estructural detenido', 'ramsey');
-    if (state.ramsey.bestFEN) {
-      log(`MEJOR FEN: ${state.ramsey.bestFEN}`, 'ramsey');
-      const pvContainer = document.getElementById('pv-lines');
-      const div = document.createElement('div');
-      div.className = 'pv-line';
-      div.style.borderLeft = '3px solid #008000';
-      div.innerHTML = `<span class="pv-eval pos">🏆</span><span class="pv-moves">Mejor FEN: ${state.ramsey.bestFEN}</span>`;
-      pvContainer.insertBefore(div, pvContainer.firstChild);
-    }
-  }
-  state.stockfish.busy = false;
-  exitMode();
-}
-
-function handleEngineMessage(msg) {
-  if (!msg || typeof msg !== 'string') return;
-  if (msg.startsWith('bestmove')) {
-    const parts = msg.split(' ');
-    const bm = parts[1];
-    state.stockfish.lastStats.bestMove = bm || '';
-    state.stockfish.busy = false;
-
-    if (activeMode === 'stockfish') {
-      exitMode();
-      updateEngineStatus('Análisis completado', 'connected');
-      document.getElementById('status-engine').textContent = 'Engine: Completado';
-      document.getElementById('status-engine').classList.remove('active');
-    }
-
-    if (bm && bm !== '(none)') {
-      const san = uciToSan(bm);
-      log(`Mejor jugada: ${san}`, 'success');
-    }
-  } else if (msg.startsWith('info')) {
-    parseInfoLine(msg);
-  }
-}
-
-function parseInfoLine(message) {
-  const parts = message.split(' ');
-  const nodesIdx = parts.indexOf('nodes');
-  const timeIdx = parts.indexOf('time');
-  if (nodesIdx !== -1 && timeIdx !== -1) {
-    state.stockfish.lastStats.nodes = parseInt(parts[nodesIdx + 1]);
-    state.stockfish.lastStats.time = parseInt(parts[timeIdx + 1]);
-    if (state.stockfish.lastStats.time > 0) {
-      state.stockfish.lastStats.nps = Math.round(state.stockfish.lastStats.nodes / (state.stockfish.lastStats.time / 1000));
-    }
-  }
-  const depthIdx = parts.indexOf('depth');
-  if (depthIdx !== -1) state.stockfish.lastStats.depth = parseInt(parts[depthIdx + 1]);
-
-  const scoreIdx = parts.indexOf('score');
-  if (scoreIdx !== -1) {
-    const scoreType = parts[scoreIdx + 1];
-    const scoreValue = parseInt(parts[scoreIdx + 2]);
-    if (scoreType === 'cp') {
-      state.stockfish.lastStats.evaluation = { value: scoreValue, type: 'cp' };
-    } else if (scoreType === 'mate') {
-      state.stockfish.lastStats.evaluation = { value: scoreValue, type: 'mate' };
+  const centerSquares = [[3,3],[3,4],[4,3],[4,4],[3,2],[3,5],[2,3],[2,4],[4,2],[4,5],[5,3],[5,4]];
+  for (const [cr, cc] of centerSquares) {
+    if (cr >= rowStart && cr <= rowEnd && cc >= colStart && cc <= colEnd) {
+      if (data.whiteControlled.has(`${cr},${cc}`)) data.centerDomination.w++;
+      if (data.blackControlled.has(`${cr},${cc}`)) data.centerDomination.b++;
     }
   }
 
-  const pvIdx = parts.indexOf('pv');
-  if (pvIdx !== -1 && parts.length > pvIdx + 1) {
-    const pvMoves = parts.slice(pvIdx + 1);
-    const pvText = convertPVToSAN(pvMoves);
-    state.stockfish.lastStats.pv = pvText;
-    state.stockfish.lastStats.pvUCI = pvMoves;
-  }
+  for (const sq of data.whiteControlled) { if (!data.blackControlled.has(sq)) data.centerDomination.w += 0.5; }
+  for (const sq of data.blackControlled) { if (!data.whiteControlled.has(sq)) data.centerDomination.b += 0.5; }
+  data.whiteControlled = Array.from(data.whiteControlled);
+  data.blackControlled = Array.from(data.blackControlled);
+  return data;
+}
 
-  // Update UI
-  if (state.stockfish.lastStats.evaluation) {
-    const e = state.stockfish.lastStats.evaluation;
-    let evalScore;
-    if (e.type === 'mate') {
-      evalScore = e.value > 0 ? 10 : -10;
-    } else {
-      evalScore = e.value / 100;
+function getAttackedSquares(boardArr, r, c) {
+  const piece = boardArr[r][c];
+  if (!piece) return [];
+  const isWhite = piece === piece.toUpperCase();
+  const type = piece.toLowerCase();
+  const attacked = [];
+  if (type === 'p') {
+    const dir = isWhite ? 1 : -1;
+    for (const dc of [-1, 1]) {
+      const nr = r + dir, nc = c + dc;
+      if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) attacked.push(`${nr},${nc}`);
     }
-    updateEvaluation(evalScore, getSignature(evalScore));
-    document.getElementById('eval-score').textContent = formatEvaluation(e.value, e.type === 'mate');
   }
-
-  if (state.stockfish.lastStats.pv) {
-    const pvContainer = document.getElementById('pv-lines');
-    pvContainer.innerHTML = '';
-    const div = document.createElement('div');
-    div.className = 'pv-line';
-    const e = state.stockfish.lastStats.evaluation;
-    const evalText = e ? formatEvaluation(e.value, e.type === 'mate') : '0.00';
-    const evalClass = (e?.value || 0) > 0 ? 'pos' : 'neg';
-    div.innerHTML = `
-      <span class="pv-eval ${evalClass}">${evalText}</span>
-      <span class="pv-moves">${state.stockfish.lastStats.pv}</span>
-      <span class="pv-depth">d${state.stockfish.lastStats.depth || 0} | ${((state.stockfish.lastStats.nps || 0) / 1000).toFixed(0)}k n/s</span>
-    `;
-    pvContainer.appendChild(div);
+  else if (type === 'n') {
+    for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) attacked.push(`${nr},${nc}`);
+    }
   }
-
-  updateEngineStatus(
-    `Prof: ${state.stockfish.lastStats.depth || 0} | ${((state.stockfish.lastStats.nps || 0) / 1000).toFixed(0)}k n/s`,
-    'connected'
-  );
-}
-
-function formatEvaluation(score, isMate) {
-  if (isMate) return score > 0 ? `+M${score}` : `-M${Math.abs(score)}`;
-  const pawns = score / 100;
-  return pawns > 0 ? `+${pawns.toFixed(2)}` : pawns.toFixed(2);
-}
-
-function uciToSan(uciMove) {
-  if (!uciMove || uciMove.length < 4) return uciMove;
-  const from = uciMove.substring(0, 2);
-  const to = uciMove.substring(2, 4);
-  const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
-  const tempChess = new Chess(currentFEN);
-  try {
-    const move = tempChess.move({ from, to, promotion });
-    return move ? move.san : uciMove;
-  } catch (e) { return uciMove; }
-}
-
-function convertPVToSAN(pvMoves) {
-  try {
-    const tempChess = new Chess(currentFEN);
-    const sanMoves = [];
-    for (const uci of pvMoves) {
-      if (uci.length >= 4) {
-        const move = tempChess.move({ from: uci.substring(0, 2), to: uci.substring(2, 4), promotion: uci.length > 4 ? uci[4] : undefined });
-        if (move) sanMoves.push(move.san); else break;
+  else if (type === 'b' || type === 'q') {
+    for (const [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
+      let nr = r + dr, nc = c + dc;
+      while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+        attacked.push(`${nr},${nc}`);
+        if (boardArr[nr][nc]) break;
+        nr += dr; nc += dc;
       }
     }
-    if (sanMoves.length > 0) {
-      let pvText = '', fullMove = parseInt(currentFEN.split(' ')[5]), whiteTurn = currentFEN.split(' ')[1] === 'w';
-      sanMoves.forEach((m, i) => {
-        if (i === 0 && !whiteTurn) pvText += `${fullMove}... ${m} `;
-        else if ((i + (whiteTurn ? 0 : 1)) % 2 === 0) { fullMove++; pvText += `${fullMove}. ${m} `; }
-        else pvText += `${m} `;
-      });
-      return pvText.trim();
+  }
+  else if (type === 'r' || type === 'q') {
+    for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      let nr = r + dr, nc = c + dc;
+      while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+        attacked.push(`${nr},${nc}`);
+        if (boardArr[nr][nc]) break;
+        nr += dr; nc += dc;
+      }
     }
-  } catch (e) {}
-  return pvMoves.join(' ');
+  }
+  else if (type === 'k') {
+    for (const [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) attacked.push(`${nr},${nc}`);
+    }
+  }
+  return attacked;
 }
 
+function countPawnChain(boardArr, r, c, isWhite) {
+  const dir = isWhite ? -1 : 1;
+  let chainLen = 1;
+  for (const dc of [-1, 1]) {
+    const nr = r + dir, nc = c + dc;
+    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+      const p = boardArr[nr][nc];
+      if (p && ((isWhite && p === 'P') || (!isWhite && p === 'p'))) {
+        chainLen += countPawnChain(boardArr, nr, nc, isWhite);
+      }
+    }
+  }
+  return chainLen;
+}
+
+function findKingSquare(boardArr, color) {
+  const king = color === 'white' ? 'K' : 'k';
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if (boardArr[r][c] === king) return [r, c];
+    }
+  }
+  return null;
+}
+
+function kingExposureMetric(boardArr, kr, kc, color) {
+  let exposure = 0;
+  const isWhite = color === 'white';
+  const oppPawn = isWhite ? 'p' : 'P';
+  const pawnDir = isWhite ? 1 : -1;
+  for (let c = 0; c < 8; c++) {
+    for (let r = isWhite ? 0 : 7; (isWhite ? r <= kr : r >= kr); r += pawnDir) {
+      if (boardArr[r][c] === oppPawn) exposure++;
+    }
+  }
+  for (let r = Math.max(0, kr - 1); r <= Math.min(7, kr + 1); r++) {
+    for (let c = Math.max(0, kc - 1); c <= Math.min(7, kc + 1); c++) {
+      if (r === kr && c === kc) continue;
+      const p = boardArr[r][c];
+      if (!p) exposure += 2;
+    }
+  }
+  return exposure;
+}
+
+function computeWeightedScore(data) {
+  const CONTROL_WEIGHT = 2.5;
+  const KING_SAFETY_WEIGHT = 1.8;
+  const MATERIAL_WEIGHT = 1.2;
+  const MOBILITY_WEIGHT = 0.8;
+  const PAWN_CHAIN_WEIGHT = 0.6;
+  const CENTER_WEIGHT = 1.5;
+  const KING_ATTACK_WEIGHT = 0.4;
+
+  const whiteControlScore = data.whiteControlled.length * CONTROL_WEIGHT;
+  const blackControlScore = data.blackControlled.length * CONTROL_WEIGHT;
+  const controlScore = whiteControlScore - blackControlScore;
+
+  const kingSafetyScore = (data.kingExposure.b * KING_SAFETY_WEIGHT - data.kingExposure.w * KING_SAFETY_WEIGHT) +
+    (data.kingSafety.w - data.kingSafety.b);
+
+  const materialScore = (data.material.w - data.material.b) * MATERIAL_WEIGHT;
+  const mobilityScore = (data.mobility.w - data.mobility.b) * MOBILITY_WEIGHT;
+  const pawnChainScore = (data.pawnChains.w - data.pawnChains.b) * PAWN_CHAIN_WEIGHT;
+  const centerScore = (data.centerDomination.w - data.centerDomination.b) * CENTER_WEIGHT;
+
+  const totalScore = controlScore + kingSafetyScore + materialScore + mobilityScore + pawnChainScore + centerScore;
+  const complexity = Math.sqrt(data.whitePieceCount + data.blackPieceCount) || 1;
+
+  return {
+    totalScore: totalScore / complexity,
+    breakdown: { control: controlScore, kingSafety: kingSafetyScore, material: materialScore, mobility: mobilityScore, pawnChains: pawnChainScore, center: centerScore },
+    complexity
+  };
+}
+
+function getTuranThreshold(n) {
+  if (n <= 3) return 3;
+  const floorHalf = Math.floor(n / 2);
+  return floorHalf * (n - floorHalf) + 1;
+}
+
+function evaluateTuranK4Prune(graph) {
+  const n = graph.length;
+  if (n < 4) return false;
+  const threshold = getTuranThreshold(n);
+  let edges = 0;
+  for (let i = 0; i < n; i++) edges += graph[i].length;
+  edges /= 2;
+  if (edges < threshold) return true;
+  const triangleFree = checkTriangleFree(graph);
+  if (triangleFree) return true;
+  return false;
+}
+
+function checkTriangleFree(graph) {
+  const n = graph.length;
+  for (let i = 0; i < n; i++) {
+    for (const j of graph[i]) {
+      if (j <= i) continue;
+      for (const k of graph[j]) {
+        if (k <= j) continue;
+        if (graph[i].includes(k)) return false;
+      }
+    }
+  }
+  return true;
+}
+
+function analyzeEscape(boardArr, color) {
+  const king = color === 'white' ? 'K' : 'k';
+  let kr = -1, kc = -1;
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      if (boardArr[r][c] === king) { kr = r; kc = c; break; }
+    }
+    if (kr !== -1) break;
+  }
+  if (kr === -1) return 0;
+  const isWhite = color === 'white';
+  const ownPawn = isWhite ? 'P' : 'p';
+  let score = 0;
+  for (let c = 0; c < 8; c++) {
+    for (let r = (isWhite ? 0 : kr); (isWhite ? r < kr : r > kr); r += (isWhite ? 1 : -1)) {
+      if (boardArr[r][c] === ownPawn) { score += 10; break; }
+    }
+  }
+  for (let r = Math.max(0, kr - 1); r <= Math.min(7, kr + 1); r++) {
+    for (let c = Math.max(0, kc - 1); c <= Math.min(7, kc + 1); c++) {
+      if (r === kr && c === kc) continue;
+      const p = boardArr[r][c];
+      if (!p) score += 5;
+      else if (p === p.toUpperCase() === isWhite) score += 8;
+    }
+  }
+  return score;
+}
 
 // ============================================================
-// RAMSEY ITERATIVO
+// RAMSEY — Motor Estructural Iterativo
 // ============================================================
-
 function startRamseyIterative() {
   if (!canStart('ramsey-iterative')) return;
   if (!window.Chess) { log('Error: chess.js no cargado', 'warn'); return; }
@@ -2195,316 +1672,506 @@ function startRamseyIterative() {
   }
 }
 
+function updateEngineStatus(text, type) {
+  const el = document.getElementById('engine-status-text');
+  if (!el) return;
+  el.textContent = text;
+  el.className = '';
+  if (type) el.classList.add(type);
+}
+
 function ramseyIterativeStep(stepNumber) {
   if (activeMode !== 'ramsey-iterative') return;
-  if (!chess || chess.game_over()) {
-    stopAnyAnalysis();
-    return;
+  if (!chess) return;
+
+  const boardArr = parseFENtoBoardArr(chess.fen());
+  const data = buildControlData(boardArr, 0, 7, 0, 7);
+  const score = computeWeightedScore(data);
+  const structuralScore = score.totalScore;
+
+  const evalScore = evaluateBoard(currentBoard, isWhiteToMove);
+  const finalScore = structuralScore + (evalScore * 0.3);
+
+  if (finalScore > state.ramsey.bestScore) {
+    state.ramsey.bestScore = finalScore;
+    state.ramsey.bestFEN = chess.fen();
   }
 
   const legalMoves = chess.moves({ verbose: true });
   if (legalMoves.length === 0) {
-    log('Ramsey: Sin jugadas legales. Fin.', 'ramsey');
-    stopAnyAnalysis();
+    log('FIN: No hay jugadas legales.', 'ramsey');
+    exitMode();
     return;
   }
 
-  let bestMove = null;
-  let bestScore = -Infinity;
-  const evaluations = [];
+  let bestMove = legalMoves[0];
+  let bestLocalScore = -Infinity;
+  const moveScores = [];
 
   for (const move of legalMoves) {
-    const tempChess = new Chess(chess.fen());
-    tempChess.move(move);
-
-    const boardArr = parseFENtoBoardArr(tempChess.fen());
-    const playingSide = move.color === 'w' ? 'white' : 'black';
-
-    const esc = analyzeEscape(boardArr, playingSide);
-    const kingSafety = esc ? esc.score : 50;
-
-    const data = buildControlData(boardArr);
-    const myKing = findKingSquare(boardArr, playingSide);
-    const rivalGraph = playingSide === 'white' ? data.Gblack : data.Gwhite;
-    const turanCheck = evaluateTuranK4Prune(rivalGraph);
-    const turanPruned = turanCheck.shouldPrune;
-    const rivalK4 = turanPruned ? [] : findCliques(rivalGraph, 4);
-    let rivalK4NearKing = 0;
-    const rivalPieces = playingSide === 'white' ? data.blackPieces : data.whitePieces;
-    if (myKing) {
-      const [kr, kc] = myKing;
-      for (const clique of rivalK4) {
-        for (const idx of clique) {
-          const { r, c } = rivalPieces[idx];
-          if (Math.max(Math.abs(r - kr), Math.abs(c - kc)) <= 2) {
-            rivalK4NearKing++;
-            break;
-          }
-        }
-      }
-    }
-
-    let materialWhite = 0, materialBlack = 0;
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-      const p = boardArr[r][c];
-      if (p) {
-        const w = PIECE_WEIGHTS[p] || 0;
-        if (p === p.toUpperCase()) materialWhite += w; else materialBlack += w;
-      }
-    }
-    const materialDiff = (playingSide === 'white' ? materialWhite - materialBlack : materialBlack - materialWhite);
-
-    const score = computeRamseyScore({
-      kingSafety,
-      rivalK4NearKing,
-      materialDiff,
-      disputed: data.disputed.size,
-      pawnStructure: 0,
-      centralControl: 0
-    });
-
-    evaluations.push({ san: move.san, score, fen: tempChess.fen() });
-
-    if (score > bestScore) {
-      bestScore = score;
+    chess.move(move);
+    const testBoardArr = parseFENtoBoardArr(chess.fen());
+    const testData = buildControlData(testBoardArr, 0, 7, 0, 7);
+    const testScore = computeWeightedScore(testData);
+    const testEval = evaluateBoard(boardArrToCurrentBoard(testBoardArr), !isWhiteToMove);
+    const combinedScore = testScore.totalScore + (testEval * 0.3);
+    moveScores.push({ move: move.san, score: combinedScore, structural: testScore.totalScore, eval: testEval });
+    if (combinedScore > bestLocalScore) {
+      bestLocalScore = combinedScore;
       bestMove = move;
     }
+    chess.undo();
   }
 
-  evaluations.sort((a, b) => b.score - a.score);
-  const top3 = evaluations.slice(0, 3).map(e => `${e.san}=${e.score}`).join(', ');
+  moveScores.sort((a, b) => b.score - a.score);
+  const top3 = moveScores.slice(0, 3);
 
-  log(`Paso ${stepNumber}: ${legalMoves.length} jugadas evaluadas | Top: ${top3}`, 'ramsey');
-
-  if (bestMove) {
-    chess.move(bestMove);
-    const fen = chess.fen();
-    parseFEN(fen);
-    renderBoardSVG();
-
-    if (bestScore > state.ramsey.bestScore) {
-      state.ramsey.bestScore = bestScore;
-      state.ramsey.bestFEN = fen;
-    }
-
-    updateEngineStatus(`Ramsey paso ${stepNumber}: ${bestMove.san} (score ${bestScore})`, 'connected');
-    document.getElementById('eval-score').textContent = bestScore;
-
-    const pvContainer = document.getElementById('pv-lines');
+  const pvContainer = document.getElementById('pv-lines');
+  if (pvContainer && activeMode === 'ramsey-iterative') {
     pvContainer.innerHTML = '';
-    evaluations.slice(0, 5).forEach((e, i) => {
-      const div = document.createElement('div');
-      div.className = 'pv-line';
-      div.innerHTML = `
-        <span class="pv-eval ${e.score > 0 ? 'pos' : 'neg'}">${e.score > 0 ? '+' : ''}${e.score}</span>
-        <span class="pv-moves">${e.san}</span>
-        <span class="pv-depth">Ramsey pts</span>
-      `;
-      pvContainer.appendChild(div);
-    });
+    for (const mv of top3) {
+      const pvDiv = document.createElement('div');
+      pvDiv.className = 'pv-line';
+      const evalStr = (mv.eval > 0 ? '+' : '') + mv.eval.toFixed(2);
+      pvDiv.innerHTML = `<span class="pv-eval pos">${evalStr}</span><span class="pv-moves">${mv.move}</span><span class="pv-depth">R${stepNumber}</span>`;
+      pvContainer.appendChild(pvDiv);
+    }
   }
 
-  state.ramsey.interval = setTimeout(() => {
-    ramseyIterativeStep(stepNumber + 1);
-  }, 300);
+  chess.move(bestMove);
+  log(`Paso ${stepNumber}: ${bestMove.san} (score: ${bestLocalScore.toFixed(2)})`, 'ramsey');
+
+  const currentFen = chess.fen();
+  document.getElementById('fen-input').value = currentFen;
+  parseFEN(currentFen);
+  renderBoardSVG();
+
+  if (state.ramsey.bestFEN) {
+    const bestBoardArr = parseFENtoBoardArr(state.ramsey.bestFEN);
+    const wKing = findKingSquare(bestBoardArr, 'white');
+    const bKing = findKingSquare(bestBoardArr, 'black');
+    if (wKing) highlightSquare(wKing[0] * 8 + wKing[1], 'ramsey');
+    if (bKing) highlightSquare(bKing[0] * 8 + bKing[1], 'ramsey');
+  }
+
+  updateEvaluation(evaluateBoard(), getSignature(evaluateBoard()));
+  updateHashDisplay();
+
+  if (chess.game_over()) {
+    const reason = chess.in_checkmate() ? 'JAQUE MATE' : chess.in_stalemate() ? 'AHOGADO' : 'TABLAS';
+    log(`FIN DEL JUEGO: ${reason}`, 'ramsey');
+    if (state.ramsey.bestFEN) log(`MEJOR FEN: ${state.ramsey.bestFEN}`, 'ramsey');
+    exitMode();
+    return;
+  }
+
+  state.ramsey.interval = setTimeout(() => ramseyIterativeStep(stepNumber + 1), 800);
 }
 
 // ============================================================
-// FUNCIONES DE SOPORTE RAMSEY
+// RAMSEY — Minería
 // ============================================================
+async function mineRamseyCluster() {
+  if (!canStart('ramsey-mining')) return;
+  enterMode('ramsey-mining');
 
-function getAttackedSquares(boardArr, r, c) {
-  const piece = boardArr[r][c];
-  if (!piece) return new Set();
-  const color = piece === piece.toUpperCase() ? 'white' : 'black';
-  const ptype = piece.toUpperCase();
-  const attacked = new Set();
-  const add = (nr, nc) => { if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) attacked.add(nr * 8 + nc); };
-  if (ptype === 'P') {
-    const dir = color === 'white' ? -1 : 1;
-    add(r + dir, c + 1); add(r + dir, c - 1); add(r + dir, c);
-  } else if (ptype === 'N') {
-    [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]].forEach(([dr, dc]) => add(r + dr, c + dc));
-  } else if (ptype === 'K') {
-    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (dr || dc) add(r + dr, c + dc);
+  const statusRamsey = document.getElementById('status-ramsey');
+  if (statusRamsey) { statusRamsey.textContent = 'Ramsey: Minando'; statusRamsey.classList.add('active'); }
+
+  log(`Iniciando mineria Ramsey: p=${params.p}, k=${params.k}, d=${params.d}`, 'ramsey');
+
+  const positions = generateSubtreePositions();
+  const adj = buildPaleyAdjacency(params.p);
+  const maxClique = findMaxClique(adj, positions.map((_, i) => i), params.k);
+
+  if (maxClique) {
+    const foundCluster = {
+      p: params.p, k: params.k, d: params.d,
+      signature: getSignature(evaluateBoard()).value,
+      clique: maxClique.map(idx => hashPosition(params.p, positions[idx].board)),
+      positions: maxClique.map(idx => positions[idx]),
+      size: maxClique.length
+    };
+    state.ramsey.pendingCluster = foundCluster;
+
+    const grid = document.getElementById('cluster-grid');
+    if (grid) {
+      grid.innerHTML = '';
+      for (const pos of foundCluster.positions) {
+        const node = document.createElement('div');
+        node.className = 'cluster-node active';
+        const h = hashPosition(params.p, pos.board);
+        node.innerHTML = `<div class="node-hash">${h}</div><div class="node-sig">${foundCluster.signature > 0 ? '+' : foundCluster.signature < 0 ? '-' : '0'}</div>`;
+        grid.appendChild(node);
+      }
+    }
+    log(`Cluster Ramsey: ${foundCluster.clique.length} posiciones`, 'ramsey');
+    log(`Hash clique: ${foundCluster.clique.slice(0, 3).join(',')}...`, 'info');
   } else {
-    const dirs = ptype === 'R' ? [[-1, 0], [1, 0], [0, -1], [0, 1]] : ptype === 'B' ? [[-1, -1], [-1, 1], [1, -1], [1, 1]] : [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
-    dirs.forEach(([dr, dc]) => { let nr = r + dr, nc = c + dc; while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) { add(nr, nc); if (boardArr[nr][nc]) break; nr += dr; nc += dc; } });
+    log('No se encontro clique', 'warn');
   }
-  return attacked;
+
+  if (statusRamsey) { statusRamsey.textContent = maxClique ? 'Ramsey: Cluster encontrado' : 'Ramsey: inactivo'; statusRamsey.classList.remove('active'); if (maxClique) statusRamsey.classList.add('certified'); }
+  exitMode();
 }
 
-function buildControlData(boardArr, rowStart = 0, rowEnd = 8, colStart = 0, colEnd = 8) {
-  const allSq = new Set();
-  for (let r = rowStart; r < rowEnd; r++) for (let c = colStart; c < colEnd; c++) allSq.add(r * 8 + c);
-  const whitePieces = [], blackPieces = [];
-  for (let r = rowStart; r < rowEnd; r++) for (let c = colStart; c < colEnd; c++) {
-    const p = boardArr[r][c];
-    if (p) (p === p.toUpperCase() ? whitePieces : blackPieces).push({ idx: 0, r, c, p });
-  }
-  whitePieces.forEach((x, i) => x.idx = i); blackPieces.forEach((x, i) => x.idx = i);
-  function computeControl(pieces) {
-    const ctrl = {};
-    pieces.forEach(({ idx, r, c, p }) => { ctrl[idx] = getAttackedSquares(boardArr, r, c); });
-    return ctrl;
-  }
-  const wCtrl = computeControl(whitePieces), bCtrl = computeControl(blackPieces);
-  function buildGraph(pieces, control) {
-    const G = { nodes: [], edges: [] };
-    pieces.forEach(x => G.nodes.push(x));
-    for (let i = 0; i < pieces.length; i++) for (let j = i + 1; j < pieces.length; j++) {
-      const a = pieces[i].idx, b_ = pieces[j].idx;
-      const shared = [...control[a]].filter(x => control[b_].has(x));
-      if (shared.length > 0) G.edges.push({ u: a, v: b_, shared: shared.length });
-    }
-    return G;
-  }
-  const wUnion = new Set(), bUnion = new Set();
-  Object.values(wCtrl).forEach(s => s.forEach(x => wUnion.add(x)));
-  Object.values(bCtrl).forEach(s => s.forEach(x => bUnion.add(x)));
-  const disputed = new Set([...wUnion].filter(x => bUnion.has(x)));
-  return { whitePieces, blackPieces, wCtrl, bCtrl, Gwhite: buildGraph(whitePieces, wCtrl), Gblack: buildGraph(blackPieces, bCtrl), disputed, wUnion, bUnion, allSq };
-}
-
-function findCliques(G, k) {
-  const adj = {}; G.nodes.forEach(n => adj[n.idx] = new Set()); G.edges.forEach(e => { adj[e.u].add(e.v); adj[e.v].add(e.u); });
-  const cliques = [];
-  function bk(R, P, X) {
-    if (P.size === 0 && X.size === 0) { if (R.size >= k) { const arr = [...R]; for (const c of combinations(arr, k)) cliques.push(c); } return; }
-    const PuX = new Set([...P, ...X]);
-    let pivot = [...PuX][0], maxDeg = adj[pivot]?.size || 0;
-    for (const u of PuX) { const d = adj[u]?.size || 0; if (d > maxDeg) { maxDeg = d; pivot = u; } }
-    const cands = new Set([...P].filter(v => !adj[pivot]?.has(v)));
-    for (const v of cands) {
-      const nR = new Set([...R, v]), nP = new Set([...P].filter(u => adj[v]?.has(u))), nX = new Set([...X].filter(u => adj[v]?.has(u)));
-      bk(nR, nP, nX); P.delete(v); X.add(v);
+function generateSubtreePositions() {
+  const positions = [];
+  const queue = [{ board: [...currentBoard], depth: 0, score: evaluateBoard() }];
+  const maxPositions = 15;
+  while (queue.length > 0 && positions.length < maxPositions) {
+    const current = queue.shift();
+    if (current.depth >= params.d) { positions.push(current); continue; }
+    const moves = generateMoves(current.board, current.depth % 2 === 0 ? isWhiteToMove : !isWhiteToMove);
+    const sorted = moves.map(m => {
+      const nb = applyMove(current.board, m);
+      return { move: m, board: nb, score: evaluateBoard(nb, (current.depth + 1) % 2 === 0 ? isWhiteToMove : !isWhiteToMove) };
+    }).sort((a, b) => Math.abs(b.score) - Math.abs(a.score));
+    for (const child of sorted.slice(0, 3)) {
+      queue.push({ board: child.board, depth: current.depth + 1, score: child.score });
     }
   }
-  bk(new Set(), new Set(G.nodes.map(n => n.idx)), new Set());
-  const seen = new Set(), uniq = [];
-  for (const c of cliques) { const key = c.slice().sort((a, b) => a - b).join(','); if (!seen.has(key)) { seen.add(key); uniq.push(c); } }
-  return uniq;
+  while (queue.length > 0 && positions.length < maxPositions) positions.push(queue.shift());
+  return positions;
 }
 
-function combinations(arr, k) {
-  if (k === 0) return [[]]; if (arr.length < k) return [];
-  const res = [];
-  function go(start, path) { if (path.length === k) { res.push([...path]); return; } for (let i = start; i < arr.length; i++) { path.push(arr[i]); go(i + 1, path); path.pop(); } }
-  go(0, []); return res;
+// ============================================================
+// RAMSEY — ZK Proof
+// ============================================================
+function hashClique(clique, p) {
+  let hash = 0n;
+  for (const h of clique) {
+    hash = (hash + BigInt(h) * BigInt(p)) % (BigInt(p) ** 2n);
+  }
+  return Number(hash).toString(16).substring(0, 12);
 }
 
-function connectedComponents(G) {
-  const adj = {}; G.nodes.forEach(n => adj[n.idx] = new Set()); G.edges.forEach(e => { adj[e.u].add(e.v); adj[e.v].add(e.u); });
-  const seen = new Set(); let comp = 0;
-  for (const n of G.nodes.map(x => x.idx)) { if (seen.has(n)) continue; comp++; const stack = [n]; while (stack.length) { const cur = stack.pop(); if (seen.has(cur)) continue; seen.add(cur); adj[cur]?.forEach(v => { if (!seen.has(v)) stack.push(v); }); } }
-  return comp;
-}
-
-function getTuranThreshold(n) {
-  if (n < 4) return 6;
-  return Math.floor((n * n) / 3);
-}
-
-function evaluateTuranK4Prune(graph) {
-  const nodes = graph?.nodes?.length || 0;
-  const edgeCount = graph?.edges?.length || 0;
-  const turanLimit = getTuranThreshold(nodes);
-  return { nodes, edgeCount, turanLimit, shouldPrune: edgeCount <= turanLimit };
-}
-
-function computeWeightedScore(data) {
-  function analyze(pieces, control, G, disputed, allSq) {
-    const n = pieces.length; if (n === 0) return { score: 0, metrics: {} };
-    const weights = {}; pieces.forEach(x => weights[x.idx] = PIECE_WEIGHTS[x.p] || 1);
-    const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
-    const k3 = findCliques(G, 3), k4 = findCliques(G, 4);
-    let k3tw = 0, k4tw = 0; k3.forEach(c => k3tw += c.reduce((s, i) => s + (weights[i] || 1), 0)); k4.forEach(c => k4tw += c.reduce((s, i) => s + (weights[i] || 1), 0));
-    const nodesInK = new Set(); k3.forEach(c => c.forEach(i => nodesInK.add(i))); k4.forEach(c => c.forEach(i => nodesInK.add(i)));
-    const wInCliques = [...nodesInK].reduce((s, i) => s + (weights[i] || 0), 0);
-    const cliqueCoverage = totalWeight > 0 ? wInCliques / totalWeight : 0;
-    const sideUnionW = {};
-    Object.entries(control).forEach(([idx, sqs]) => { const w = weights[idx] || 1; sqs.forEach(sq => sideUnionW[sq] = (sideUnionW[sq] || 0) + w); });
-    const sideUnion = new Set(Object.keys(sideUnionW).map(Number));
-    const disputedCovered = new Set([...sideUnion].filter(x => disputed.has(x)));
-    const disputedCoverage = disputed.size > 0 ? disputedCovered.size / disputed.size : 0;
-    const controlSat = Math.min(1, Object.values(sideUnionW).reduce((a, b) => a + b, 0) / (allSq.size * 3.5));
-    let clustering = 0;
-    if (n >= 3 && G.edges.length > 0) {
-      const adj = {}; G.nodes.forEach(x => adj[x.idx] = new Set()); G.edges.forEach(e => { adj[e.u].add(e.v); adj[e.v].add(e.u); });
-      let sum = 0; G.nodes.forEach(({ idx }) => { const neigh = [...adj[idx]]; if (neigh.length >= 2) { let tri = 0; for (let i = 0; i < neigh.length; i++) for (let j = i + 1; j < neigh.length; j++) if (adj[neigh[i]].has(neigh[j])) tri++; sum += 2 * tri / (neigh.length * (neigh.length - 1)); } }); clustering = sum / n;
+function merkleRoot(data) {
+  if (data.length === 0) return '0';
+  let layer = data.map(d => {
+    let h = 0;
+    for (let i = 0; i < d.length; i++) h = ((h << 5) - h + d.charCodeAt(i)) | 0;
+    return Math.abs(h).toString(16);
+  });
+  while (layer.length > 1) {
+    const next = [];
+    for (let i = 0; i < layer.length; i += 2) {
+      const combined = layer[i] + (layer[i + 1] || layer[i]);
+      let h = 0;
+      for (let j = 0; j < combined.length; j++) h = ((h << 5) - h + combined.charCodeAt(j)) | 0;
+      next.push(Math.abs(h).toString(16));
     }
-    const pieceEff = Object.values(sideUnionW).reduce((a, b) => a + b, 0) / Math.max(1, totalWeight);
-    const nComp = connectedComponents(G);
-    const cohesion = 1 / Math.max(1, nComp);
-    let score = controlSat * 25 + k3tw * 4 + k4tw * 12 + disputedCoverage * 25;
-    score *= (1 + clustering * 0.5 + cohesion * 0.3); score *= (1 + pieceEff * 0.2);
-    return { score, metrics: { n, totalWeight, k3: k3.length, k4: k4.length, k3tw, k4tw, cliqueCoverage, disputedCoverage, controlSat, clustering, pieceEff, nComp } };
+    layer = next;
   }
-  const w = analyze(data.whitePieces, data.wCtrl, data.Gwhite, data.disputed, data.allSq);
-  const b = analyze(data.blackPieces, data.bCtrl, data.Gblack, data.disputed, data.allSq);
-  const total = w.score + b.score;
-  return { white: { score: total > 0 ? (w.score / total) * 100 : 50, ...w.metrics }, black: { score: total > 0 ? (b.score / total) * 100 : 50, ...b.metrics } };
+  return layer[0];
 }
 
-function analyzeEscape(boardArr, color) {
-  const kingP = color === 'white' ? 'K' : 'k'; let kr = -1, kc = -1;
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (boardArr[r][c] === kingP) { kr = r; kc = c; }
-  if (kr < 0) return null;
-  const escapes = new Set();
-  for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (dr || dc) {
-    const nr = kr + dr, nc = kc + dc;
-    if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) { const t = boardArr[nr][nc]; if (!t || (color === 'white' && t === t.toLowerCase()) || (color === 'black' && t === t.toUpperCase())) escapes.add(nr * 8 + nc); }
+function verifyProof(proof, cluster) {
+  if (proof.type !== 'ZK-RAMSEY-REDUCTION') return false;
+  if (proof.p !== cluster.p || proof.k !== cluster.k) return false;
+  const reconstructedHash = hashClique(cluster.clique, cluster.p);
+  if (proof.cliqueHash !== reconstructedHash) return false;
+  return true;
+}
+
+function certifyZKProof() {
+  if (!canStart('ramsey-zk')) return;
+  if (!state.ramsey.pendingCluster) { log('No hay cluster pendiente. Mine primero.', 'warn'); return; }
+
+  enterMode('ramsey-zk');
+  const cluster = state.ramsey.pendingCluster;
+  log('Construyendo ZK-Proof de reduccion estrategica...', 'ramsey');
+
+  const proof = {
+    type: 'ZK-RAMSEY-REDUCTION', p: cluster.p, k: cluster.k, d: cluster.d,
+    signature: cluster.signature, cliqueHash: hashClique(cluster.clique, cluster.p),
+    reductionRoot: merkleRoot(cluster.positions.map(p => JSON.stringify(p.board))),
+    timestamp: Date.now(), nonce: Math.floor(Math.random() * 1e9)
+  };
+
+  const verified = verifyProof(proof, cluster);
+  if (verified) {
+    proof.status = 'CERTIFIED';
+    state.ramsey.certifiedClusters.push({ ...cluster, proof });
+    log(`ZK-PROOF CERTIFICADA: ${proof.cliqueHash}`, 'ramsey');
+    log(`  Reduccion anclada a ${cluster.positions.length} posiciones`, 'success');
+    updateDifficulty();
+    const cliquesEl = document.getElementById('param-cliques');
+    if (cliquesEl) cliquesEl.textContent = state.ramsey.certifiedClusters.length;
+  } else {
+    log('Verificacion ZK fallida', 'warn');
   }
-  const attacker = color === 'white' ? 'black' : 'white';
-  const coverage = {};
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const p = boardArr[r][c]; if (!p) continue;
-    const pc = p === p.toUpperCase() ? 'white' : 'black';
-    if (pc === attacker) { const sqs = getAttackedSquares(boardArr, r, c); sqs.forEach(sq => { if (!coverage[sq]) coverage[sq] = []; coverage[sq].push({ r, c, p }); }); }
+  exitMode();
+}
+
+// ============================================================
+// RAMSEY — Poda Certificada
+// ============================================================
+function simulatePositionAt(idx) {
+  const sim = [...currentBoard];
+  const moves = generateMoves(sim, isWhiteToMove);
+  if (moves.length > idx) return applyMove(sim, moves[idx % moves.length]);
+  return sim;
+}
+
+function applyCertifiedPoda() {
+  if (!canStart('ramsey-poda')) return;
+  if (state.ramsey.certifiedClusters.length === 0) { log('No hay clusters certificados para poda.', 'warn'); return; }
+
+  enterMode('ramsey-poda');
+  const currentHash = hashPosition(params.p, currentBoard);
+  const currentEval = evaluateBoard();
+  const currentSig = getSignature(currentEval).value;
+
+  let appliedCluster = null;
+  for (const cc of state.ramsey.certifiedClusters) {
+    if (cc.clique.includes(currentHash) && cc.signature === currentSig) { appliedCluster = cc; break; }
   }
-  const controlled = new Set([...escapes].filter(sq => coverage[sq]));
-  const safe = new Set([...escapes].filter(sq => !coverage[sq]));
-  const kingUnderAttack = coverage[kr * 8 + kc] ? true : false;
-  let score = 0;
-  if (kingUnderAttack && safe.size === 0) score = 100;
-  else if (kingUnderAttack) score = 70 + (controlled.size / Math.max(1, escapes.size)) * 30;
-  else if (safe.size === 0 && escapes.size > 0) score = 85;
-  else score = (controlled.size / Math.max(1, escapes.size)) * 40;
-  return { escapes, controlled, safe, kingUnderAttack, score, kingPos: kr * 8 + kc, coverage };
+
+  if (appliedCluster) {
+    log(`PODA CERTIFICADA APLICADA`, 'ramsey');
+    log(`  Firma: ${appliedCluster.signature > 0 ? 'GANA BLANCAS' : 'GANA NEGRAS'}`, 'success');
+    log(`  Cluster: ${appliedCluster.proof.cliqueHash}`, 'info');
+    clearHighlights();
+    for (let i = 0; i < 64; i++) {
+      const sqHash = hashPosition(params.p, simulatePositionAt(i));
+      if (appliedCluster.clique.includes(sqHash)) highlightSquare(i, 'ramsey');
+    }
+  } else {
+    log('Posicion actual no en cluster certificado. Exploracion normal.', 'info');
+  }
+  exitMode();
 }
 
-function findKingSquare(boardArr, color) {
-  const target = color === 'white' ? 'K' : 'k';
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (boardArr[r][c] === target) return [r, c];
-  return null;
+// ============================================================
+// UCI TO SAN (Stockfish helper)
+// ============================================================
+function uciToSan(uci) {
+  if (!uci || uci.length < 4) return uci;
+  const from = uci.substring(0, 2);
+  const to = uci.substring(2, 4);
+  const promotion = uci.length > 4 ? uci[4] : '';
+  return from + to + (promotion ? '=' + promotion.toUpperCase() : '');
 }
 
-function computeRamseyScore(vec) {
-  if (!vec) return 0;
-  const kingSafetyNorm = Math.min(vec.kingSafety || 50, 100) / 100;
-  const materialNorm = Math.min(Math.abs(vec.materialDiff) / 15, 1);
-  const materialSign = vec.materialDiff >= 0 ? 1 : -1;
-  const controlNorm = Math.min((vec.disputed || 0) / 20, 1);
-  const k4Penalty = Math.min((vec.rivalK4NearKing || 0) / 4, 1);
-  const pawnNorm = (vec.pawnStructure || 0) > 0 ? 1 : (1 + (vec.pawnStructure || 0) / 3);
-  const centralNorm = Math.min(Math.abs(vec.centralControl || 0) / 5, 1);
-
-  const score = (
-    kingSafetyNorm * PV_EVAL_CONFIG.WEIGHT_KING_SAFETY +
-    materialNorm * materialSign * PV_EVAL_CONFIG.WEIGHT_MATERIAL +
-    controlNorm * PV_EVAL_CONFIG.WEIGHT_CONTROL +
-    (-k4Penalty) * Math.abs(PV_EVAL_CONFIG.WEIGHT_K4_THREAT) +
-    pawnNorm * PV_EVAL_CONFIG.WEIGHT_PAWN_STRUCT +
-    centralNorm * PV_EVAL_CONFIG.WEIGHT_CENTRAL
-  );
-
-  return Math.round(score * 100);
+// ============================================================
+// STOCKFISH — Conexión y análisis
+// ============================================================
+async function connectStockfish() {
+  if (state.stockfish.isConnected) {
+    if (activeMode === 'stockfish') stopAnyAnalysis();
+    if (state.stockfish.worker) { state.stockfish.worker.terminate(); state.stockfish.worker = null; }
+    if (state.stockfish.blobURL) { URL.revokeObjectURL(state.stockfish.blobURL); state.stockfish.blobURL = null; }
+    state.stockfish.isConnected = false;
+    log('Stockfish desconectado', 'info');
+    updateEngineStatus('Motor: desconectado', '');
+    document.getElementById('btn-connect-engine').textContent = '🔌 Conectar SF';
+    return;
+  }
+  try {
+    log('Conectando motor Stockfish...', 'info');
+    const response = await fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
+    if (!response.ok) throw new Error('Error al descargar Stockfish');
+    const workerScript = await response.text();
+    const blob = new Blob([workerScript], { type: 'application/javascript' });
+    state.stockfish.blobURL = URL.createObjectURL(blob);
+    state.stockfish.worker = new Worker(state.stockfish.blobURL);
+    state.stockfish.worker.onmessage = function(event) { handleEngineMessage(event.data); };
+    state.stockfish.worker.postMessage('uci');
+    state.stockfish.worker.postMessage('setoption name MultiPV value 1');
+    state.stockfish.worker.postMessage('setoption name Hash value 128');
+    state.stockfish.worker.postMessage('isready');
+    state.stockfish.isConnected = true;
+    log('Motor Stockfish conectado', 'success');
+    updateEngineStatus('Motor: conectado ✓', 'connected');
+    document.getElementById('btn-connect-engine').textContent = '🔌 Desconectar';
+  } catch (error) {
+    log('Error conectando motor: ' + error.message, 'warn');
+    updateEngineStatus('Error: ' + error.message, 'error');
+  }
 }
 
+function handleEngineMessage(msg) {
+  if (!msg || typeof msg !== 'string') return;
+  if (msg.startsWith('bestmove')) {
+    const parts = msg.split(' ');
+    const bm = parts[1];
+    state.stockfish.lastStats.bestMove = bm || '';
+    state.stockfish.busy = false;
+    if (activeMode === 'stockfish') {
+      exitMode();
+      updateEngineStatus('Analisis completado', 'connected');
+      document.getElementById('status-engine').textContent = 'Engine: Completo';
+      document.getElementById('status-engine').classList.remove('active');
+    }
+    if (bm && bm !== '(none)') {
+      const san = uciToSan(bm);
+      log(`Mejor jugada: ${san}`, 'success');
+    }
+  } else if (msg.startsWith('info')) {
+    parseInfoLine(msg);
+  }
+}
+
+function parseInfoLine(message) {
+  const parts = message.split(' ');
+  const scoreIdx = parts.indexOf('score');
+  if (scoreIdx !== -1) {
+    const scoreType = parts[scoreIdx + 1];
+    const scoreValue = parseInt(parts[scoreIdx + 2]);
+    let evalScore = 0;
+    if (scoreType === 'cp') evalScore = scoreValue / 100;
+    else if (scoreType === 'mate') evalScore = scoreValue > 0 ? 100 : -100;
+    const sig = getSignature(evalScore);
+    updateEvaluation(evalScore, sig);
+    const scoreEl = document.getElementById('eval-score');
+    if (scoreEl) scoreEl.textContent = (evalScore > 0 ? '+' : '') + evalScore.toFixed(2);
+  }
+  const pvIdx = parts.indexOf('pv');
+  if (pvIdx !== -1 && parts.length > pvIdx + 1) {
+    const pvMoves = parts.slice(pvIdx + 1);
+    const pvContainer = document.getElementById('pv-lines');
+    if (pvContainer && activeMode === 'stockfish') {
+      pvContainer.innerHTML = `
+        <div class="pv-line">
+          <span class="pv-eval pos">SF</span>
+          <span class="pv-moves">${pvMoves.join(' ')}</span>
+          <span class="pv-depth">infinite</span>
+        </div>`;
+    }
+  }
+}
+
+function startStockfishAnalysis() {
+  if (!canStart('stockfish')) return;
+  if (!state.stockfish.isConnected) { log('Conecte Stockfish primero', 'warn'); return; }
+  try {
+    enterMode('stockfish');
+    state.stockfish.busy = true;
+    state.stockfish.lastStats = { nps: 0, depth: 0, nodes: 0, time: 0, pv: '', bestMove: '', evaluation: null };
+    updateEngineStatus('Stockfish analizando (go infinite)...', 'connected');
+    document.getElementById('btn-connect-engine').disabled = true;
+
+    const fen = currentFEN;
+    state.stockfish.worker.postMessage('setoption name MultiPV value 1');
+    state.stockfish.worker.postMessage(`position fen ${fen}`);
+    state.stockfish.worker.postMessage('go infinite');
+  } catch (e) {
+    log('Error en Stockfish: ' + e.message, 'warn');
+    exitMode();
+  }
+}
+
+function stopAnyAnalysis() {
+  const mode = activeMode;
+  if (mode === 'stockfish') {
+    if (state.stockfish.worker) state.stockfish.worker.postMessage('stop');
+    log('Stockfish: analisis detenido', 'info');
+  } else if (mode === 'ramsey-iterative') {
+    if (state.ramsey.interval) { clearTimeout(state.ramsey.interval); state.ramsey.interval = null; }
+    log('Ramsey: motor estructural detenido', 'ramsey');
+    if (state.ramsey.bestFEN) {
+      log(`MEJOR FEN: ${state.ramsey.bestFEN}`, 'ramsey');
+      const pvContainer = document.getElementById('pv-lines');
+      if (pvContainer) {
+        const div = document.createElement('div');
+        div.className = 'pv-line';
+        div.style.borderLeft = '3px solid #008000';
+        div.innerHTML = `<span class="pv-eval pos">🏆</span><span class="pv-moves">Mejor FEN: ${state.ramsey.bestFEN}</span>`;
+        pvContainer.insertBefore(div, pvContainer.firstChild);
+      }
+    }
+  } else if (mode === 'ramsey-mining' || mode === 'ramsey-zk' || mode === 'ramsey-poda') {
+    log(`${MODE_LABELS[mode]} detenido`, 'info');
+  }
+  state.stockfish.busy = false;
+  exitMode();
+}
+
+// ============================================================
+// EJECUTOR DE MODO (selector único)
+// ============================================================
+function executeCurrentMode() {
+  if (activeMode !== 'idle') {
+    log(`Espera a que termine ${MODE_LABELS[activeMode]}`, 'warn');
+    return;
+  }
+  const mode = document.getElementById('analysis-mode').value;
+  if (mode === 'stockfish') {
+    if (!state.stockfish.isConnected) { log('Conecta Stockfish primero', 'warn'); return; }
+    startStockfishAnalysis();
+  } else if (mode === 'ramsey-iterative') {
+    startRamseyIterative();
+  } else if (mode === 'ramsey-mining') {
+    mineRamseyCluster();
+  } else if (mode === 'ramsey-zk') {
+    certifyZKProof();
+  } else if (mode === 'ramsey-poda') {
+    applyCertifiedPoda();
+  }
+}
+
+// ============================================================
+// PESTAÑAS
+// ============================================================
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active-pane'));
+  document.getElementById('tab-' + tabId).classList.add('active-pane');
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelector(`.tab-btn[data-tab="${tabId}"]`).classList.add('active');
+}
+
+// ============================================================
+// SLIDERS
+// ============================================================
+function setupSliders() {
+  document.getElementById('slider-p').oninput = function() {
+    params.p = parseInt(this.value);
+    document.getElementById('param-p').textContent = params.p;
+    updateHashDisplay();
+  };
+  document.getElementById('slider-k').oninput = function() {
+    params.k = parseInt(this.value);
+    document.getElementById('param-k').textContent = params.k;
+  };
+  document.getElementById('slider-d').oninput = function() {
+    params.d = parseInt(this.value);
+    document.getElementById('param-d').textContent = params.d;
+  };
+}
+
+// ============================================================
+// INICIALIZACIÓN
+// ============================================================
+function init() {
+  setupSliders();
+
+  document.getElementById('fen-input').oninput = function() {
+    const btn = document.getElementById('btn-load-fen');
+    if (btn) btn.disabled = false;
+    const status = document.getElementById('fen-status');
+    if (status) status.textContent = 'Pegado detectado — presione Cargar FEN';
+  };
+  document.getElementById('fen-input').onpaste = function() {
+    const btn = document.getElementById('btn-load-fen');
+    if (btn) btn.disabled = false;
+    const status = document.getElementById('fen-status');
+    if (status) status.textContent = 'Pegado detectado — presione Cargar FEN';
+  };
+
+  document.getElementById('pgn-file').addEventListener('change', function(e) {
+    if (e.target.files.length > 0) handlePGNFile(e.target.files[0]);
+  });
+
+  parseFEN('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+  renderBoardSVG();
+  updateHashDisplay();
+  updateEvaluation(evaluateBoard(), getSignature(evaluateBoard()));
+  log('RASP-FEN Windows95 Edition listo', 'info');
+}
 
 window.onload = init;
 </script>
 
-</div> <!-- w95-window -->
 </body>
 </html>
