@@ -667,6 +667,7 @@
           <option value="ramsey-mining">⛏️ Minería Ramsey</option>
           <option value="ramsey-zk">📜 Certificación ZK</option>
           <option value="ramsey-poda">✂️ Poda certificada</option>
+          <option value="combined-analysis">🧠 Análisis combinado</option>
         </select>
         <div class="action-buttons">
           <button class="btn btn-primary" id="btn-execute-mode" onclick="executeCurrentMode()">▶ Ejecutar</button>
@@ -771,12 +772,29 @@ const MODE_LABELS = {
   'ramsey-iterative': 'Ramsey Iterativo',
   'ramsey-mining': 'Ramsey Mineria',
   'ramsey-zk': 'ZK Proof',
-  'ramsey-poda': 'Poda Certificada'
+  'ramsey-poda': 'Poda Certificada',
+  'combined-analysis': 'Análisis combinado'
 };
 
 const state = {
-  stockfish: { isConnected: false, worker: null, blobURL: null, busy: false, lastStats: {}, lastLines: [] },
-  ramsey:    { mining: false, interval: null, bestFEN: null, bestScore: -Infinity, overlays: false, lastResult: null, lastEscape: null, certifiedClusters: [], pendingCluster: null }
+  stockfish: { isConnected: false, worker: null, blobURL: null, busy: false, lastStats: {}, lastLines: [], baseFEN: null },
+  ramsey:    { mining: false, interval: null, bestFEN: null, bestScore: -Infinity, overlays: false, lastResult: null, lastEscape: null, certifiedClusters: [], pendingCluster: null },
+  combined: {
+    active: false,
+    phase: 'idle',
+    baseFEN: null,
+    baseLines: [],
+    hypotheses: [],
+    accepted: [],
+    rejected: [],
+    currentHypothesis: null,
+    iteration: 0,
+    maxIterations: 3,
+    baseMovetime: 3000,
+    verifyMovetime: 1500,
+    ramseyBudgetMs: 500,
+    minImprovement: 0.20
+  }
 };
 
 let chess = null; // chess.js instance for Ramsey iterative
@@ -2095,6 +2113,176 @@ function upsertStockfishLine(line) {
   state.stockfish.lastLines.sort((a, b) => (a.multipv || 1) - (b.multipv || 1));
 }
 
+
+function normalizeStockfishEval(line) {
+  if (!line || typeof line.score !== 'number') return null;
+  return line.score;
+}
+
+function runStockfishForFEN({ fen, movetime, multipv, purpose }) {
+  return new Promise((resolve, reject) => {
+    if (!state.stockfish.isConnected || !state.stockfish.worker) { reject(new Error('Stockfish no conectado')); return; }
+    state.stockfish.lastLines = [];
+    state.stockfish.busy = true;
+    log(`Stockfish [${purpose}] movetime=${movetime}ms multipv=${multipv}`, 'info');
+    const timeout = setTimeout(() => {
+      state.stockfish.worker.onmessage = originalHandler;
+      state.stockfish.busy = false;
+      reject(new Error('Timeout esperando Stockfish'));
+    }, movetime + 2500);
+    const originalHandler = state.stockfish.worker.onmessage;
+    state.stockfish.worker.onmessage = function(event) {
+      const msg = event.data;
+      handleEngineMessage(msg);
+      if (typeof msg === 'string' && msg.startsWith('bestmove')) {
+        clearTimeout(timeout);
+        state.stockfish.worker.onmessage = originalHandler;
+        resolve();
+      }
+    };
+    state.stockfish.worker.postMessage(`position fen ${fen}`);
+    state.stockfish.worker.postMessage(`setoption name MultiPV value ${multipv}`);
+    state.stockfish.worker.postMessage(`go movetime ${movetime}`);
+  });
+}
+
+async function runCombinedBaseStockfish() {
+  state.stockfish.lastLines = [];
+  state.stockfish.baseFEN = currentFEN;
+  log('Stockfish base sobre FEN actual', 'info');
+  await runStockfishForFEN({ fen: currentFEN, movetime: state.combined.baseMovetime, multipv: 3, purpose: 'combined-base' });
+  state.combined.baseLines = [...state.stockfish.lastLines];
+}
+
+function selectPromisingStructure(candidates) {
+  const rejectedHashes = new Set(state.combined.rejected.map(h => h.hash));
+  const exploredHashes = new Set(state.combined.hypotheses.map(h => h.hash));
+  const filtered = candidates.filter(c => !rejectedHashes.has(c.hash) && !exploredHashes.has(c.hash));
+  if (filtered.length === 0) return null;
+  filtered.sort((a, b) => {
+    const sigA = a.sig > 0 ? 2 : a.sig === 0 ? 1 : 0;
+    const sigB = b.sig > 0 ? 2 : b.sig === 0 ? 1 : 0;
+    if (sigB !== sigA) return sigB - sigA;
+    if ((b.eval || 0) !== (a.eval || 0)) return (b.eval || 0) - (a.eval || 0);
+    if ((b.ply || 0) !== (a.ply || 0)) return (b.ply || 0) - (a.ply || 0);
+    return (a.multipv || 99) - (b.multipv || 99);
+  });
+  const candidate = filtered[0];
+  return {
+    id: `H${state.combined.hypotheses.length + 1}`,
+    sourcePV: candidate.multipv || 1,
+    sourceMoveIndex: candidate.ply || 0,
+    baseFEN: state.combined.baseFEN,
+    focusFEN: candidate.fen,
+    structure: 'ramsey-cluster',
+    reason: 'Estructura favorable detectada en línea Stockfish',
+    baseEval: typeof candidate.score === 'number' ? candidate.score : 0,
+    candidateEval: candidate.eval,
+    newEval: null,
+    status: 'pending',
+    hash: candidate.hash,
+    signature: candidate.sig
+  };
+}
+
+async function buildNextRamseyHypothesis() {
+  const start = performance.now();
+  const positions = collectPositionsFromStockfishLines(state.combined.baseLines);
+  if (!positions || positions.length === 0) { log('No hay posiciones derivadas de PV para analizar.', 'warn'); return null; }
+  const candidates = positions.map(pos => {
+    const evalScore = evaluateBoard(pos.board, pos.fen.split(' ')[1] === 'w');
+    const sig = getSignature(evalScore);
+    const hash = hashPosition(params.p, pos.board);
+    return { ...pos, eval: evalScore, sig: sig.value, sigLabel: sig.label, hash, sourceEval: pos.score };
+  }).filter(pos => pos.sig !== null);
+  if (candidates.length === 0) { log('Ramsey no encontró posiciones con firma útil.', 'warn'); return null; }
+  const hypothesis = selectPromisingStructure(candidates);
+  if (!hypothesis) return null;
+  log(`Ramsey generó hipótesis en ${Math.round(performance.now() - start)} ms`, 'ramsey');
+  return hypothesis;
+}
+
+async function verifyHypothesisWithStockfish(hypothesis) {
+  log(`Stockfish verifica hipótesis ${hypothesis.id}`, 'info');
+  await runStockfishForFEN({ fen: hypothesis.focusFEN, movetime: state.combined.verifyMovetime, multipv: 1, purpose: 'combined-verify' });
+  const best = state.stockfish.lastLines?.[0];
+  if (!best) return { ok: false, eval: null, reason: 'Sin respuesta Stockfish' };
+  return { ok: true, eval: normalizeStockfishEval(best), line: best };
+}
+
+function isEvaluationImproved(baseEval, newEval, delta = 0.20) { return newEval > baseEval + delta; }
+
+function renderCombinedResult(hypothesis, verifiedLine) {
+  const pvContainer = document.getElementById('pv-lines');
+  if (!pvContainer) return;
+  const evalBase = typeof hypothesis.baseEval === 'number' ? (hypothesis.baseEval > 0 ? '+' : '') + hypothesis.baseEval.toFixed(2) : 'n/a';
+  const evalNew = typeof hypothesis.newEval === 'number' ? (hypothesis.newEval > 0 ? '+' : '') + hypothesis.newEval.toFixed(2) : 'n/a';
+  const pv = Array.isArray(verifiedLine?.pv) ? verifiedLine.pv.join(' ') : 'sin PV';
+  const div = document.createElement('div');
+  div.className = 'pv-line';
+  div.style.borderLeft = '3px solid #0000ff';
+  div.innerHTML = `<span class="pv-eval pos">[C]</span><span class="pv-moves">[COMBINADO] Hipótesis ${hypothesis.id} aceptada | PV origen: ${hypothesis.sourcePV} | Eval base: ${evalBase} | Eval verificada: ${evalNew} | Estructura: ${hypothesis.structure} | Ruta: ${pv}</span>`;
+  pvContainer.insertBefore(div, pvContainer.firstChild);
+}
+
+function promoteCombinedLine(hypothesis, verifiedLine) {
+  state.ramsey.lastResult = { type: 'combined-promotion', hypothesis, verifiedLine, timestamp: Date.now() };
+  log(`Ruta promovida por análisis combinado: ${hypothesis.id}`, 'success');
+  renderCombinedResult(hypothesis, verifiedLine);
+}
+
+function applyCombinedDecision(hypothesis, verification) {
+  if (!verification.ok) {
+    hypothesis.status = 'rejected'; hypothesis.rejectReason = verification.reason; state.combined.rejected.push(hypothesis);
+    log(`Hipótesis ${hypothesis.id} rechazada: ${verification.reason}`, 'warn'); return;
+  }
+  hypothesis.newEval = verification.eval;
+  const improved = isEvaluationImproved(hypothesis.baseEval, hypothesis.newEval, state.combined.minImprovement);
+  if (improved) { hypothesis.status = 'accepted'; state.combined.accepted.push(hypothesis); log(`Hipótesis ${hypothesis.id} aceptada`, 'success'); log(`Eval base: ${hypothesis.baseEval} → nueva eval: ${hypothesis.newEval}`, 'success'); promoteCombinedLine(hypothesis, verification.line); }
+  else { hypothesis.status = 'rejected'; state.combined.rejected.push(hypothesis); log(`Hipótesis ${hypothesis.id} rechazada`, 'warn'); log(`Eval base: ${hypothesis.baseEval} → nueva eval: ${hypothesis.newEval}`, 'warn'); }
+}
+
+function finishCombinedAnalysis() {
+  const accepted = state.combined.accepted.length;
+  const rejected = state.combined.rejected.length;
+  log(`Análisis combinado finalizado. Aceptadas: ${accepted}, rechazadas: ${rejected}`, 'info');
+  state.combined.active = false;
+  state.combined.phase = 'done';
+  exitMode();
+}
+
+async function startCombinedAnalysis() {
+  if (!canStart('combined-analysis')) return;
+  if (!state.stockfish.isConnected) { log('Conecta Stockfish primero', 'warn'); return; }
+  enterMode('combined-analysis');
+  state.combined.active = true; state.combined.phase = 'stockfish-base'; state.combined.baseFEN = currentFEN; state.combined.baseLines = []; state.combined.hypotheses = []; state.combined.accepted = []; state.combined.rejected = []; state.combined.currentHypothesis = null; state.combined.iteration = 0;
+  log('Análisis combinado iniciado', 'info');
+  log('Fase 1: Stockfish genera líneas base', 'info');
+  try {
+    await runCombinedBaseStockfish();
+    if (!state.stockfish.lastLines || state.stockfish.lastLines.length === 0) { log('Stockfish no generó líneas base. Análisis combinado detenido.', 'warn'); finishCombinedAnalysis(); return; }
+    state.combined.baseLines = [...state.stockfish.lastLines];
+    while (state.combined.active && state.combined.iteration < state.combined.maxIterations) {
+      state.combined.iteration++;
+      log(`Iteración combinada ${state.combined.iteration}`, 'info');
+      state.combined.phase = 'ramsey-hypothesis';
+      const hypothesis = await buildNextRamseyHypothesis();
+      if (!hypothesis) { log('Ramsey no encontró nuevas hipótesis prometedoras.', 'warn'); break; }
+      state.combined.currentHypothesis = hypothesis;
+      state.combined.hypotheses.push(hypothesis);
+      log(`Hipótesis Ramsey generada: ${hypothesis.id}`, 'ramsey');
+      log(`PV origen: ${hypothesis.sourcePV} | Eval base: ${hypothesis.baseEval}`, 'ramsey');
+      state.combined.phase = 'stockfish-verify';
+      const verification = await verifyHypothesisWithStockfish(hypothesis);
+      applyCombinedDecision(hypothesis, verification);
+    }
+    finishCombinedAnalysis();
+  } catch (err) {
+    log('Error en análisis combinado: ' + err.message, 'warn');
+    finishCombinedAnalysis();
+  }
+}
+
 function startStockfishAnalysis() {
   if (!canStart('stockfish')) return;
   if (!state.stockfish.isConnected) { log('Conecte Stockfish primero', 'warn'); return; }
@@ -2135,6 +2323,11 @@ function stopAnyAnalysis() {
         pvContainer.insertBefore(div, pvContainer.firstChild);
       }
     }
+  } else if (mode === 'combined-analysis') {
+    state.combined.active = false;
+    state.combined.phase = 'idle';
+    if (state.stockfish.worker) state.stockfish.worker.postMessage('stop');
+    log('Análisis combinado detenido por el usuario.', 'warn');
   } else if (mode === 'ramsey-mining' || mode === 'ramsey-zk' || mode === 'ramsey-poda') {
     log(`${MODE_LABELS[mode]} detenido`, 'info');
   }
@@ -2162,6 +2355,10 @@ function executeCurrentMode() {
     certifyZKProof();
   } else if (mode === 'ramsey-poda') {
     applyCertifiedPoda();
+  } else if (mode === 'combined-analysis') {
+    startCombinedAnalysis();
+  } else {
+    log('Modo no reconocido: ' + mode, 'warn');
   }
 }
 
