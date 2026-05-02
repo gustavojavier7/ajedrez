@@ -775,7 +775,7 @@ const MODE_LABELS = {
 };
 
 const state = {
-  stockfish: { isConnected: false, worker: null, blobURL: null, busy: false, lastStats: {} },
+  stockfish: { isConnected: false, worker: null, blobURL: null, busy: false, lastStats: {}, lastLines: [] },
   ramsey:    { mining: false, interval: null, bestFEN: null, bestScore: -Infinity, overlays: false, lastResult: null, lastEscape: null, certifiedClusters: [], pendingCluster: null }
 };
 
@@ -1772,6 +1772,10 @@ function ramseyIterativeStep(stepNumber) {
 // ============================================================
 async function mineRamseyCluster() {
   if (!canStart('ramsey-mining')) return;
+  if (!state.stockfish.lastLines || state.stockfish.lastLines.length === 0) {
+    log('Ejecute primero Evaluación directa con Stockfish.', 'warn');
+    return;
+  }
   enterMode('ramsey-mining');
 
   const statusRamsey = document.getElementById('status-ramsey');
@@ -1779,7 +1783,12 @@ async function mineRamseyCluster() {
 
   log(`Iniciando mineria Ramsey: p=${params.p}, k=${params.k}, d=${params.d}`, 'ramsey');
 
-  const positions = generateSubtreePositions();
+  const positions = collectPositionsFromStockfishLines(state.stockfish.lastLines);
+  if (positions.length === 0) {
+    log('No se pudieron reconstruir posiciones desde las lineas de Stockfish.', 'warn');
+    exitMode();
+    return;
+  }
   const adj = buildPaleyAdjacency(params.p);
   const maxClique = findMaxClique(adj, positions.map((_, i) => i), params.k);
 
@@ -1831,6 +1840,36 @@ function generateSubtreePositions() {
     }
   }
   while (queue.length > 0 && positions.length < maxPositions) positions.push(queue.shift());
+  return positions;
+}
+
+function collectPositionsFromStockfishLines(lines) {
+  if (!window.Chess || !Array.isArray(lines)) return [];
+  const positions = [];
+  const seen = new Set();
+  const baseFen = currentFEN;
+  const pushPosition = (fen, source) => {
+    if (!fen || seen.has(fen)) return;
+    seen.add(fen);
+    const board = boardArrToCurrentBoard(parseFENtoBoardArr(fen));
+    positions.push({ board, fen, depth: source.depth || 0, score: source.score || 0, multipv: source.multipv || 1, ply: source.ply || 0, source: 'stockfish-pv' });
+  };
+
+  pushPosition(baseFen, { depth: 0, score: evaluateBoard(), multipv: 0, ply: 0 });
+  for (const line of lines) {
+    if (!line || !Array.isArray(line.pv) || line.pv.length === 0) continue;
+    const lineChess = new Chess(baseFen);
+    for (let ply = 0; ply < line.pv.length; ply++) {
+      const move = line.pv[ply];
+      const moveApplied = lineChess.move(move, { sloppy: true });
+      if (!moveApplied) break;
+      const fen = lineChess.fen();
+      const board = boardArrToCurrentBoard(parseFENtoBoardArr(fen));
+      const turn = fen.split(' ')[1] === 'w';
+      const lineScore = typeof line.score === 'number' ? line.score : evaluateBoard(board, turn);
+      positions.push({ board, fen, depth: line.depth || 0, score: lineScore, multipv: line.multipv || 1, ply: ply + 1, source: 'stockfish-pv' });
+    }
+  }
   return positions;
 }
 
@@ -2014,11 +2053,16 @@ function handleEngineMessage(msg) {
 
 function parseInfoLine(message) {
   const parts = message.split(' ');
+  const depthIdx = parts.indexOf('depth');
+  const depth = depthIdx !== -1 ? parseInt(parts[depthIdx + 1], 10) || 0 : 0;
+  const multiPVIdx = parts.indexOf('multipv');
+  const multipv = multiPVIdx !== -1 ? parseInt(parts[multiPVIdx + 1], 10) || 1 : 1;
+  let evalScore = null;
   const scoreIdx = parts.indexOf('score');
   if (scoreIdx !== -1) {
     const scoreType = parts[scoreIdx + 1];
     const scoreValue = parseInt(parts[scoreIdx + 2]);
-    let evalScore = 0;
+    evalScore = 0;
     if (scoreType === 'cp') evalScore = scoreValue / 100;
     else if (scoreType === 'mate') evalScore = scoreValue > 0 ? 100 : -100;
     const sig = getSignature(evalScore);
@@ -2029,6 +2073,7 @@ function parseInfoLine(message) {
   const pvIdx = parts.indexOf('pv');
   if (pvIdx !== -1 && parts.length > pvIdx + 1) {
     const pvMoves = parts.slice(pvIdx + 1);
+    upsertStockfishLine({ depth, multipv, score: evalScore, pv: pvMoves, raw: message });
     const pvContainer = document.getElementById('pv-lines');
     if (pvContainer && activeMode === 'stockfish') {
       pvContainer.innerHTML = `
@@ -2041,6 +2086,15 @@ function parseInfoLine(message) {
   }
 }
 
+function upsertStockfishLine(line) {
+  if (!line || !Array.isArray(line.pv) || line.pv.length === 0) return;
+  const key = line.multipv || 1;
+  const existingIdx = state.stockfish.lastLines.findIndex(l => (l.multipv || 1) === key);
+  if (existingIdx === -1) state.stockfish.lastLines.push(line);
+  else if ((state.stockfish.lastLines[existingIdx].depth || 0) <= (line.depth || 0)) state.stockfish.lastLines[existingIdx] = line;
+  state.stockfish.lastLines.sort((a, b) => (a.multipv || 1) - (b.multipv || 1));
+}
+
 function startStockfishAnalysis() {
   if (!canStart('stockfish')) return;
   if (!state.stockfish.isConnected) { log('Conecte Stockfish primero', 'warn'); return; }
@@ -2048,6 +2102,7 @@ function startStockfishAnalysis() {
     enterMode('stockfish');
     state.stockfish.busy = true;
     state.stockfish.lastStats = { nps: 0, depth: 0, nodes: 0, time: 0, pv: '', bestMove: '', evaluation: null };
+    state.stockfish.lastLines = [];
     updateEngineStatus('Stockfish analizando (go infinite)...', 'connected');
     document.getElementById('btn-connect-engine').disabled = true;
 
