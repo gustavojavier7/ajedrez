@@ -670,9 +670,8 @@
           <option value="combined-analysis">🧠 Análisis combinado</option>
         </select>
         <div class="action-buttons">
-          <button class="btn btn-primary" id="btn-execute-mode" onclick="executeCurrentMode()">▶ Ejecutar</button>
-          <button class="btn" id="btn-stop-action" onclick="stopAnyAnalysis()">⏹ Detener</button>
           <button class="btn" id="btn-connect-engine" onclick="connectStockfish()">🔌 Conectar SF</button>
+          <button class="btn btn-primary" id="btn-run-stop" onclick="handleRunStopAction()" disabled>▶ Ejecutar</button>
         </div>
         <div id="engine-status-text" style="font-size:11px; margin-top:6px; background:white; border:1px solid #808080; border-top-color:#404040; border-left-color:#404040; padding:3px 6px; font-family:'Courier New',monospace;">Motor: desconectado</div>
       </div>
@@ -822,6 +821,20 @@ function log(msg, type = 'info') {
   logArea.scrollTop = logArea.scrollHeight;
 }
 
+
+function updateRunStopButton() {
+  const runStopBtn = document.getElementById('btn-run-stop');
+  if (!runStopBtn) return;
+  runStopBtn.disabled = !state.stockfish.isConnected;
+  if (activeMode === 'idle') {
+    runStopBtn.textContent = '▶ Ejecutar';
+    runStopBtn.classList.add('btn-primary');
+  } else {
+    runStopBtn.textContent = '⏹ Detener';
+    runStopBtn.classList.remove('btn-primary');
+  }
+}
+
 // ============================================================
 // MAQUINA DE ESTADO — canStart / enterMode / exitMode
 // ============================================================
@@ -839,6 +852,7 @@ function enterMode(mode) {
   activeMode = mode;
   document.getElementById('status-engine').textContent = `Engine: ${MODE_LABELS[mode]}`;
   document.getElementById('status-engine').classList.add('active');
+  updateRunStopButton();
   log(`${MODE_LABELS[mode]} iniciado`, mode.startsWith('ramsey') ? 'ramsey' : 'info');
 }
 
@@ -849,6 +863,7 @@ function exitMode() {
   document.getElementById('status-engine').textContent = 'Engine: Standby';
   document.getElementById('status-engine').classList.remove('active');
   document.getElementById('status-ramsey').classList.remove('active', 'certified');
+  updateRunStopButton();
   if (prev !== 'idle') log(`${MODE_LABELS[prev]} finalizado`, 'info');
 }
 
@@ -2022,6 +2037,7 @@ async function connectStockfish() {
     log('Stockfish desconectado', 'info');
     updateEngineStatus('Motor: desconectado', '');
     document.getElementById('btn-connect-engine').textContent = '🔌 Conectar SF';
+    updateRunStopButton();
     return;
   }
   try {
@@ -2041,6 +2057,7 @@ async function connectStockfish() {
     log('Motor Stockfish conectado', 'success');
     updateEngineStatus('Motor: conectado ✓', 'connected');
     document.getElementById('btn-connect-engine').textContent = '🔌 Desconectar';
+    updateRunStopButton();
   } catch (error) {
     log('Error conectando motor: ' + error.message, 'warn');
     updateEngineStatus('Error: ' + error.message, 'error');
@@ -2302,6 +2319,7 @@ function startStockfishAnalysis() {
     state.stockfish.lastLines = [];
     updateEngineStatus('Stockfish analizando (go infinite)...', 'connected');
     document.getElementById('btn-connect-engine').disabled = true;
+    updateRunStopButton();
 
     const fen = currentFEN;
     state.stockfish.worker.postMessage('setoption name MultiPV value 1');
@@ -2343,6 +2361,16 @@ function stopAnyAnalysis() {
   }
   state.stockfish.busy = false;
   exitMode();
+}
+
+
+function handleRunStopAction() {
+  if (!state.stockfish.isConnected) {
+    log('Conecta Stockfish primero', 'warn');
+    return;
+  }
+  if (activeMode === 'idle') executeCurrentMode();
+  else stopAnyAnalysis();
 }
 
 // ============================================================
@@ -2428,6 +2456,7 @@ function init() {
   renderBoardSVG();
   updateHashDisplay();
   updateEvaluation(evaluateBoard(), getSignature(evaluateBoard()));
+  updateRunStopButton();
   log('RASP-FEN Windows95 Edition listo', 'info');
 }
 
