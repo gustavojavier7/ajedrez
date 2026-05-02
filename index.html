@@ -846,7 +846,7 @@ function parseFEN(fen) {
     let col = 0;
     for (const char of rows[row]) {
       if (/\d/.test(char)) { col += parseInt(char); }
-      else { currentBoard[(7 - row) * 8 + col] = char; col++; }
+      else { currentBoard[row * 8 + col] = char; col++; }
     }
   }
   isWhiteToMove = parts[1] === 'w';
@@ -1377,10 +1377,9 @@ function parseFENtoBoardArr(fen) {
   const boardArr = Array(8).fill().map(() => Array(8).fill(null));
   for (let row = 0; row < 8; row++) {
     let col = 0;
-    const actualRow = 7 - row;
     for (const char of rows[row]) {
       if (/\d/.test(char)) col += parseInt(char);
-      else { boardArr[actualRow][col] = char; col++; }
+      else { boardArr[row][col] = char; col++; }
     }
   }
   return boardArr;
@@ -2175,3 +2174,4 @@ window.onload = init;
 
 </body>
 </html>
+html>
