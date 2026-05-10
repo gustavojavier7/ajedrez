@@ -1029,7 +1029,7 @@
             lastStats.bestMove = '';
             lastStats.bestMoveSan = '';
 
-            resetASPTPanel({ preservePV: isEngineMove });
+            resetASPTPanel({ preservePV: false });
             
             document.getElementById('chessboard').innerHTML = generateChessboardSVG();
             document.getElementById('legalMoves').style.display = 'none';
