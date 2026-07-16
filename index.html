@@ -7,669 +7,205 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background-color: #f0f0f0;
             min-height: 100vh;
-            line-height: 1.4;
             overflow-x: auto;
+            background: #f0f0f0;
+            color: #1f2937;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.4;
         }
-
         .container {
+            width: 100%;
             max-width: 1600px;
+            min-height: 100vh;
             margin: 0 auto;
             padding: 20px;
-            min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
-
-        .header {
-            text-align: center;
-            margin-bottom: 16px;
-        }
-
-        .header h1 {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #333;
-        }
-
-        .input-section {
-            background: white;
+        .header { margin-bottom: 16px; text-align: center; }
+        .header h1 { color: #333; font-size: 2rem; }
+        .card {
+            background: #fff;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            padding: 16px;
-            margin-bottom: 16px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, .1);
         }
-
-        .input-row {
-            display: flex;
-            gap: 12px;
-            align-items: flex-end;
-            flex-wrap: wrap;
-        }
-
-        .input-group {
-            flex: 1;
-            min-width: 300px;
-        }
-
-        .input-group label {
-            display: block;
-            font-weight: 600;
-            color: #374151;
-            font-size: 0.9rem;
-            margin-bottom: 4px;
-        }
-
+        .input-section { margin-bottom: 16px; padding: 16px; }
+        .input-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+        .input-group { min-width: 300px; flex: 1; }
+        .input-group label { display: block; margin-bottom: 4px; font-size: .9rem; font-weight: 600; }
         .input-group input {
             width: 100%;
-            padding: 2px 5px;
+            padding: 7px 9px;
             border: 2px solid #e5e7eb;
             border-radius: 6px;
-            font-size: 0.9rem;
-            transition: border-color 0.2s;
+            font-size: .9rem;
         }
-
         .input-group input:focus {
             outline: none;
             border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, .1);
         }
-
-        .button-group {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
+        .button-group, .engine-controls { display: flex; gap: 8px; flex-wrap: wrap; }
         .btn {
             padding: 10px 16px;
-            border: none;
+            border: 0;
             border-radius: 6px;
-            font-weight: 600;
+            color: #fff;
             cursor: pointer;
-            transition: all 0.2s;
-            font-size: 0.85rem;
             display: inline-flex;
             align-items: center;
             gap: 6px;
+            font-size: .85rem;
+            font-weight: 600;
             white-space: nowrap;
         }
-
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .btn-primary {
-            background-color: #3b82f6;
-            color: white;
-        }
-
-        .btn-primary:hover:not(:disabled) {
-            background-color: #2563eb;
-        }
-
-        .btn-success {
-            background-color: #10b981;
-            color: white;
-        }
-
-        .btn-success:hover:not(:disabled) {
-            background-color: #059669;
-        }
-
-        .btn-purple {
-            background-color: #8b5cf6;
-            color: white;
-        }
-
-        .btn-purple:hover:not(:disabled) {
-            background-color: #7c3aed;
-        }
-
-        .btn-danger {
-            background-color: #ef4444;
-            color: white;
-        }
-
-        .btn-danger:hover:not(:disabled) {
-            background-color: #dc2626;
-        }
-
-        .btn-warning {
-            background-color: #f59e0b;
-            color: white;
-        }
-
-        .btn-warning:hover:not(:disabled) {
-            background-color: #d97706;
-        }
-
-        .status-section {
-            flex: 1;
-            background: white;
-            border-radius: 8px;
-            padding: 12px 16px;
-            margin-bottom: 16px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .status-info {
-            background-color: #dbeafe;
-            border-left: 4px solid #3b82f6;
-            color: #1e40af;
-        }
-
-        .status-success {
-            background-color: #d1fae5;
-            border-left: 4px solid #10b981;
-            color: #065f46;
-        }
-
-        .status-warning {
-            background-color: #fef3c7;
-            border-left: 4px solid #f59e0b;
-            color: #92400e;
-        }
-
-        .status-danger {
-            background-color: #fee2e2;
-            border-left: 4px solid #ef4444;
-            color: #991b1b;
-        }
-
-        .main-layout {
-            display: flex;
-            gap: 20px;
-            flex: 1;
-            min-height: 0;
-        }
-
-        .board-container-wrapper {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .board-section {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background: white;
-            border-radius: 8px;
-            padding: 5px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
+        .btn:disabled { opacity: .5; cursor: not-allowed; }
+        .btn-primary { background: #3b82f6; }
+        .btn-success { background: #10b981; }
+        .btn-purple { background: #8b5cf6; }
+        .btn-danger { background: #ef4444; }
+        .btn-warning { background: #f59e0b; }
+        .main-layout { min-height: 0; flex: 1; display: flex; gap: 20px; }
+        .board-container-wrapper { display: flex; flex-direction: column; gap: 12px; }
+        .board-section { padding: 5px; display: flex; justify-content: center; align-items: center; }
         .game-status-compact {
-            background: white;
-            border-radius: 6px;
             padding: 8px 12px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             display: flex;
             align-items: center;
             gap: 8px;
-            font-size: 0.9rem;
             border-left: 4px solid #3b82f6;
+            font-size: .9rem;
         }
-
-        .game-status-compact.status-info {
-            background-color: #dbeafe;
-            border-left-color: #3b82f6;
-            color: #1e40af;
-        }
-
-        .game-status-compact.status-success {
-            background-color: #d1fae5;
-            border-left-color: #10b981;
-            color: #065f46;
-        }
-
-        .game-status-compact.status-warning {
-            background-color: #fef3c7;
-            border-left-color: #f59e0b;
-            color: #92400e;
-        }
-
-        .game-status-compact.status-danger {
-            background-color: #fee2e2;
-            border-left-color: #ef4444;
-            color: #991b1b;
-        }
-
-        .right-panel {
-            width: 400px;
-            min-width: 400px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .analysis-panel {
-            background: white;
-            border-radius: 8px;
-            padding: 16px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        .analysis-section {
-            margin-bottom: 12px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid #f3f4f6;
-        }
-
-        .analysis-section:last-child {
-            margin-bottom: 0;
-            padding-bottom: 0;
-            border-bottom: none;
-        }
-
-        .section-title {
-            font-weight: 600;
-            color: #374151;
-            font-size: 0.9rem;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .engine-controls {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 8px;
-        }
-
-        .engine-controls .btn {
-            padding: 8px 12px;
-            font-size: 0.8rem;
-        }
-
-        .engine-status {
-            font-size: 0.85rem;
-            color: #6b7280;
-            margin-bottom: 8px;
-        }
-
-        .evaluation-display {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            margin-bottom: 8px;
-        }
-
-        .evaluation {
-            font-weight: bold;
-            font-size: 1.1rem;
-        }
-
-        .eval-positive {
-            color: #059669;
-        }
-
-        .eval-negative {
-            color: #dc2626;
-        }
-
-        .eval-neutral {
-            color: #6b7280;
-        }
-
-        .best-move {
-            font-weight: 600;
-            color: #3b82f6;
-            font-size: 0.9rem;
-        }
-
-        .stats-display {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.8rem;
-            color: #6b7280;
-            margin-bottom: 8px;
-        }
-
-        .pv-section {
-            background-color: #f9fafb;
-            padding: 8px 12px;
-            border-radius: 6px;
-            border-left: 4px solid #10b981;
-        }
-
-        .pv-title {
-            font-size: 0.75rem;
-            color: #6b7280;
-            margin-bottom: 4px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .pv-line {
-            font-family: 'Courier New', monospace;
-            font-size: 0.8rem;
-            color: #374151;
-            line-height: 1.2;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 100%;
-        }
-
-        .moves-panel {
-            background: white;
-            border-radius: 8px;
-            padding: 16px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            flex: 1;
-            min-height: 0;
-        }
-
-        .moves-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-            padding-bottom: 8px;
-            border-bottom: 2px solid #f3f4f6;
-        }
-
-        .moves-header h3 {
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: #374151;
-        }
-
-        .close-btn {
-            background: none;
-            border: none;
-            font-size: 1rem;
-            color: #9ca3af;
-            cursor: pointer;
-            padding: 4px;
-        }
-
-        .close-btn:hover {
-            color: #6b7280;
-        }
-
-        .moves-list {
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .move-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 10px;
-            margin: 2px 0;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-            border: 1px solid transparent;
-        }
-
-        .move-item:hover {
-            background-color: #f9fafb;
-            border-color: #e5e7eb;
-        }
-
-        .move-notation {
-            font-weight: 600;
-            color: #374151;
-            font-size: 0.9rem;
-        }
-
-        .move-coords {
-            font-size: 0.75rem;
-            color: #9ca3af;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #6b7280;
-        }
-
-        .loading i {
-            font-size: 3rem;
-            margin-bottom: 16px;
-            animation: pulse 2s infinite;
-        }
-
-        /* Estilos para destacar casillas de la mejor línea con efecto blink */
-        .square-highlight {
-            animation: blink-light 0.2s ease-in-out 10;
-        }
-
-        .square-highlight.dark {
-            animation: blink-dark 0.2s ease-in-out 10;
-        }
-
-        /* Animación de parpadeo para casillas claras */
-        @keyframes blink-light {
-            0%, 50% {
-                fill: #D3D3D3; /* Gris claro destacado */
-            }
-            50.1%, 100% {
-                fill: #F5F5DC; /* Color original de casilla clara */
-            }
-        }
-
-        /* Animación de parpadeo para casillas oscuras */
-        @keyframes blink-dark {
-            0%, 50% {
-                fill: #808080; /* Gris oscuro destacado */
-            }
-            50.1%, 100% {
-                fill: #C19A6B; /* Color original de casilla oscura */
-            }
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
+        .status-info { background: #dbeafe; color: #1e40af; border-left-color: #3b82f6; }
+        .status-success { background: #d1fae5; color: #065f46; border-left-color: #10b981; }
+        .status-warning { background: #fef3c7; color: #92400e; border-left-color: #f59e0b; }
+        .status-danger { background: #fee2e2; color: #991b1b; border-left-color: #ef4444; }
+        .right-panel { width: 400px; min-width: 400px; display: flex; flex-direction: column; gap: 16px; }
+        .analysis-panel, .moves-panel { padding: 16px; }
+        .analysis-section { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #f3f4f6; }
+        .analysis-section:last-child { margin: 0; padding: 0; border-bottom: 0; }
+        .section-title { margin-bottom: 8px; display: flex; align-items: center; gap: 6px; font-size: .9rem; font-weight: 600; }
+        .engine-controls { margin-bottom: 8px; }
+        .engine-controls .btn { padding: 8px 12px; font-size: .8rem; }
+        .engine-status { margin-bottom: 8px; color: #6b7280; font-size: .85rem; }
+        .evaluation-display { margin-bottom: 8px; display: flex; align-items: center; gap: 16px; }
+        .evaluation { font-size: 1.1rem; font-weight: 700; }
+        .eval-positive { color: #059669; }
+        .eval-negative { color: #dc2626; }
+        .eval-neutral { color: #6b7280; }
+        .best-move { color: #3b82f6; font-size: .9rem; font-weight: 600; }
+        .stats-display { display: flex; justify-content: space-between; color: #6b7280; font-size: .8rem; }
+        .pv-section { padding: 8px 12px; border-left: 4px solid #10b981; border-radius: 6px; background: #f9fafb; }
+        .pv-title { margin-bottom: 4px; display: flex; align-items: center; gap: 6px; color: #6b7280; font-size: .75rem; }
+        .pv-line { max-width: 100%; overflow: hidden; color: #374151; font-family: "Courier New", monospace; font-size: .8rem; text-overflow: ellipsis; white-space: nowrap; }
+        .moves-panel { min-height: 0; flex: 1; }
+        .moves-header { margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #f3f4f6; display: flex; justify-content: space-between; align-items: center; }
+        .moves-header h3 { font-size: .95rem; }
+        .close-btn { padding: 4px; border: 0; background: transparent; color: #9ca3af; cursor: pointer; }
+        .moves-list { max-height: 300px; overflow-y: auto; }
+        .move-item { margin: 2px 0; padding: 8px 10px; border: 1px solid transparent; border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .move-item:hover { border-color: #e5e7eb; background: #f9fafb; }
+        .move-notation { font-size: .9rem; font-weight: 600; }
+        .move-coords { color: #9ca3af; font-size: .75rem; }
+        .loading { padding: 40px; color: #6b7280; text-align: center; }
+        .loading i { margin-bottom: 16px; font-size: 3rem; }
+        .square-highlight { animation: blink-light .2s ease-in-out 10; }
+        .square-highlight.dark { animation-name: blink-dark; }
+        @keyframes blink-light { 0%, 50% { fill: #d3d3d3; } 50.1%, 100% { fill: #f5f5dc; } }
+        @keyframes blink-dark { 0%, 50% { fill: #808080; } 50.1%, 100% { fill: #c19a6b; } }
         @media (max-width: 1200px) {
-            .main-layout {
-                flex-direction: column;
-            }
-
-            .board-container-wrapper {
-                align-self: center;
-            }
-
-            .right-panel {
-                width: 100%;
-                min-width: unset;
-            }
-
-            .analysis-panel {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 16px;
-            }
-
-            .analysis-section {
-                border-bottom: none;
-                padding-bottom: 0;
-                margin-bottom: 0;
-            }
+            .main-layout { flex-direction: column; }
+            .board-container-wrapper { align-self: center; }
+            .right-panel { width: 100%; min-width: 0; }
+            .analysis-panel { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+            .analysis-section { margin: 0; padding: 0; border-bottom: 0; }
         }
-
         @media (max-width: 768px) {
-            .container {
-                padding: 12px;
-            }
-
-            .input-row {
-                flex-direction: column;
-            }
-
-            .input-group {
-                min-width: unset;
-            }
-
-            .button-group {
-                flex-direction: column;
-            }
-
-            .analysis-panel {
-                grid-template-columns: 1fr;
-            }
-
-            .right-panel {
-                width: 100%;
-            }
+            .container { padding: 12px; }
+            .input-row, .button-group { flex-direction: column; align-items: stretch; }
+            .input-group { min-width: 0; }
+            .analysis-panel { grid-template-columns: 1fr; }
+            .board-section { overflow-x: auto; justify-content: flex-start; }
         }
     </style>
-<base target="_blank">
 </head>
 <body>
     <div class="container">
-        <!-- Título -->
-        <div class="header">
-            <h1>Analizador de Posiciones de Ajedrez</h1>
-        </div>
+        <header class="header"><h1>Analizador de Posiciones de Ajedrez</h1></header>
 
-        <!-- Input FEN y controles principales -->
-        <div class="input-section">
+        <section class="input-section card">
             <div class="input-row">
                 <div class="input-group">
                     <label for="fenInput">Posición FEN:</label>
-                    <input type="text" id="fenInput" placeholder="Ingresa la posición FEN" onclick="this.select()">
+                    <input id="fenInput" type="text" placeholder="Ingresa la posición FEN" onclick="this.select()">
                 </div>
                 <div class="button-group">
-                    <button onclick="drawBoard()" class="btn btn-primary">
-                        <i class="fas fa-chess-board"></i>Cargar Posición
-                    </button>
-                    <button onclick="showLegalMoves()" id="showMovesBtn" class="btn btn-success">
-                        <i class="fas fa-list"></i>Mostrar Movimientos
-                    </button>
+                    <button class="btn btn-primary" onclick="drawBoard()"><i class="fas fa-chess-board"></i>Cargar Posición</button>
+                    <button class="btn btn-success" id="showMovesBtn" onclick="showLegalMoves()"><i class="fas fa-list"></i>Mostrar Movimientos</button>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <!-- Layout principal -->
-        <div class="main-layout">
-            <!-- Sección del tablero con estado -->
+        <main class="main-layout">
             <div class="board-container-wrapper">
-                <div class="board-section">
-                    <div id="chessboard">
-                        <div class="loading">
-                            <i class="fas fa-chess-board"></i>
-                            <p>Cargando tablero...</p>
-                        </div>
-                    </div>
-                </div>
-                <!-- Estado del juego compacto -->
-                <div id="gameStatus" class="game-status-compact">
-                    <i class="fas fa-info-circle"></i>
-                    <span>Cargando...</span>
-                </div>
+                <section class="board-section card">
+                    <div id="chessboard" class="loading"><i class="fas fa-chess-board"></i><p>Cargando tablero...</p></div>
+                </section>
+                <section id="gameStatus" class="game-status-compact card status-info"><i class="fas fa-info-circle"></i><span>Cargando...</span></section>
             </div>
 
-            <!-- Panel derecho -->
-            <div class="right-panel">
-                <!-- Panel de análisis -->
-                <div class="analysis-panel">
-                    <!-- Sección de Motor -->
+            <aside class="right-panel">
+                <section class="analysis-panel card">
                     <div class="analysis-section">
-                        <div class="section-title">
-                            <i class="fas fa-microchip"></i>
-                            Motor de Análisis
-                        </div>
+                        <div class="section-title"><i class="fas fa-microchip"></i>Motor de Análisis</div>
                         <div class="engine-controls">
-                            <button onclick="toggleEngine()" id="engineToggleBtn" class="btn btn-purple">
-                                <i class="fas fa-plug"></i>Conectar Motor
-                            </button>
-                            <button onclick="toggleAnalysis()" id="analysisToggleBtn" class="btn btn-success">
-                                <i class="fas fa-play"></i>Analizar
-                            </button>
+                            <button class="btn btn-purple" id="engineToggleBtn" onclick="toggleEngine()"><i class="fas fa-plug"></i>Conectar Motor</button>
+                            <button class="btn btn-success" id="analysisToggleBtn" onclick="toggleAnalysis()"><i class="fas fa-play"></i>Analizar</button>
                         </div>
                         <div id="engineStatus" class="engine-status">Motor no conectado</div>
                     </div>
 
-                    <!-- Sección de Evaluación -->
                     <div class="analysis-section">
-                        <div class="section-title">
-                            <i class="fas fa-balance-scale"></i>
-                            Evaluación
-                        </div>
+                        <div class="section-title"><i class="fas fa-balance-scale"></i>Evaluación</div>
                         <div class="evaluation-display">
                             <span id="evaluation" class="evaluation"></span>
                             <span id="bestMove" class="best-move"></span>
                         </div>
-                        <div class="stats-display">
-                            <span id="engineStats"></span>
-                            <span id="memoryStats"></span>
-                        </div>
+                        <div class="stats-display"><span id="engineStats"></span><span id="memoryStats"></span></div>
                     </div>
 
-                    <!-- Sección de Línea Principal -->
                     <div class="analysis-section">
                         <div class="pv-section">
-                            <div class="pv-title">
-                                <i class="fas fa-route"></i>
-                                Mejor línea de juego:
-                            </div>
+                            <div class="pv-title"><i class="fas fa-route"></i>Mejor línea de juego:</div>
                             <div id="pvLine" class="pv-line">Inicia el análisis para ver la mejor línea</div>
-
-                            <div style="margin-top: 8px;">
-                                <button onclick="runASPTPVAnalysis()" id="asptBtn" class="btn btn-warning">
-                                    <i class="fas fa-route"></i> Analizar PV con ASPT
-                                </button>
-                            </div>
-                            <div id="asptPanel" class="pv-section" style="margin-top:8px; display:none;">
-                                ASPT pendiente
-                            </div>
                         </div>
                     </div>
-                </div>
+                </section>
 
-                <!-- Panel de movimientos legales -->
-                <div id="legalMoves" class="moves-panel" style="display: none;">
+                <section id="legalMoves" class="moves-panel card" style="display:none">
                     <div class="moves-header">
-                        <h3 id="legalMovesHeader">
-                            <i class="fas fa-chess-knight"></i>
-                            Movimientos Legales
-                        </h3>
-                        <button onclick="hideLegalMoves()" class="close-btn">
-                            <i class="fas fa-times"></i>
-                        </button>
+                        <h3 id="legalMovesHeader"><i class="fas fa-chess-knight"></i> Movimientos Legales</h3>
+                        <button class="close-btn" onclick="hideLegalMoves()"><i class="fas fa-times"></i></button>
                     </div>
                     <div id="legalMovesList" class="moves-list"></div>
-                </div>
-            </div>
-        </div>
+                </section>
+            </aside>
+        </main>
     </div>
 
     <script>
-        // Símbolos de las piezas
-        const MAX_PV_MOVES_ASPT = 10;
-
+        const INITIAL_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+        const MAX_PV_MOVES = 10;
+        const SQUARE_SIZE = 65;
+        const BOARD_SIZE = 8 * SQUARE_SIZE;
         const pieceSymbols = {
-            'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
-            'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
+            K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙',
+            k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟'
         };
 
-        // Variables globales
-        const squareSize = 65;
-        const boardSize = 8 * squareSize;
         let board = [];
         let chess = new Chess();
         let lastMove = null;
@@ -678,571 +214,312 @@
         let blobURL = null;
         let isEngineConnected = false;
         let isAnalyzing = false;
-        
-        // Variables para destacar casillas
         let previousHighlightedSquares = [];
         let pvObserver = null;
-        
-        // Estadísticas del motor
-        let lastStats = { 
-            nps: 0, 
-            pv: '', 
-            pvMovesUci: [],
-            evaluation: null,
-            depth: 0,
-            bestMove: '',
-            bestMoveSan: '',
-            asptAnalysis: null
-        };
+        const lastStats = { nps: 0, evaluation: null, depth: 0, bestMove: '', bestMoveSan: '' };
 
-        // Función para actualizar estado de botones
+        function resetEngineStats() {
+            lastStats.nps = 0;
+            lastStats.evaluation = null;
+            lastStats.depth = 0;
+            lastStats.bestMove = '';
+            lastStats.bestMoveSan = '';
+        }
+
+        function clearEngineDisplay(message = 'Inicia el análisis para ver la mejor línea') {
+            document.getElementById('evaluation').textContent = '';
+            document.getElementById('bestMove').textContent = '';
+            document.getElementById('engineStats').textContent = '';
+            document.getElementById('pvLine').textContent = message;
+        }
+
         function updateButtonStates() {
             const engineToggleBtn = document.getElementById('engineToggleBtn');
             const analysisToggleBtn = document.getElementById('analysisToggleBtn');
             const showMovesBtn = document.getElementById('showMovesBtn');
 
-            // Botón de motor (alternar conectar/desconectar)
-            if (isEngineConnected) {
-                engineToggleBtn.innerHTML = '<i class="fas fa-power-off"></i>Desconectar Motor';
-                engineToggleBtn.className = 'btn btn-warning';
-            } else {
-                engineToggleBtn.innerHTML = '<i class="fas fa-plug"></i>Conectar Motor';
-                engineToggleBtn.className = 'btn btn-purple';
-            }
+            engineToggleBtn.innerHTML = isEngineConnected
+                ? '<i class="fas fa-power-off"></i>Desconectar Motor'
+                : '<i class="fas fa-plug"></i>Conectar Motor';
+            engineToggleBtn.className = `btn ${isEngineConnected ? 'btn-warning' : 'btn-purple'}`;
 
-            // Botón de análisis (alternar iniciar/detener)
-            if (isAnalyzing) {
-                analysisToggleBtn.innerHTML = '<i class="fas fa-stop"></i>Detener Análisis';
-                analysisToggleBtn.className = 'btn btn-danger';
-                analysisToggleBtn.disabled = false;
-            } else {
-                analysisToggleBtn.innerHTML = '<i class="fas fa-play"></i>Iniciar Análisis';
-                analysisToggleBtn.className = 'btn btn-success';
-                analysisToggleBtn.disabled = !isEngineConnected || chess.game_over();
-            }
-
-            // Botón de mostrar movimientos
+            analysisToggleBtn.innerHTML = isAnalyzing
+                ? '<i class="fas fa-stop"></i>Detener Análisis'
+                : '<i class="fas fa-play"></i>Iniciar Análisis';
+            analysisToggleBtn.className = `btn ${isAnalyzing ? 'btn-danger' : 'btn-success'}`;
+            analysisToggleBtn.disabled = !isAnalyzing && (!isEngineConnected || chess.game_over());
             showMovesBtn.disabled = chess.game_over();
         }
 
-        // Función para parsear FEN
         function parseFEN(fen) {
-            const [position] = fen.split(' ');
-            const rows = position.split('/');
-            board = Array(8).fill().map(() => Array(8).fill(null));
-
-            for (let row = 0; row < 8; row++) {
+            const rows = fen.split(' ')[0].split('/');
+            board = Array.from({ length: 8 }, () => Array(8).fill(null));
+            rows.forEach((rowText, row) => {
                 let col = 0;
-                const actualRow = 7 - row;
-                for (let char of rows[row]) {
-                    if (/\d/.test(char)) {
-                        col += parseInt(char);
-                    } else {
-                        board[actualRow][col] = char;
-                        col++;
-                    }
+                for (const char of rowText) {
+                    if (/\d/.test(char)) col += Number(char);
+                    else board[7 - row][col++] = char;
                 }
-            }
+            });
         }
 
-        // Función para convertir UCI a SAN
         function uciToSan(uciMove) {
             if (!uciMove || uciMove.length < 4) return uciMove;
-            
-            const from = uciMove.substring(0, 2);
-            const to = uciMove.substring(2, 4);
-            const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
-            
             const tempChess = new Chess(chess.fen());
-            
             try {
                 const move = tempChess.move({
-                    from: from,
-                    to: to,
-                    promotion: promotion
+                    from: uciMove.slice(0, 2),
+                    to: uciMove.slice(2, 4),
+                    promotion: uciMove[4]
                 });
                 return move ? move.san : uciMove;
-            } catch (e) {
+            } catch (_) {
                 return uciMove;
             }
         }
 
-        // Función para formatear evaluación
         function formatEvaluation(score, isMate) {
-            if (isMate) {
-                return score > 0 ? `+M${score}` : `-M${Math.abs(score)}`;
-            }
-            
+            if (isMate) return score > 0 ? `+M${score}` : `-M${Math.abs(score)}`;
             const pawns = score / 100;
             return pawns > 0 ? `+${pawns.toFixed(2)}` : pawns.toFixed(2);
         }
 
-        // Función para destacar casillas de la mejor línea
-        function highlightBestLine() {
-            // Limpiar destacados anteriores
-            resetHighlights();
-            
-            // Obtener el contenido de la mejor línea
-            const bestLineElement = document.getElementById('pvLine');
-            const bestLine = bestLineElement.textContent.trim();
-
-            // Si no hay línea válida, no hacer nada
-            if (bestLine === "Inicia el análisis para ver la mejor línea" || 
-                bestLine === "Analizando..." || 
-                !bestLine || 
-                bestLine.length < 3) {
-                return;
-            }
-
-            try {
-                // Parsear los movimientos de la línea
-                const moves = bestLine.split(/\s+/).filter(move => 
-                    move.match(/^[a-h1-8KQRBNOX+#=\-]+$/) && 
-                    !move.match(/^\d+\.+$/)
-                );
-
-                if (moves.length === 0) return;
-
-                // Usar Chess.js para obtener las casillas involucradas
-                const tempChess = new Chess(chess.fen());
-                const squares = [];
-
-                // Solo procesar los primeros 2-3 movimientos para no saturar el tablero
-                const movesToProcess = moves.slice(0, 4);
-
-                movesToProcess.forEach(move => {
-                    try {
-                        const moveObj = tempChess.move(move, { sloppy: true });
-                        if (moveObj) {
-                            // Agregar casillas de origen y destino
-                            squares.push(moveObj.from);
-                            squares.push(moveObj.to);
-                        }
-                    } catch (e) {
-                        console.warn(`Movimiento inválido en línea principal: ${move}`);
-                    }
-                });
-
-                // Destacar las casillas en el SVG
-                squares.forEach(square => {
-                    const squareElements = document.querySelectorAll(`[data-square="${square}"]`);
-                    squareElements.forEach(squareElement => {
-                        if (squareElement && squareElement.tagName === 'rect') {
-                            // Determinar si es casilla clara u oscura basado en coordenadas
-                            const file = square.charCodeAt(0) - 97; // a=0, b=1, etc.
-                            const rank = parseInt(square[1]) - 1; // 1=0, 2=1, etc.
-                            const isDark = (file + rank) % 2 === 1;
-                            
-                            squareElement.classList.add('square-highlight');
-                            if (isDark) {
-                                squareElement.classList.add('dark');
-                            }
-                            previousHighlightedSquares.push(squareElement);
-                        }
-                    });
-                });
-            } catch (error) {
-                console.warn('Error al destacar la mejor línea:', error);
-            }
-        }
-
-        // Función para restablecer los destacados anteriores
         function resetHighlights() {
-            previousHighlightedSquares.forEach(square => {
-                square.classList.remove('square-highlight', 'dark');
-            });
+            previousHighlightedSquares.forEach(square => square.classList.remove('square-highlight', 'dark'));
             previousHighlightedSquares = [];
         }
 
-        // Función para configurar el observador de cambios en la línea principal
-        function setupPVObserver() {
-            if (pvObserver) {
-                pvObserver.disconnect();
-            }
-            
-            const pvLineElement = document.getElementById('pvLine');
-            if (pvLineElement) {
-                pvObserver = new MutationObserver(() => {
-                    // Usar setTimeout para permitir que el DOM se actualice completamente
-                    setTimeout(highlightBestLine, 100);
+        function highlightBestLine() {
+            resetHighlights();
+            const text = document.getElementById('pvLine').textContent.trim();
+            if (!text || text === 'Analizando...' || text.startsWith('Inicia') || text === 'Motor desconectado') return;
+
+            const moves = text.split(/\s+/).filter(token => token.match(/^[a-h1-8KQRBNOX+#=\-]+$/) && !token.match(/^\d+\.+$/));
+            const tempChess = new Chess(chess.fen());
+            const squares = [];
+
+            moves.slice(0, 4).forEach(move => {
+                try {
+                    const moveObj = tempChess.move(move, { sloppy: true });
+                    if (moveObj) squares.push(moveObj.from, moveObj.to);
+                } catch (_) {}
+            });
+
+            squares.forEach(square => {
+                document.querySelectorAll(`[data-square="${square}"]`).forEach(element => {
+                    if (element.tagName.toLowerCase() !== 'rect') return;
+                    const file = square.charCodeAt(0) - 97;
+                    const rank = Number(square[1]) - 1;
+                    element.classList.add('square-highlight');
+                    if ((file + rank) % 2 === 1) element.classList.add('dark');
+                    previousHighlightedSquares.push(element);
                 });
-                
-                pvObserver.observe(pvLineElement, {
-                    childList: true,
-                    characterData: true,
-                    subtree: true
-                });
-            }
+            });
         }
 
-        // Función para generar SVG del tablero
-        function generateChessboardSVG() {
-            let svg = `<svg width="${boardSize + 40}" height="${boardSize + 40}" xmlns="http://www.w3.org/2000/svg">`;
+        function setupPVObserver() {
+            if (pvObserver) pvObserver.disconnect();
+            const pvLine = document.getElementById('pvLine');
+            pvObserver = new MutationObserver(() => setTimeout(highlightBestLine, 100));
+            pvObserver.observe(pvLine, { childList: true, characterData: true, subtree: true });
+        }
 
-            // Dibujar casillas
+        function generateChessboardSVG() {
+            let svg = `<svg width="${BOARD_SIZE + 40}" height="${BOARD_SIZE + 40}" xmlns="http://www.w3.org/2000/svg">`;
+
             for (let row = 0; row < 8; row++) {
                 for (let col = 0; col < 8; col++) {
-                    const x = col * squareSize + 20;
-                    const y = row * squareSize + 20;
-                    const fill = (row + col) % 2 === 0 ? '#F5F5DC' : '#C19A6B';
+                    const x = col * SQUARE_SIZE + 20;
+                    const y = row * SQUARE_SIZE + 20;
                     const squareName = String.fromCharCode(97 + col) + (8 - row);
-                    svg += `<rect x="${x}" y="${y}" width="${squareSize}" height="${squareSize}" fill="${fill}" data-square="${squareName}" />`;
+                    const fill = (row + col) % 2 === 0 ? '#F5F5DC' : '#C19A6B';
+                    svg += `<rect x="${x}" y="${y}" width="${SQUARE_SIZE}" height="${SQUARE_SIZE}" fill="${fill}" data-square="${squareName}"/>`;
                 }
             }
 
-            // Resaltar último movimiento
-            if (lastMove) {
-                const history = chess.history({ verbose: true });
-                if (history.length > 0) {
-                    const move = history[history.length - 1];
-                    const fromCol = move.from.charCodeAt(0) - 97;
-                    const fromRow = 8 - parseInt(move.from[1]);
-                    const toCol = move.to.charCodeAt(0) - 97;
-                    const toRow = 8 - parseInt(move.to[1]);
-
-                    const fromX = fromCol * squareSize + 20;
-                    const fromY = fromRow * squareSize + 20;
-                    const toX = toCol * squareSize + 20;
-                    const toY = toRow * squareSize + 20;
-
-                    svg += `<rect x="${fromX}" y="${fromY}" width="${squareSize}" height="${squareSize}" fill="rgba(255, 255, 0, 0.5)" />`;
-                    svg += `<rect x="${toX}" y="${toY}" width="${squareSize}" height="${squareSize}" fill="rgba(255, 255, 0, 0.5)" />`;
-                }
+            const history = chess.history({ verbose: true });
+            if (lastMove && history.length) {
+                const move = history[history.length - 1];
+                [move.from, move.to].forEach(square => {
+                    const col = square.charCodeAt(0) - 97;
+                    const row = 8 - Number(square[1]);
+                    svg += `<rect x="${col * SQUARE_SIZE + 20}" y="${row * SQUARE_SIZE + 20}" width="${SQUARE_SIZE}" height="${SQUARE_SIZE}" fill="rgba(255,255,0,.5)"/>`;
+                });
             }
 
-            // Flecha del mejor movimiento
-            if (lastStats.bestMove && lastStats.bestMove.length >= 4) {
-                const from = lastStats.bestMove.substring(0, 2);
-                const to = lastStats.bestMove.substring(2, 4);
-                
-                const fromCol = from.charCodeAt(0) - 97;
-                const fromRow = 8 - parseInt(from[1]);
-                const toCol = to.charCodeAt(0) - 97;
-                const toRow = 8 - parseInt(to[1]);
-                
-                const fromX = (fromCol * squareSize) + squareSize/2 + 20;
-                const fromY = (fromRow * squareSize) + squareSize/2 + 20;
-                const toX = (toCol * squareSize) + squareSize/2 + 20;
-                const toY = (toRow * squareSize) + squareSize/2+ 20;
-                
-                svg += `<defs>
-                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                        <polygon points="0 0, 10 3.5, 0 7" fill="#3B82F6" />
-                    </marker>
-                </defs>
-                <line x1="${fromX}" y1="${fromY}" x2="${toX}" y2="${toY}" stroke="#3B82F6" 
-                    stroke-width="4" opacity="0.8" marker-end="url(#arrowhead)" />`;
+            if (lastStats.bestMove.length >= 4) {
+                const from = lastStats.bestMove.slice(0, 2);
+                const to = lastStats.bestMove.slice(2, 4);
+                const point = square => ({
+                    x: (square.charCodeAt(0) - 97) * SQUARE_SIZE + SQUARE_SIZE / 2 + 20,
+                    y: (8 - Number(square[1])) * SQUARE_SIZE + SQUARE_SIZE / 2 + 20
+                });
+                const start = point(from);
+                const end = point(to);
+                svg += '<defs><marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0,10 3.5,0 7" fill="#3B82F6"/></marker></defs>';
+                svg += `<line x1="${start.x}" y1="${start.y}" x2="${end.x}" y2="${end.y}" stroke="#3B82F6" stroke-width="4" opacity=".8" marker-end="url(#arrowhead)"/>`;
             }
 
-            // Dibujar piezas
             for (let row = 0; row < 8; row++) {
                 for (let col = 0; col < 8; col++) {
                     const piece = board[7 - row][col];
-                    if (piece) {
-                        const x = col * squareSize + squareSize / 2 + 20;
-                        const y = row * squareSize + squareSize / 2 + 42;
-                        const symbol = pieceSymbols[piece] || '';
-                        svg += `<text x="${x}" y="${y}" font-size="48" text-anchor="middle" fill="#000">${symbol}</text>`;
-                    }
+                    if (!piece) continue;
+                    const x = col * SQUARE_SIZE + SQUARE_SIZE / 2 + 20;
+                    const y = row * SQUARE_SIZE + SQUARE_SIZE / 2 + 42;
+                    svg += `<text x="${x}" y="${y}" font-size="48" text-anchor="middle" fill="#000">${pieceSymbols[piece]}</text>`;
                 }
             }
 
-            // Coordenadas
             for (let i = 0; i < 8; i++) {
-                svg += `<text x="10" y="${i * squareSize + squareSize / 1.5 + 20}" font-size="16" text-anchor="middle" fill="#666">${8 - i}</text>`;
-                svg += `<text x="${i * squareSize + squareSize / 2 + 20}" y="${boardSize + 35}" font-size="16" text-anchor="middle" fill="#666">${String.fromCharCode(97 + i)}</text>`;
+                svg += `<text x="10" y="${i * SQUARE_SIZE + SQUARE_SIZE / 1.5 + 20}" font-size="16" text-anchor="middle" fill="#666">${8 - i}</text>`;
+                svg += `<text x="${i * SQUARE_SIZE + SQUARE_SIZE / 2 + 20}" y="${BOARD_SIZE + 35}" font-size="16" text-anchor="middle" fill="#666">${String.fromCharCode(97 + i)}</text>`;
             }
 
-            svg += '</svg>';
-            return svg;
+            return `${svg}</svg>`;
         }
 
-        // Función para mostrar estado del juego
         function showGameStatus() {
-            const statusElement = document.getElementById('gameStatus');
-            let status = "";
-            let iconClass = "fas fa-info-circle";
-            let statusClass = "status-info";
+            const element = document.getElementById('gameStatus');
+            let text = chess.turn() === 'w' ? 'Turno: Blancas' : 'Turno: Negras';
+            let icon = 'fas fa-chess';
+            let statusClass = 'status-success';
 
-            if (chess.in_checkmate()) {
-                status = "¡Jaque mate!";
-                iconClass = "fas fa-crown";
-                statusClass = "status-danger";
-            } else if (chess.in_stalemate()) {
-                status = "Tablas por ahogado";
-                iconClass = "fas fa-handshake";
-                statusClass = "status-warning";
-            } else if (chess.in_draw()) {
-                if (chess.in_threefold_repetition()) {
-                    status = "Tablas por repetición";
-                } else if (chess.insufficient_material()) {
-                    status = "Tablas por material";
-                } else {
-                    status = "Tablas por 50 movimientos";
-                }
-                iconClass = "fas fa-handshake";
-                statusClass = "status-warning";
-            } else if (chess.in_check()) {
-                status = "¡Jaque!";
-                iconClass = "fas fa-exclamation-triangle";
-                statusClass = "status-warning";
-            } else {
-                status = chess.turn() === 'w' ? "Turno: Blancas" : "Turno: Negras";
-                iconClass = "fas fa-chess";
-                statusClass = "status-success";
-            }
+            if (chess.in_checkmate()) [text, icon, statusClass] = ['¡Jaque mate!', 'fas fa-crown', 'status-danger'];
+            else if (chess.in_stalemate()) [text, icon, statusClass] = ['Tablas por ahogado', 'fas fa-handshake', 'status-warning'];
+            else if (chess.in_draw()) {
+                text = chess.in_threefold_repetition() ? 'Tablas por repetición' : chess.insufficient_material() ? 'Tablas por material' : 'Tablas por 50 movimientos';
+                icon = 'fas fa-handshake';
+                statusClass = 'status-warning';
+            } else if (chess.in_check()) [text, icon, statusClass] = ['¡Jaque!', 'fas fa-exclamation-triangle', 'status-warning'];
 
-            statusElement.className = `game-status-compact ${statusClass}`;
-            statusElement.innerHTML = `
-                <i class="${iconClass}"></i>
-                <span>${status}</span>
-            `;
+            element.className = `game-status-compact card ${statusClass}`;
+            element.innerHTML = `<i class="${icon}"></i><span>${text}</span>`;
         }
 
-        // Función principal para dibujar tablero
         function drawBoard() {
-            resetASPTPanel({ preservePV: false });
+            let fen = document.getElementById('fenInput').value.trim() || INITIAL_FEN;
+            document.getElementById('fenInput').value = fen;
 
-            let fen = document.getElementById('fenInput').value.trim();
-            // Si no se ingresó un FEN, usar la posición inicial estándar
-            if (!fen) {
-                fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-                document.getElementById('fenInput').value = fen;
-            }
-
-            chess = new Chess();
-            const validation = chess.validate_fen(fen);
+            const nextChess = new Chess();
+            const validation = nextChess.validate_fen(fen);
             if (!validation.valid) {
                 alert(`Posición FEN inválida: ${validation.error}`);
                 return;
             }
 
+            if (isAnalyzing) stopAnalysis();
+            chess = nextChess;
             chess.load(fen);
             parseFEN(fen);
-            
-            // Limpiar estadísticas
-            // Limpieza controlada: preservar PV si es movimiento del motor
-            lastStats.nps = 0;
-            lastStats.pv = '';
-            lastStats.evaluation = null;
-            lastStats.depth = 0;
-            lastStats.bestMove = '';
-            lastStats.bestMoveSan = '';
-
-            resetASPTPanel({ preservePV: false });
-            
+            lastMove = null;
+            resetEngineStats();
+            clearEngineDisplay();
+            resetHighlights();
             document.getElementById('chessboard').innerHTML = generateChessboardSVG();
             document.getElementById('legalMoves').style.display = 'none';
-            lastMove = null;
             showGameStatus();
             updateButtonStates();
-            
-            // Limpiar información del motor
-            document.getElementById('evaluation').textContent = '';
-            document.getElementById('bestMove').textContent = '';
-            document.getElementById('engineStats').textContent = '';
-            document.getElementById('pvLine').textContent = 'Inicia el análisis para ver la mejor línea';
-            
-            // Resetear destacados
-            resetHighlights();
-            
-            if (isAnalyzing) {
-                stopAnalysis();
-            }
-            
             updateMemoryStats();
-            
-            // Configurar observador para la línea principal
-            setTimeout(setupPVObserver, 100);
         }
 
-        // Función alternante para motor
-        function toggleEngine() {
-            if (isEngineConnected) {
-                disconnectEngine();
-            } else {
-                connectEngine();
-            }
-        }
-
-        // Función alternante para análisis
-        function toggleAnalysis() {
-            if (isAnalyzing) {
-                stopAnalysis();
-            } else {
-                startAnalysis();
-            }
-        }
-
-        // Función para mostrar movimientos legales
         function showLegalMoves() {
             if (chess.game_over()) return;
-
             const moves = chess.moves({ verbose: true });
-            const movesList = document.getElementById('legalMovesList');
-            const movesHeader = document.getElementById('legalMovesHeader');
-            movesList.innerHTML = '';
+            const list = document.getElementById('legalMovesList');
+            document.getElementById('legalMovesHeader').innerHTML = `<i class="fas fa-chess-knight"></i> Movimientos Legales (${moves.length})`;
+            list.innerHTML = '';
 
-            movesHeader.innerHTML = `<i class="fas fa-chess-knight"></i> Movimientos Legales (${moves.length})`;
-
-            if (moves.length === 0) {
-                movesList.innerHTML = '<div style="text-align: center; padding: 20px; color: #9ca3af;">No hay movimientos legales</div>';
-            } else {
-                moves.forEach(move => {
-                    const div = document.createElement('div');
-                    div.className = 'move-item';
-                    
-                    div.innerHTML = `
-                        <span class="move-notation">${move.san}</span>
-                        <span class="move-coords">${move.from}-${move.to}</span>
-                    `;
-                    
-                    div.addEventListener('click', () => {
-                        makeMove(move.san);
-                    });
-                    movesList.appendChild(div);
-                });
-            }
+            moves.forEach(move => {
+                const item = document.createElement('div');
+                item.className = 'move-item';
+                item.innerHTML = `<span class="move-notation">${move.san}</span><span class="move-coords">${move.from}-${move.to}</span>`;
+                item.addEventListener('click', () => makeMove(move.san));
+                list.appendChild(item);
+            });
 
             document.getElementById('legalMoves').style.display = 'block';
         }
 
-        // Función para ocultar movimientos legales
         function hideLegalMoves() {
             document.getElementById('legalMoves').style.display = 'none';
         }
 
-        // Función para hacer un movimiento
-        function makeMove(move, options = {}) {
-            const isEngineMove = options.isEngineMove === true;
-            chess.move(move);
-            lastMove = move;
+        function makeMove(move) {
+            const appliedMove = chess.move(move);
+            if (!appliedMove) return;
+            if (isAnalyzing) stopAnalysis();
+
+            lastMove = appliedMove;
             parseFEN(chess.fen());
-            
+            resetEngineStats();
+            clearEngineDisplay();
+            resetHighlights();
             document.getElementById('fenInput').value = chess.fen();
             document.getElementById('chessboard').innerHTML = generateChessboardSVG();
-            
             showLegalMoves();
             showGameStatus();
             updateButtonStates();
-            
-            if (isAnalyzing) {
-                stopAnalysis();
-            }
-            
-            // Limpiar información del motor
-            document.getElementById('bestMove').textContent = '';
-            document.getElementById('evaluation').textContent = '';
-            document.getElementById('engineStats').textContent = '';
-            document.getElementById('pvLine').textContent = 'Inicia el análisis para ver la mejor línea';
-            
-            // Resetear destacados
-            resetHighlights();
-            
-            // Limpieza controlada: preservar PV si es movimiento del motor
-            lastStats.nps = 0;
-            lastStats.pv = '';
-            lastStats.evaluation = null;
-            lastStats.depth = 0;
-            lastStats.bestMove = '';
-            lastStats.bestMoveSan = '';
-
-            resetASPTPanel({ preservePV: isEngineMove });
-            
-            if (isEngineConnected && !chess.game_over()) {
-                setTimeout(() => startAnalysis(), 500);
-            }
-            
             updateMemoryStats();
-            
-            // Reconfigurar observador
-            setTimeout(setupPVObserver, 100);
+
+            if (isEngineConnected && !chess.game_over()) setTimeout(startAnalysis, 500);
         }
 
-        // Funciones del motor
+        function toggleEngine() {
+            if (isEngineConnected) disconnectEngine();
+            else connectEngine();
+        }
+
+        function toggleAnalysis() {
+            if (isAnalyzing) stopAnalysis();
+            else startAnalysis();
+        }
+
         async function connectEngine() {
             if (isEngineConnected) return;
-
             try {
                 document.getElementById('engineStatus').textContent = 'Conectando motor...';
                 const response = await fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
-                if (!response.ok) {
-                    throw new Error('Error al descargar Stockfish');
-                }
-                const workerScript = await response.text();
+                if (!response.ok) throw new Error('Error al descargar Stockfish');
 
-                const blob = new Blob([workerScript], { type: 'application/javascript' });
-                blobURL = URL.createObjectURL(blob);
-
+                blobURL = URL.createObjectURL(new Blob([await response.text()], { type: 'application/javascript' }));
                 stockfish = new Worker(blobURL);
-                stockfish.onmessage = function(event) {
-                    handleEngineMessage(event.data);
-                };
-                
+                stockfish.onmessage = event => handleEngineMessage(event.data);
                 stockfish.postMessage('uci');
                 stockfish.postMessage('setoption name MultiPV value 1');
                 stockfish.postMessage('isready');
-                
+
                 isEngineConnected = true;
                 document.getElementById('engineStatus').textContent = 'Motor conectado y listo';
                 updateButtonStates();
-                
-                if (!chess.game_over()) {
-                    startAnalysis();
-                }
+                if (!chess.game_over()) startAnalysis();
             } catch (error) {
-                document.getElementById('engineStatus').textContent = 'Error: ' + error.message;
                 isEngineConnected = false;
+                document.getElementById('engineStatus').textContent = `Error: ${error.message}`;
                 updateButtonStates();
             }
         }
-        
-        function disconnectEngine() {
-            resetASPTPanel({ preservePV: false });
 
+        function disconnectEngine() {
             if (!isEngineConnected) return;
-            
-            if (isAnalyzing) {
-                stopAnalysis();
-            }
-            
-            if (stockfish) {
-                stockfish.terminate();
-                stockfish = null;
-            }
-            
-            if (blobURL) {
-                URL.revokeObjectURL(blobURL);
-                blobURL = null;
-            }
-            
-            // Limpiar observador
-            if (pvObserver) {
-                pvObserver.disconnect();
-                pvObserver = null;
-            }
-            
+            if (isAnalyzing) stopAnalysis();
+            if (stockfish) stockfish.terminate();
+            if (blobURL) URL.revokeObjectURL(blobURL);
+            stockfish = null;
+            blobURL = null;
             isEngineConnected = false;
-            document.getElementById('engineStatus').textContent = 'Motor desconectado';
-            document.getElementById('evaluation').textContent = '';
-            document.getElementById('bestMove').textContent = '';
-            document.getElementById('engineStats').textContent = '';
-            document.getElementById('pvLine').textContent = 'Motor desconectado';
-            
-            // Resetear destacados
+            resetEngineStats();
+            clearEngineDisplay('Motor desconectado');
             resetHighlights();
-            
+            document.getElementById('engineStatus').textContent = 'Motor desconectado';
             updateButtonStates();
             updateMemoryStats();
         }
 
         function startAnalysis() {
             if (!isEngineConnected || isAnalyzing || chess.game_over()) return;
-
-            const fen = chess.fen();
-            stockfish.postMessage('position fen ' + fen);
+            resetEngineStats();
+            stockfish.postMessage(`position fen ${chess.fen()}`);
             stockfish.postMessage('go infinite');
-            
             isAnalyzing = true;
             document.getElementById('engineStatus').textContent = 'Analizando posición...';
             document.getElementById('pvLine').textContent = 'Analizando...';
@@ -1250,11 +527,7 @@
 
             analysisInterval = setInterval(() => {
                 if (lastStats.nps > 0) {
-                    document.getElementById('engineStats').textContent = 
-                        `Profundidad: ${lastStats.depth} | ${lastStats.nps.toLocaleString()} nodos/s`;
-                }
-                if (lastStats.bestMove && lastStats.bestMove.length >= 4) {
-                    document.getElementById('chessboard').innerHTML = generateChessboardSVG();
+                    document.getElementById('engineStats').textContent = `Profundidad: ${lastStats.depth} | ${lastStats.nps.toLocaleString()} nodos/s`;
                 }
                 updateMemoryStats();
             }, 1000);
@@ -1262,351 +535,105 @@
 
         function stopAnalysis() {
             if (!isEngineConnected || !isAnalyzing) return;
-
-            if (stockfish) {
-                stockfish.postMessage('stop');
-            }
-            if (analysisInterval) {
-                clearInterval(analysisInterval);
-                analysisInterval = null;
-            }
-            
+            stockfish.postMessage('stop');
+            clearInterval(analysisInterval);
+            analysisInterval = null;
             isAnalyzing = false;
             document.getElementById('engineStatus').textContent = 'Motor conectado - Análisis detenido';
             updateButtonStates();
         }
 
-        // Manejar mensajes del motor
         function handleEngineMessage(message) {
+            const parts = message.split(' ');
             if (message.startsWith('bestmove')) {
-                const parts = message.split(' ');
-                const bestMove = parts[1];
-                lastStats.bestMove = bestMove;
-                lastStats.bestMoveSan = uciToSan(bestMove);
-                
-                document.getElementById('bestMove').textContent = 
-                    `Mejor: ${lastStats.bestMoveSan}`;
-                
+                lastStats.bestMove = parts[1] || '';
+                lastStats.bestMoveSan = uciToSan(lastStats.bestMove);
+                document.getElementById('bestMove').textContent = lastStats.bestMove ? `Mejor: ${lastStats.bestMoveSan}` : '';
                 document.getElementById('chessboard').innerHTML = generateChessboardSVG();
-            } 
-            else if (message.startsWith('info')) {
-                const parts = message.split(' ');
-                
-                // Procesar nodos y tiempo
-                const nodesIndex = parts.indexOf('nodes');
-                const timeIndex = parts.indexOf('time');
-                if (nodesIndex !== -1 && timeIndex !== -1) {
-                    const nodes = parseInt(parts[nodesIndex + 1]);
-                    const time = parseInt(parts[timeIndex + 1]) / 1000;
-                    if (time > 0) {
-                        lastStats.nps = Math.round(nodes / time);
+                return;
+            }
+            if (!message.startsWith('info')) return;
+
+            const nodesIndex = parts.indexOf('nodes');
+            const timeIndex = parts.indexOf('time');
+            if (nodesIndex !== -1 && timeIndex !== -1) {
+                const elapsedSeconds = Number(parts[timeIndex + 1]) / 1000;
+                if (elapsedSeconds > 0) lastStats.nps = Math.round(Number(parts[nodesIndex + 1]) / elapsedSeconds);
+            }
+
+            const depthIndex = parts.indexOf('depth');
+            if (depthIndex !== -1) lastStats.depth = Number(parts[depthIndex + 1]);
+
+            const scoreIndex = parts.indexOf('score');
+            if (scoreIndex !== -1) {
+                const type = parts[scoreIndex + 1];
+                const rawValue = Number(parts[scoreIndex + 2]);
+                const adjustedValue = chess.turn() === 'w' ? rawValue : -rawValue;
+                lastStats.evaluation = { type, value: adjustedValue };
+                const element = document.getElementById('evaluation');
+                element.textContent = formatEvaluation(adjustedValue, type === 'mate');
+                element.className = 'evaluation ' + (adjustedValue > (type === 'cp' ? 50 : 0) ? 'eval-positive' : adjustedValue < (type === 'cp' ? -50 : 0) ? 'eval-negative' : 'eval-neutral');
+            }
+
+            const pvIndex = parts.indexOf('pv');
+            if (pvIndex !== -1 && parts.length > pvIndex + 1) {
+                const pvMoves = parts.slice(pvIndex + 1, pvIndex + 1 + MAX_PV_MOVES);
+                const tempChess = new Chess(chess.fen());
+                const sanMoves = [];
+
+                for (const uciMove of pvMoves) {
+                    try {
+                        const move = tempChess.move({
+                            from: uciMove.slice(0, 2),
+                            to: uciMove.slice(2, 4),
+                            promotion: uciMove[4]
+                        });
+                        if (!move) break;
+                        sanMoves.push(move.san);
+                    } catch (_) {
+                        break;
                     }
                 }
-                
-                // Procesar profundidad
-                const depthIndex = parts.indexOf('depth');
-                if (depthIndex !== -1) {
-                    lastStats.depth = parseInt(parts[depthIndex + 1]);
-                }
-                
-                // Procesar evaluación
-                const scoreIndex = parts.indexOf('score');
-                if (scoreIndex !== -1) {
-                    if (parts[scoreIndex + 1] === 'cp') {
-                        const evalValue = parseInt(parts[scoreIndex + 2]);
-                        const adjustedEval = chess.turn() === 'w' ? evalValue : -evalValue;
-                        lastStats.evaluation = {
-                            value: adjustedEval,
-                            type: 'cp'
-                        };
-                        
-                        const evalElement = document.getElementById('evaluation');
-                        const formattedEval = formatEvaluation(adjustedEval, false);
-                        evalElement.textContent = formattedEval;
-                        
-                        // Aplicar clases de color
-                        evalElement.className = 'evaluation';
-                        if (adjustedEval > 50) {
-                            evalElement.classList.add('eval-positive');
-                        } else if (adjustedEval < -50) {
-                            evalElement.classList.add('eval-negative');
-                        } else {
-                            evalElement.classList.add('eval-neutral');
-                        }
-                    } 
-                    else if (parts[scoreIndex + 1] === 'mate') {
-                        const mateInN = parseInt(parts[scoreIndex + 2]);
-                        const adjustedMate = chess.turn() === 'w' ? mateInN : -mateInN;
-                        lastStats.evaluation = {
-                            value: adjustedMate,
-                            type: 'mate'
-                        };
-                        
-                        const evalElement = document.getElementById('evaluation');
-                        const formattedEval = formatEvaluation(adjustedMate, true);
-                        evalElement.textContent = formattedEval;
-                        
-                        // Aplicar clases de color para mate
-                        evalElement.className = 'evaluation';
-                        if (adjustedMate > 0) {
-                            evalElement.classList.add('eval-positive');
-                        } else {
-                            evalElement.classList.add('eval-negative');
-                        }
-                    }
-                }
-                
-                // Procesar línea principal
-                const pvIndex = parts.indexOf('pv');
-                if (pvIndex !== -1 && parts.length > pvIndex + 1) {
-                    const pvMoves = parts.slice(pvIndex + 1, pvIndex + 1 + MAX_PV_MOVES_ASPT);
-                    lastStats.pvMovesUci = pvMoves; // Puente ASPT
-                    const tempChess = new Chess(chess.fen());
-                    const sanMoves = [];
-                    
-                    for (const uciMove of pvMoves) {
-                        if (uciMove.length >= 4) {
-                            try {
-                                const from = uciMove.substring(0, 2);
-                                const to = uciMove.substring(2, 4);
-                                const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
-                                
-                                const move = tempChess.move({
-                                    from: from,
-                                    to: to,
-                                    promotion: promotion
-                                });
-                                
-                                if (move) {
-                                    sanMoves.push(move.san);
-                                } else {
-                                    break;
-                                }
-                            } catch (e) {
-                                break;
-                            }
-                        }
-                    }
-                    
-                    // Mostrar la línea principal con números de movimiento mejorado
-                    if (sanMoves.length > 0) {
-                        let pvText = '';
-                        let fullMoveNumber = parseInt(chess.fen().split(' ')[5]);
-                        let isWhiteTurn = chess.turn() === 'w';
-                        
-                        for (let i = 0; i < sanMoves.length; i++) {
-                            if (i === 0 && !isWhiteTurn) {
-                                pvText += `${fullMoveNumber}... ${sanMoves[i]} `;
-                            } else if (i === 0 && isWhiteTurn) {
-                                pvText += `${fullMoveNumber}. ${sanMoves[i]} `;
-                            } else if ((i + (isWhiteTurn ? 1 : 0)) % 2 === 0) {
-                                if (!isWhiteTurn || i > 0) {
-                                    fullMoveNumber++;
-                                }
-                                pvText += `${fullMoveNumber}. ${sanMoves[i]} `;
-                            } else {
-                                pvText += `${sanMoves[i]} `;
-                            }
-                        }
-                        
-                        document.getElementById('pvLine').textContent = pvText.trim();
-                    }
-                }
+
+                if (sanMoves.length) document.getElementById('pvLine').textContent = formatPrincipalVariation(sanMoves);
             }
         }
 
-        // Función para estimar el uso de memoria
+        function formatPrincipalVariation(sanMoves) {
+            let fullMoveNumber = Number(chess.fen().split(' ')[5]);
+            const startsWithWhite = chess.turn() === 'w';
+            let text = '';
+
+            sanMoves.forEach((move, index) => {
+                if (index === 0) text += startsWithWhite ? `${fullMoveNumber}. ${move} ` : `${fullMoveNumber}... ${move} `;
+                else if ((index + (startsWithWhite ? 1 : 0)) % 2 === 0) {
+                    fullMoveNumber++;
+                    text += `${fullMoveNumber}. ${move} `;
+                } else text += `${move} `;
+            });
+
+            return text.trim();
+        }
+
         function updateMemoryStats() {
-            if (window.performance && window.performance.memory) {
-                const memory = window.performance.memory;
-                document.getElementById('memoryStats').textContent = 
-                    `Memoria: ${Math.round(memory.usedJSHeapSize / (1024 * 1024))}MB`;
-            } else {
-                document.getElementById('memoryStats').textContent = '';
-            }
-        }
-        
-
-        // ==================== ASPT RESET ====================
-        function resetASPTPanel(options = {}) {
-            const preservePV = options.preservePV === true;
-            if (!preservePV) lastStats.pvMovesUci = [];
-            lastStats.asptAnalysis = null;
-            const panel = document.getElementById("asptPanel");
-            if (panel) {
-                panel.style.display = "none";
-                panel.innerHTML = "ASPT pendiente";
-            }
+            const element = document.getElementById('memoryStats');
+            if (performance && performance.memory) {
+                element.textContent = `Memoria: ${Math.round(performance.memory.usedJSHeapSize / 1048576)}MB`;
+            } else element.textContent = '';
         }
 
-        // ==================== ASPT PLACEHOLDER ====================
-        function medirASPTPlaceholder(fen, claseObjetivo, profundidad) {
-            const temp = new Chess(fen);
-            if (claseObjetivo === "mate" && temp.in_checkmate()) return 0;
-            if (temp.in_check()) return 5;
-            return 10;
+        function cleanupResources() {
+            if (stockfish) stockfish.terminate();
+            if (blobURL) URL.revokeObjectURL(blobURL);
+            if (analysisInterval) clearInterval(analysisInterval);
+            if (pvObserver) pvObserver.disconnect();
         }
 
-        // ==================== ASPT ANALYZER v0.7-rc2 ====================
-        function analizarPVConASPT_v07_rc2_JS(fenInicial, pvMovesUci, claseObjetivo = "mate", profundidadBase = 8, profundidadMinima = 4) {
-            const temp = new Chess(fenInicial);
-            const registros = [];
-            let progresoBlancoTotal = 0, retrocesoBlancoTotal = 0;
-            let resistenciaNegraTotal = 0, colapsoNegroTotal = 0;
-            let profHeredada = profundidadBase;
-            let asptAntes = medirASPTPlaceholder(temp.fen(), claseObjetivo, profundidadBase);
-            const asptInicial = asptAntes;
-
-            for (let i = 0; i < pvMovesUci.length; i++) {
-                const uci = pvMovesUci[i];
-                const ply = i + 1;
-                const colorQueMueve = temp.turn();
-                const profActual = Math.max(profundidadMinima, profundidadBase - Math.floor(i / 2));
-
-                const moveObj = {
-                    from: uci.substring(0, 2),
-                    to: uci.substring(2, 4),
-                    promotion: uci.length > 4 ? uci[4] : undefined
-                };
-
-                const legalMove = temp.move(moveObj);
-                if (!legalMove) {
-                    registros.push({ ply, move_uci: uci, error: "Movimiento ilegal en PV" });
-                    break;
-                }
-
-                const asptDespues = medirASPTPlaceholder(temp.fen(), claseObjetivo, profActual);
-                const delta = asptDespues - asptAntes;
-
-                let lectura, impacto;
-                if (colorQueMueve === "w") {
-                    const progreso = Math.max(0, -delta);
-                    const retroceso = Math.max(0, delta);
-                    progresoBlancoTotal += progreso;
-                    retrocesoBlancoTotal += retroceso;
-                    lectura = delta < 0 ? "blanco_acerca" : delta > 0 ? "blanco_aleja" : "blanco_neutro";
-                    impacto = progreso - retroceso;
-                } else {
-                    const resistencia = Math.max(0, delta);
-                    const colapso = Math.max(0, -delta);
-                    resistenciaNegraTotal += resistencia;
-                    colapsoNegroTotal += colapso;
-                    lectura = delta > 0 ? "negro_resiste" : delta < 0 ? "negro_colapsa" : "negro_neutro";
-                    impacto = resistencia - colapso;
-                }
-
-                registros.push({
-                    ply, move_uci: uci, move_san: legalMove.san,
-                    color: colorQueMueve === "w" ? "blanco" : "negro",
-                    aspt_antes: Number(asptAntes.toFixed(3)),
-                    aspt_despues: Number(asptDespues.toFixed(3)),
-                    profundidad_antes: profHeredada,
-                    profundidad_despues: profActual,
-                    delta: Number(delta.toFixed(3)),
-                    lectura, impacto_causal: Number(impacto.toFixed(3))
-                });
-
-                asptAntes = asptDespues;
-                profHeredada = profActual;
-            }
-
-            const balanceBlanco = progresoBlancoTotal - retrocesoBlancoTotal;
-            const balanceNegro = resistenciaNegraTotal - colapsoNegroTotal;
-            const ventajaDireccionBlanca = balanceBlanco - balanceNegro;
-
-            const denomBlanco = progresoBlancoTotal + retrocesoBlancoTotal;
-            const denomNegro = resistenciaNegraTotal + colapsoNegroTotal;
-
-            return {
-                version: "ASPT-PV Analyzer v0.7-rc2 JS Placeholder",
-                clase_objetivo: claseObjetivo,
-                aspt_inicial: Number(asptInicial.toFixed(3)),
-                progreso_blanco_total: Number(progresoBlancoTotal.toFixed(3)),
-                retroceso_blanco_total: Number(retrocesoBlancoTotal.toFixed(3)),
-                resistencia_negra_total: Number(resistenciaNegraTotal.toFixed(3)),
-                colapso_negro_total: Number(colapsoNegroTotal.toFixed(3)),
-                balance_blanco: Number(balanceBlanco.toFixed(3)),
-                balance_negro: Number(balanceNegro.toFixed(3)),
-                ventaja_direccion_blanca: Number(ventajaDireccionBlanca.toFixed(3)),
-                eficiencia_blanca: denomBlanco > 0 ? Number((progresoBlancoTotal / denomBlanco).toFixed(4)) : null,
-                eficiencia_negra: denomNegro > 0 ? Number((resistenciaNegraTotal / denomNegro).toFixed(4)) : null,
-                cantidad_plies: pvMovesUci.length,
-                registros
-            };
-        }
-
-        // ==================== ASPT RUNNER ====================
-        function runASPTPVAnalysis() {
-            const panel = document.getElementById("asptPanel");
-            panel.style.display = "block";
-
-            if (!lastStats.pvMovesUci || lastStats.pvMovesUci.length === 0) {
-                panel.innerHTML = "<b>No hay PV disponible para analizar.</b>";
-                return;
-            }
-
-            const resultado = analizarPVConASPT_v07_rc2_JS(chess.fen(), lastStats.pvMovesUci, "mate", 8, 4);
-            lastStats.asptAnalysis = resultado;
-            renderASPTResult(resultado);
-        }
-
-        // ==================== ASPT RENDER ====================
-        function renderASPTResult(resultado) {
-            const panel = document.getElementById("asptPanel");
-            if (!resultado || !resultado.registros) {
-                panel.innerHTML = "<b>Error en análisis ASPT.</b>";
-                return;
-            }
-
-            const primerasFilas = resultado.registros.slice(0, 6).map(reg => {
-                if (reg.error) return `<div style="color:#c0392b;font-family:monospace;font-size:0.78rem;">Ply ${reg.ply}: ${reg.error}</div>`;
-                const colorClass = reg.color === "blanco" ? "color:#2980b9;" : "color:#8e44ad;";
-                return `<div style="font-family:monospace;font-size:0.78rem;margin:2px 0;${colorClass}">
-                    ${reg.ply}. ${reg.move_san} | Δ${reg.delta} | ${reg.lectura} | imp:${reg.impacto_causal}
-                </div>`;
-            }).join("");
-
-            const tieneMas = resultado.registros.length > 6 ? `<div style="font-size:0.75rem;color:#7f8c8d;margin-top:4px;">... y ${resultado.registros.length - 6} plies más</div>` : "";
-
-            panel.innerHTML = `
-                <div class="pv-title"><i class="fas fa-route"></i> ${resultado.version}</div>
-                <div style="font-size:0.82rem;line-height:1.5;">
-                    <b>Objetivo:</b> ${resultado.clase_objetivo}<br>
-                    <b>ASPT inicial:</b> ${resultado.aspt_inicial}<br>
-                    <b>Progreso blanco:</b> ${resultado.progreso_blanco_total}<br>
-                    <b>Resistencia negra:</b> ${resultado.resistencia_negra_total}<br>
-                    <b>Ventaja blanca:</b> ${resultado.ventaja_direccion_blanca}<br>
-                    <b>Ef. blanca:</b> ${resultado.eficiencia_blanca ?? "N/A"} | <b>Ef. negra:</b> ${resultado.eficiencia_negra ?? "N/A"}
-                </div>
-                <hr style="margin:8px 0;border:none;border-top:1px solid #ddd;">
-                ${primerasFilas}
-                ${tieneMas}
-            `;
-        }
-
-        // Inicializar al cargar la página
-        window.onload = function() {
+        window.addEventListener('load', () => {
             drawBoard();
-            updateMemoryStats();
-            updateButtonStates();
             setupPVObserver();
-        };
-        
-        // Limpiar recursos al cerrar la página
-        window.onbeforeunload = function() {
-            if (stockfish) {
-                stockfish.terminate();
-            }
-            if (blobURL) {
-                URL.revokeObjectURL(blobURL);
-            }
-            if (analysisInterval) {
-                clearInterval(analysisInterval);
-            }
-            if (pvObserver) {
-                pvObserver.disconnect();
-            }
-        };
+        });
+        window.addEventListener('beforeunload', cleanupResources);
     </script>
 </body>
 </html>
