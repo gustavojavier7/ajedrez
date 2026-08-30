@@ -22,7 +22,7 @@
         }
 
         .container {
-            max-width: 1600px;
+            max-width: 1900px;
             margin: 0 auto;
             padding: 20px;
             min-height: 100vh;
@@ -191,16 +191,21 @@
         }
 
         .main-layout {
-            display: flex;
-            gap: 20px;
+            display: grid;
+            grid-template-columns: minmax(520px, 560px) minmax(360px, 420px) minmax(430px, 1fr);
+            grid-template-areas: "board controls metrics";
+            gap: 16px;
+            align-items: start;
             flex: 1;
             min-height: 0;
         }
 
         .board-container-wrapper {
+            grid-area: board;
             display: flex;
             flex-direction: column;
             gap: 12px;
+            min-width: 0;
         }
 
         .board-section {
@@ -250,11 +255,59 @@
         }
 
         .right-panel {
-            width: 400px;
-            min-width: 400px;
+            grid-area: controls;
+            width: auto;
+            min-width: 0;
             display: flex;
             flex-direction: column;
             gap: 16px;
+        }
+
+        .pca-metrics-sidebar {
+            grid-area: metrics;
+            min-width: 0;
+            align-self: start;
+            position: sticky;
+            top: 12px;
+            max-height: calc(100vh - 24px);
+            overflow: auto;
+        }
+
+        .pca-metrics-card {
+            border-left: 4px solid #2563eb;
+            background: #ffffff;
+        }
+
+        .pca-metrics-card > .section-title {
+            margin-bottom: 10px;
+            font-size: 0.95rem;
+        }
+
+        .pca-selected-summary {
+            margin: 8px 0 10px;
+            padding: 8px;
+            border: 1px solid #dbeafe;
+            border-radius: 6px;
+            background: #ffffff;
+        }
+
+        .pca-selected-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 5px;
+        }
+
+        .pca-selected-grid .metric-item {
+            padding: 5px 6px;
+            background: #f8fbff;
+        }
+
+        .pca-selected-grid .metric-label {
+            font-size: 0.62rem;
+        }
+
+        .pca-selected-grid .metric-value {
+            font-size: 0.76rem;
         }
 
         .analysis-panel {
@@ -566,7 +619,7 @@
 
         .pca-evaluation-overview {
             display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 5px;
             margin: 7px 0;
         }
@@ -590,6 +643,23 @@
 
         .pca-evaluation-table {
             min-width: 850px;
+        }
+
+        .pca-ranking-compact {
+            min-width: 610px;
+        }
+
+        .pca-ranking-compact th:nth-child(2),
+        .pca-ranking-compact td:nth-child(2),
+        .pca-ranking-compact th:nth-child(3),
+        .pca-ranking-compact td:nth-child(3),
+        .pca-ranking-compact th:nth-child(4),
+        .pca-ranking-compact td:nth-child(4),
+        .pca-ranking-compact th:nth-child(11),
+        .pca-ranking-compact td:nth-child(11),
+        .pca-ranking-compact th:nth-child(12),
+        .pca-ranking-compact td:nth-child(12) {
+            display: none;
         }
 
         .pca-evaluation-table .pca-evaluation-top {
@@ -857,37 +927,85 @@
             50% { opacity: 0.5; }
         }
 
-        @media (max-width: 1200px) {
+        @media (max-width: 1350px) {
             .main-layout {
-                flex-direction: column;
+                grid-template-columns: minmax(480px, 540px) minmax(0, 1fr);
+                grid-template-areas:
+                    "board controls"
+                    "board metrics";
+            }
+
+            .board-container-wrapper {
+                align-self: start;
+            }
+
+            .right-panel,
+            .pca-metrics-sidebar {
+                width: 100%;
+                min-width: 0;
+            }
+
+            .pca-metrics-sidebar {
+                position: static;
+                max-height: none;
+                overflow: visible;
+            }
+
+            .analysis-panel {
+                display: flex;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .container {
+                padding: 12px;
+            }
+
+            .main-layout {
+                grid-template-columns: minmax(0, 1fr);
+                grid-template-areas:
+                    "board"
+                    "controls"
+                    "metrics";
             }
 
             .board-container-wrapper {
                 align-self: center;
+                max-width: 100%;
             }
 
-            .right-panel {
-                width: 100%;
+            .input-row {
+                flex-direction: column;
+            }
+
+            .input-group {
                 min-width: unset;
+                width: 100%;
+            }
+
+            .button-group {
+                width: 100%;
+            }
+
+            .button-group .btn {
+                flex: 1 1 auto;
+                justify-content: center;
             }
 
             .analysis-panel {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 16px;
+                display: flex;
             }
 
-            .analysis-section {
-                border-bottom: none;
-                padding-bottom: 0;
-                margin-bottom: 0;
+            .right-panel,
+            .pca-metrics-sidebar {
+                width: 100%;
+            }
+
+            .pca-selected-grid,
+            .metric-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
-
-        @media (max-width: 768px) {
-            .container {
-                padding: 12px;
-            }
 
             .input-row {
                 flex-direction: column;
@@ -1040,73 +1158,7 @@
                             <span id="pcaStatus" class="pca-status-badge">NO EJECUTADO</span>
                             <span id="pcaMove" class="pca-move">—</span>
                         </div>
-                        <div class="metric-grid">
-                            <div class="metric-item"><span class="metric-label">Hipótesis iniciales</span><span id="pcaInitialCandidates" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">Supervivientes</span><span id="pcaSurvivors" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">Targets restantes</span><span id="pcaTargets" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">K efectivo (plies)</span><span id="pcaDepth" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">H estado (bits)</span><span id="pcaStateH" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">H Target (bits)</span><span id="pcaTargetH" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">Conflictos</span><span id="pcaConflicts" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">Progreso decisional</span><span id="pcaProgressText" class="metric-value">—</span></div>
-                        </div>
-                        <div class="pca-progress-track" aria-label="Progreso decisional PCA">
-                            <div id="pcaProgressBar" class="pca-progress-fill"></div>
-                        </div>
-                        <div id="pcaStopReason" class="stop-reason">STOP_REASON: —</div>
-                        <div id="pcaEvaluationPanel" class="pca-evaluation" hidden>
-                            <div class="section-title">
-                                <i class="fas fa-wave-square"></i>
-                                PCA-CHESS PULSE EVALUATION V2
-                                <span class="section-subtitle">BFS temporal por profundidad</span>
-                            </div>
-                            <div class="pca-evaluation-overview">
-                                <span id="pcaEvaluationPcaStatus">PCA_STATUS: —</span>
-                                <span id="pcaEvaluationStatus">EVALUATION_STATUS: —</span>
-                                <span id="pcaEvaluationPhase">PHASE: —</span>
-                                <span id="pcaEvaluationK">K_GUARD: —</span>
-                                <span id="pcaEvaluationDepth">DEPTH: —</span>
-                                <span id="pcaEvaluationMoves">MOVES: —</span>
-                                <span id="pcaEvaluationActiveMove">ACTIVE_MOVE: —</span>
-                                <span id="pcaEvaluationActiveMoveNodes">ACTIVE_MOVE_NODES: —</span>
-                                <span id="pcaEvaluationNodes">NODES: —</span>
-                                <span id="pcaEvaluationNodeGuard">NODE_GUARD: —</span>
-                                <span id="pcaEvaluationElapsed">ELAPSED: —</span>
-                                <span id="pcaEvaluationRankingStatus">RANKING: —</span>
-                                <span id="pcaEvaluationStopReason">STOP_REASON: —</span>
-                            </div>
-                            <div class="pca-evaluation-table-wrap">
-                                <table class="pca-regression-table pca-evaluation-table">
-                                    <thead><tr>
-                                        <th>MOVE</th><th>DEPTH</th><th>FIRST_PULSE</th><th>BRANCHES</th>
-                                        <th>W</th><th>D</th><th>L</th><th>FRONTIER</th><th>RESOLUTION</th>
-                                        <th>SIGNED_PULSE</th><th>H_OUTCOME</th><th>CONFLICTS</th><th>PCA_SCORE</th>
-                                    </tr></thead>
-                                    <tbody id="pcaEvaluationBody"><tr><td colspan="13">—</td></tr></tbody>
-                                </table>
-                            </div>
-                            <div class="pca-evaluation-table-wrap">
-                                <div class="pca-regression-header">
-                                    <span class="pca-regression-title">Firma temporal: <strong id="pcaPulseTemporalMove">—</strong></span>
-                                </div>
-                                <table class="pca-regression-table pca-evaluation-table">
-                                    <thead><tr>
-                                        <th>K</th><th>W@K</th><th>D@K</th><th>L@K</th><th>W≤K</th><th>D≤K</th>
-                                        <th>L≤K</th><th>FRONTIER</th><th>RESOLUTION</th><th>SIGNED_PULSE</th><th>H</th>
-                                    </tr></thead>
-                                    <tbody id="pcaPulseTemporalBody"><tr><td colspan="11">—</td></tr></tbody>
-                                </table>
-                            </div>
-                            <div id="pcaEvaluationStockfish" class="pca-evaluation-stockfish" hidden>
-                                <span id="pcaEvaluationStockfishMove">Stockfish: —</span>
-                                <span id="pcaEvaluationStockfishRank">PCA rank: —</span>
-                            </div>
-                            <div class="pca-evaluation-note">
-                                Pulse Evaluation es diagnóstica: W/D/L se registran sólo en la primera terminal de cada rama.
-                                PCA_SCORE conserva la fórmula compatible; SIGNED_PULSE no cambia PCA_STATUS.
-                                Los resultados TRUNCATED son parciales y el ranking permanece PROVISIONAL.
-                            </div>
-                        </div>
+
                     </div>
 
                     <div class="analysis-section analysis-card analysis-card-control">
@@ -1169,6 +1221,100 @@
                     <div id="legalMovesList" class="moves-list"></div>
                 </div>
             </div>
+
+            <aside class="pca-metrics-sidebar" aria-label="Métricas PCA en vivo">
+                <div class="analysis-card pca-metrics-card">
+                    <div class="section-title">
+                        <i class="fas fa-chart-line"></i>
+                        MÉTRICAS PCA
+                        <span class="section-subtitle">telemetría en vivo</span>
+                    </div>
+                        <div class="metric-grid">
+                            <div class="metric-item"><span class="metric-label">Hipótesis iniciales</span><span id="pcaInitialCandidates" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">Supervivientes</span><span id="pcaSurvivors" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">Targets restantes</span><span id="pcaTargets" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">K efectivo (plies)</span><span id="pcaDepth" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">H estado (bits)</span><span id="pcaStateH" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">H Target (bits)</span><span id="pcaTargetH" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">Conflictos</span><span id="pcaConflicts" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">Progreso decisional</span><span id="pcaProgressText" class="metric-value">—</span></div>
+                        </div>
+                        <div class="pca-progress-track" aria-label="Progreso decisional PCA">
+                            <div id="pcaProgressBar" class="pca-progress-fill"></div>
+                        </div>
+                        <div id="pcaStopReason" class="stop-reason">STOP_REASON: —</div>
+                        <div id="pcaEvaluationPanel" class="pca-evaluation" hidden>
+                            <div class="section-title">
+                                <i class="fas fa-wave-square"></i>
+                                PCA-CHESS PULSE EVALUATION V2
+                                <span class="section-subtitle">BFS temporal por profundidad</span>
+                            </div>
+                            <div class="pca-evaluation-overview">
+                                <span id="pcaEvaluationPcaStatus">PCA_STATUS: —</span>
+                                <span id="pcaEvaluationStatus">EVALUATION_STATUS: —</span>
+                                <span id="pcaEvaluationPhase">PHASE: —</span>
+                                <span id="pcaEvaluationK">K_GUARD: —</span>
+                                <span id="pcaEvaluationDepth">DEPTH: —</span>
+                                <span id="pcaEvaluationMoves">MOVES: —</span>
+                                <span id="pcaEvaluationActiveMove">ACTIVE_MOVE: —</span>
+                                <span id="pcaEvaluationActiveMoveNodes">ACTIVE_MOVE_NODES: —</span>
+                                <span id="pcaEvaluationNodes">NODES: —</span>
+                                <span id="pcaEvaluationNodeGuard">NODE_GUARD: —</span>
+                                <span id="pcaEvaluationElapsed">ELAPSED: —</span>
+                                <span id="pcaEvaluationRankingStatus">RANKING: —</span>
+                                <span id="pcaEvaluationStopReason">STOP_REASON: —</span>
+                            </div>
+                            <div class="pca-selected-summary">
+                                <div class="pca-regression-header">
+                                    <span class="pca-regression-title">Movimiento seleccionado</span>
+                                    <strong id="pcaSelectedMove">—</strong>
+                                </div>
+                                <div class="pca-selected-grid">
+                                    <div class="metric-item"><span class="metric-label">FIRST_PULSE</span><span id="pcaSelectedFirstPulse" class="metric-value">—</span></div>
+                                    <div class="metric-item"><span class="metric-label">LAST_DEPTH</span><span id="pcaSelectedDepth" class="metric-value">—</span></div>
+                                    <div class="metric-item"><span class="metric-label">ESTADO</span><span id="pcaSelectedCompleteness" class="metric-value">—</span></div>
+                                    <div class="metric-item"><span class="metric-label">BALANCE</span><span id="pcaSelectedBalance" class="metric-value">—</span></div>
+                                    <div class="metric-item"><span class="metric-label">RESOLUTION</span><span id="pcaSelectedResolution" class="metric-value">—</span></div>
+                                    <div class="metric-item"><span class="metric-label">SIGNED_PULSE</span><span id="pcaSelectedSignedPulse" class="metric-value">—</span></div>
+                                    <div class="metric-item"><span class="metric-label">H_OUTCOME</span><span id="pcaSelectedEntropy" class="metric-value">—</span></div>
+                                    <div class="metric-item"><span class="metric-label">CONFLICTS</span><span id="pcaSelectedConflicts" class="metric-value">—</span></div>
+                                    <div class="metric-item"><span class="metric-label">PCA_SCORE</span><span id="pcaSelectedScore" class="metric-value">—</span></div>
+                                </div>
+                            </div>
+                            <div class="pca-evaluation-table-wrap">
+                                <table class="pca-regression-table pca-evaluation-table pca-ranking-compact">
+                                    <thead><tr>
+                                        <th>MOVE</th><th>DEPTH</th><th>FIRST_PULSE</th><th>BRANCHES</th>
+                                        <th>W</th><th>D</th><th>L</th><th>FRONTIER</th><th>RESOLUTION</th>
+                                        <th>SIGNED_PULSE</th><th>H_OUTCOME</th><th>CONFLICTS</th><th>PCA_SCORE</th>
+                                    </tr></thead>
+                                    <tbody id="pcaEvaluationBody"><tr><td colspan="13">—</td></tr></tbody>
+                                </table>
+                            </div>
+                            <div class="pca-evaluation-table-wrap">
+                                <div class="pca-regression-header">
+                                    <span class="pca-regression-title">Firma temporal: <strong id="pcaPulseTemporalMove">—</strong></span>
+                                </div>
+                                <table class="pca-regression-table pca-evaluation-table">
+                                    <thead><tr>
+                                        <th>K</th><th>W@K</th><th>D@K</th><th>L@K</th><th>W≤K</th><th>D≤K</th>
+                                        <th>L≤K</th><th>FRONTIER</th><th>RESOLUTION</th><th>SIGNED_PULSE</th><th>H</th>
+                                    </tr></thead>
+                                    <tbody id="pcaPulseTemporalBody"><tr><td colspan="11">—</td></tr></tbody>
+                                </table>
+                            </div>
+                            <div id="pcaEvaluationStockfish" class="pca-evaluation-stockfish" hidden>
+                                <span id="pcaEvaluationStockfishMove">Stockfish: —</span>
+                                <span id="pcaEvaluationStockfishRank">PCA rank: —</span>
+                            </div>
+                            <div class="pca-evaluation-note">
+                                Pulse Evaluation es diagnóstica: W/D/L se registran sólo en la primera terminal de cada rama.
+                                PCA_SCORE conserva la fórmula compatible; SIGNED_PULSE no cambia PCA_STATUS.
+                                Los resultados TRUNCATED son parciales y el ranking permanece PROVISIONAL.
+                            </div>
+                        </div>
+                </div>
+            </aside>
         </div>
     </div>
 
@@ -1885,6 +2031,23 @@
             const body = document.getElementById('pcaPulseTemporalBody');
             const label = document.getElementById('pcaPulseTemporalMove');
             if (!body || !label) return;
+            const setSelectedText = (id, value) => {
+                const element = document.getElementById(id);
+                if (element) element.textContent = value;
+            };
+            setSelectedText('pcaSelectedMove', move ? move.san : '—');
+            setSelectedText('pcaSelectedFirstPulse', move && move.firstPulseDepth != null ? move.firstPulseDepth : '—');
+            setSelectedText('pcaSelectedDepth', move ? (move.lastComputedDepth || move.depth || 0) : '—');
+            setSelectedText(
+                'pcaSelectedCompleteness',
+                move ? (move.partial ? 'PARTIAL' : (move.complete ? 'COMPLETE' : 'RUNNING')) : '—'
+            );
+            setSelectedText('pcaSelectedBalance', move ? pcaFormatSigned(move.balance) : '—');
+            setSelectedText('pcaSelectedResolution', move ? ((move.resolution || 0) * 100).toFixed(1) + '%' : '—');
+            setSelectedText('pcaSelectedSignedPulse', move ? pcaFormatSigned(move.signedPulse) : '—');
+            setSelectedText('pcaSelectedEntropy', move ? Number(move.outcomeUncertainty || 0).toFixed(3) : '—');
+            setSelectedText('pcaSelectedConflicts', move ? Number(move.outcomeConflicts || 0).toLocaleString() : '—');
+            setSelectedText('pcaSelectedScore', move ? pcaFormatSigned(move.pcaScore) : '—');
             body.replaceChildren();
             label.textContent = move ? move.san : '—';
             if (!move || !move.temporal || move.temporal.length === 0) {
@@ -1961,7 +2124,8 @@
             }
 
             if (evaluation.status === 'AVAILABLE') pcaLastEvaluation = evaluation;
-            moves.forEach((move, index) => {
+            const rankingMoves = moves.slice(0, 10);
+            rankingMoves.forEach((move, index) => {
                 const row = document.createElement('tr');
                 if (index === 0 && evaluation.status === 'AVAILABLE') row.className = 'pca-evaluation-top';
                 row.title = 'Ver firma temporal de ' + move.san;
