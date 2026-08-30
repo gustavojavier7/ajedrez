@@ -566,7 +566,7 @@
 
         .pca-evaluation-overview {
             display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 5px;
             margin: 7px 0;
         }
@@ -968,9 +968,16 @@
                         <div class="pca-engine-controls">
                             <label for="pcaKGuard">K_GUARD (plies)
                                 <select id="pcaKGuard" aria-label="Profundidad máxima PCA en plies">
-                                    <option value="1">1 · mate en 1</option>
-                                    <option value="3" selected>3 · mate en 2</option>
-                                    <option value="5">5 · mate en 3</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3" selected>3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                    <option value="7">7</option>
+                                    <option value="8">8</option>
+                                    <option value="9">9</option>
+                                    <option value="10">10</option>
                                 </select>
                             </label>
                             <button type="button" onclick="analyzePCAChess()" id="pcaAnalyzeBtn" class="btn btn-primary">
@@ -1059,6 +1066,7 @@
                                 <span id="pcaEvaluationK">K_GUARD: —</span>
                                 <span id="pcaEvaluationMoves">MOVES_EVALUATED: —</span>
                                 <span id="pcaEvaluationNodes">NODES: —</span>
+                                <span id="pcaEvaluationStopReason">STOP_REASON: —</span>
                             </div>
                             <div class="pca-evaluation-table-wrap">
                                 <table class="pca-regression-table pca-evaluation-table">
@@ -1256,7 +1264,16 @@
         };
 
         let isPcaAnalyzing = false;
+        const PCA_K_MIN = 1;
+        const PCA_K_MAX = 10;
         const PCA_NODE_GUARD = 150000;
+        const PCA_EVAL_NODE_GUARD = 150000;
+
+        function pcaIsValidKGuard(k) {
+            return Number.isInteger(k) &&
+                k >= PCA_K_MIN &&
+                k <= PCA_K_MAX;
+        }
         let pcaLastTrace = [];
         let pcaLastEvaluation = null;
 
@@ -1363,11 +1380,10 @@
         // Función pura respecto de la interfaz: no lee ni escribe DOM, no consulta Stockfish
         // y su resultado depende sólo de fen, kGuard y las reglas de Chess.js.
         function pcaAnalyzePosition(fen, kGuard) {
-            const guard = Number.parseInt(kGuard, 10);
-            const allowedGuards = [1, 3, 5];
+            const guard = Number(kGuard);
             const trace = [];
 
-            if (!allowedGuards.includes(guard)) {
+            if (!pcaIsValidKGuard(guard)) {
                 return pcaResultMetrics({
                     status: 'UNDEFINED', move: null, initialCandidates: 0, survivors: 0,
                     depth: 0, nodes: 0, trace, stopReason: 'INVALID_K_GUARD'
@@ -1403,7 +1419,10 @@
                 });
             }
 
-            const horizons = allowedGuards.filter(k => k <= guard);
+            const horizons = Array.from(
+                { length: guard },
+                (_, index) => index + 1
+            );
             const context = { nodes: 0, nodeGuard: PCA_NODE_GUARD, memo: new Map() };
 
             try {
@@ -1484,6 +1503,13 @@
         }
 
         function pcaExploreEvaluationBranches(game, initialSide, remainingPlies, counts, context) {
+            context.nodes += 1;
+            if (context.nodes > context.nodeGuard) {
+                const err = new Error('PCA_EVAL_NODE_GUARD');
+                err.code = 'PCA_EVAL_NODE_GUARD';
+                throw err;
+            }
+
             const terminalOutcome = pcaEvaluationOutcome(game, initialSide);
             if (terminalOutcome) {
                 counts[terminalOutcome.toLowerCase()] += 1;
@@ -1507,7 +1533,6 @@
                     to: move.to,
                     promotion: move.promotion
                 });
-                context.nodes += 1;
                 pcaExploreEvaluationBranches(
                     game,
                     initialSide,
@@ -1519,14 +1544,21 @@
             }
         }
 
-        function pcaEvaluationUnavailable(fen, kGuard, stopReason) {
+        function pcaEvaluationUnavailable(
+            fen,
+            kGuard,
+            stopReason,
+            side = null,
+            totalMoves = 0,
+            nodes = 0
+        ) {
             return {
                 status: 'UNAVAILABLE',
                 fen,
                 kGuard,
-                side: null,
-                totalMoves: 0,
-                nodes: 0,
+                side,
+                totalMoves,
+                nodes,
                 moves: [],
                 stopReason
             };
@@ -1534,8 +1566,8 @@
 
         // Función pura: usa únicamente fen, kGuard, Chess.js e instancias locales de Chess.
         function pcaEvaluatePosition(fen, kGuard) {
-            const guard = Number.parseInt(kGuard, 10);
-            if (![1, 3, 5].includes(guard)) {
+            const guard = Number(kGuard);
+            if (!pcaIsValidKGuard(guard)) {
                 return pcaEvaluationUnavailable(fen, guard, 'INVALID_K_GUARD');
             }
 
@@ -1547,84 +1579,105 @@
 
             root.load(fen);
             if (root.game_over()) {
-                return pcaEvaluationUnavailable(fen, guard, 'POSITION_ALREADY_TERMINAL');
+                return pcaEvaluationUnavailable(
+                    fen,
+                    guard,
+                    'POSITION_ALREADY_TERMINAL',
+                    root.turn()
+                );
             }
 
             const initialSide = root.turn();
             const rootMoves = root.moves({ verbose: true });
-            const context = { nodes: 0 };
+            const context = {
+                nodes: 0,
+                nodeGuard: PCA_EVAL_NODE_GUARD
+            };
             const evaluatedMoves = [];
 
-            for (const rootMove of rootMoves) {
-                const branchGame = new Chess(fen);
-                branchGame.move({
-                    from: rootMove.from,
-                    to: rootMove.to,
-                    promotion: rootMove.promotion
-                });
-                context.nodes += 1;
+            try {
+                for (const rootMove of rootMoves) {
+                    const branchGame = new Chess(fen);
+                    branchGame.move({
+                        from: rootMove.from,
+                        to: rootMove.to,
+                        promotion: rootMove.promotion
+                    });
 
-                const counts = {
-                    win: 0,
-                    draw: 0,
-                    loss: 0,
-                    unknown: 0
-                };
-                pcaExploreEvaluationBranches(
-                    branchGame,
-                    initialSide,
-                    guard - 1,
-                    counts,
-                    context
-                );
+                    const counts = {
+                        win: 0,
+                        draw: 0,
+                        loss: 0,
+                        unknown: 0
+                    };
+                    pcaExploreEvaluationBranches(
+                        branchGame,
+                        initialSide,
+                        guard - 1,
+                        counts,
+                        context
+                    );
 
-                const branchesTotal =
-                    counts.win + counts.draw + counts.loss + counts.unknown;
-                const resolved = counts.win + counts.draw + counts.loss;
-                const survivalRate =
-                    branchesTotal > 0 ? counts.unknown / branchesTotal : 0;
-                const outcomeUncertainty = pcaEvaluationEntropy(
-                    [counts.win, counts.draw, counts.loss, counts.unknown],
-                    branchesTotal
-                );
-                const resolvedUncertainty = resolved > 0
-                    ? pcaEvaluationEntropy(
-                        [counts.win, counts.draw, counts.loss],
-                        resolved
-                    )
-                    : null;
-                const samePairs =
-                    pcaChoose2(counts.win) +
-                    pcaChoose2(counts.draw) +
-                    pcaChoose2(counts.loss) +
-                    pcaChoose2(counts.unknown);
-                const outcomeConflicts =
-                    pcaChoose2(branchesTotal) - samePairs;
-                const balance = branchesTotal > 0
-                    ? (counts.win - counts.loss) / branchesTotal
-                    : 0;
-                const resolution = branchesTotal > 0
-                    ? resolved / branchesTotal
-                    : 0;
-                const pcaScore = balance * resolution;
+                    const branchesTotal =
+                        counts.win + counts.draw + counts.loss + counts.unknown;
+                    const resolved = counts.win + counts.draw + counts.loss;
+                    const survivalRate =
+                        branchesTotal > 0 ? counts.unknown / branchesTotal : 0;
+                    const outcomeUncertainty = pcaEvaluationEntropy(
+                        [counts.win, counts.draw, counts.loss, counts.unknown],
+                        branchesTotal
+                    );
+                    const resolvedUncertainty = resolved > 0
+                        ? pcaEvaluationEntropy(
+                            [counts.win, counts.draw, counts.loss],
+                            resolved
+                        )
+                        : null;
+                    const samePairs =
+                        pcaChoose2(counts.win) +
+                        pcaChoose2(counts.draw) +
+                        pcaChoose2(counts.loss) +
+                        pcaChoose2(counts.unknown);
+                    const outcomeConflicts =
+                        pcaChoose2(branchesTotal) - samePairs;
+                    const balance = branchesTotal > 0
+                        ? (counts.win - counts.loss) / branchesTotal
+                        : 0;
+                    const resolution = branchesTotal > 0
+                        ? resolved / branchesTotal
+                        : 0;
+                    const pcaScore = balance * resolution;
 
-                evaluatedMoves.push({
-                    san: rootMove.san,
-                    uci: rootMove.from + rootMove.to + (rootMove.promotion || ''),
-                    branchesTotal,
-                    wins: counts.win,
-                    draws: counts.draw,
-                    losses: counts.loss,
-                    unknown: counts.unknown,
-                    resolved,
-                    survivalRate,
-                    outcomeUncertainty,
-                    resolvedUncertainty,
-                    outcomeConflicts,
-                    balance,
-                    resolution,
-                    pcaScore
-                });
+                    evaluatedMoves.push({
+                        san: rootMove.san,
+                        uci: rootMove.from + rootMove.to + (rootMove.promotion || ''),
+                        branchesTotal,
+                        wins: counts.win,
+                        draws: counts.draw,
+                        losses: counts.loss,
+                        unknown: counts.unknown,
+                        resolved,
+                        survivalRate,
+                        outcomeUncertainty,
+                        resolvedUncertainty,
+                        outcomeConflicts,
+                        balance,
+                        resolution,
+                        pcaScore
+                    });
+                }
+            } catch (error) {
+                if (error && error.code === 'PCA_EVAL_NODE_GUARD') {
+                    return pcaEvaluationUnavailable(
+                        fen,
+                        guard,
+                        'NODE_GUARD_REACHED',
+                        initialSide,
+                        rootMoves.length,
+                        context.nodes
+                    );
+                }
+                throw error;
             }
 
             evaluatedMoves.sort((left, right) =>
@@ -1695,9 +1748,8 @@
             resetPCAEvaluation();
             const panel = document.getElementById('pcaEvaluationPanel');
             const body = document.getElementById('pcaEvaluationBody');
-            if (!panel || !body || evaluation.status !== 'AVAILABLE') return;
+            if (!panel || !body) return;
 
-            pcaLastEvaluation = evaluation;
             panel.hidden = false;
             document.getElementById('pcaEvaluationPcaStatus').textContent =
                 'PCA_STATUS: ' + pcaStatus;
@@ -1709,8 +1761,23 @@
                 'MOVES_EVALUATED: ' + evaluation.totalMoves;
             document.getElementById('pcaEvaluationNodes').textContent =
                 'NODES: ' + evaluation.nodes.toLocaleString();
+            document.getElementById('pcaEvaluationStopReason').textContent =
+                'STOP_REASON: ' + (evaluation.stopReason || '—');
 
             body.replaceChildren();
+            if (evaluation.status !== 'AVAILABLE') {
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 10;
+                cell.textContent =
+                    'Evaluation no disponible: ' + (evaluation.stopReason || 'UNKNOWN');
+                row.appendChild(cell);
+                body.appendChild(row);
+                refreshPCAEvaluationStockfish();
+                return;
+            }
+
+            pcaLastEvaluation = evaluation;
             evaluation.moves.forEach((move, index) => {
                 const row = document.createElement('tr');
                 if (index === 0) row.className = 'pca-evaluation-top';
@@ -1753,7 +1820,7 @@
             if (isPcaAnalyzing) return;
 
             const rootFen = chess.fen();
-            const guard = Number.parseInt(document.getElementById('pcaKGuard').value, 10);
+            const guard = Number(document.getElementById('pcaKGuard').value);
             const analyzeBtn = document.getElementById('pcaAnalyzeBtn');
             const regressionBtn = document.getElementById('pcaRegressionBtn');
 
@@ -1781,7 +1848,11 @@
                 const evaluation = pcaEvaluatePosition(rootFen, guard);
                 renderPCAEvaluation(result.status, evaluation);
                 pcaSetEngineStatus(
-                    pcaDescribeResult(result) + ' · evaluación parcial disponible'
+                    evaluation.status === 'AVAILABLE'
+                        ? pcaDescribeResult(result) + ' · evaluación parcial disponible'
+                        : pcaDescribeResult(result) +
+                            ' · evaluación no disponible · ' +
+                            (evaluation.stopReason || 'UNKNOWN')
                 );
             }
 
