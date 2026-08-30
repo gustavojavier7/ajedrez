@@ -1091,8 +1091,8 @@
                                 </div>
                                 <table class="pca-regression-table pca-evaluation-table">
                                     <thead><tr>
-                                        <th>K</th><th>W@K</th><th>D@K</th><th>L@K</th><th>W=K</th><th>D=K</th>
-                                        <th>L=K</th><th>FRONTIER</th><th>RESOLUTION</th><th>SIGNED_PULSE</th><th>H</th>
+                                        <th>K</th><th>W@K</th><th>D@K</th><th>L@K</th><th>W≤K</th><th>D≤K</th>
+                                        <th>L≤K</th><th>FRONTIER</th><th>RESOLUTION</th><th>SIGNED_PULSE</th><th>H</th>
                                     </tr></thead>
                                     <tbody id="pcaPulseTemporalBody"><tr><td colspan="11">—</td></tr></tbody>
                                 </table>
@@ -1292,6 +1292,7 @@
         let pcaRunSequence = 0;
         let activePcaRunId = null;
         let activePcaStatus = 'RUNNING';
+        let selectedPulseMoveUci = null;
 
         function pcaChoose2(n) {
             return n > 1 ? (n * (n - 1)) / 2 : 0;
@@ -1324,6 +1325,7 @@
                 err.code = 'PCA_NODE_GUARD';
                 throw err;
             }
+            if (context.reportProgress) context.reportProgress(false);
 
             if (game.in_checkmate()) {
                 return game.turn() !== attackerColor;
@@ -1395,9 +1397,10 @@
 
         // Función pura respecto de la interfaz: no lee ni escribe DOM, no consulta Stockfish
         // y su resultado depende sólo de fen, kGuard y las reglas de Chess.js.
-        function pcaAnalyzePosition(fen, kGuard) {
+        function pcaAnalyzePositionCore(fen, kGuard, options = {}) {
             const guard = Number(kGuard);
             const trace = [];
+            const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
 
             if (!pcaIsValidKGuard(guard)) {
                 return pcaResultMetrics({
@@ -1439,16 +1442,58 @@
                 { length: guard },
                 (_, index) => index + 1
             );
-            const context = { nodes: 0, nodeGuard: PCA_NODE_GUARD, memo: new Map() };
+            const context = {
+                nodes: 0,
+                nodeGuard: PCA_NODE_GUARD,
+                memo: new Map(),
+                activeDepth: 0,
+                activeMove: null,
+                activeMoveIndex: -1,
+                activeMoveStartNodes: 0,
+                lastReportedNodes: 0,
+                lastReportedAt: onProgress ? Date.now() : 0,
+                reportProgress: null
+            };
+            context.reportProgress = onProgress ? function(force = false) {
+                const now = Date.now();
+                const nodesElapsed = context.nodes - context.lastReportedNodes;
+                const timeElapsed = now - context.lastReportedAt;
+                if (!force &&
+                    nodesElapsed < PCA_PROGRESS_NODE_INTERVAL &&
+                    timeElapsed < PCA_PROGRESS_TIME_INTERVAL
+                ) return;
+                context.lastReportedNodes = context.nodes;
+                context.lastReportedAt = now;
+                onProgress({
+                    status: 'RUNNING',
+                    kGuard: guard,
+                    depth: context.activeDepth,
+                    nodes: context.nodes,
+                    nodeGuard: context.nodeGuard,
+                    movesCompleted: Math.max(0, context.activeMoveIndex + (force ? 1 : 0)),
+                    totalMoves: initialCandidates,
+                    activeMove: context.activeMove,
+                    activeMoveIndex: context.activeMoveIndex,
+                    activeMoveNodes: context.nodes - context.activeMoveStartNodes,
+                    trace: trace.slice(),
+                    stopReason: 'SEARCHING'
+                });
+            } : null;
 
             try {
                 for (const k of horizons) {
+                    context.activeDepth = k;
                     const winningMoves = [];
 
-                    for (const move of rootMoves) {
+                    for (let moveIndex = 0; moveIndex < rootMoves.length; moveIndex += 1) {
+                        const move = rootMoves[moveIndex];
+                        context.activeMove = move.san;
+                        context.activeMoveIndex = moveIndex;
+                        context.activeMoveStartNodes = context.nodes;
                         if (pcaRootMoveForcesMate(fen, move, rootColor, k, context)) {
                             winningMoves.push(move);
                         }
+                        if (context.reportProgress) context.reportProgress(true);
                     }
 
                     trace.push({
@@ -1498,6 +1543,9 @@
             }
         }
 
+        function pcaAnalyzePosition(fen, kGuard) {
+            return pcaAnalyzePositionCore(fen, kGuard);
+        }
 
 
         function pcaEvaluationOutcome(game, initialSide) {
@@ -1521,8 +1569,59 @@
             return { status: 'UNAVAILABLE', fen, kGuard, side, totalMoves, nodes, nodeGuard: PCA_EVAL_NODE_GUARD, movesCompleted: 0, depth: 0, moves: [], stopReason };
         }
 
-        function pcaPulseSnapshotMove(state, kGuard) {
-            const temporal = state.temporal.slice();
+        function pcaPulseSnapshotMove(state, kGuard, partial = null) {
+            const activePartial = partial || state.partial || null;
+            const winPulse = state.winPulse.slice();
+            const drawPulse = state.drawPulse.slice();
+            const lossPulse = state.lossPulse.slice();
+            let temporal = state.temporal.slice();
+            let firstPulseDepth = state.firstPulseDepth;
+            let lastComputedDepth = state.lastComputedDepth;
+            let partialLayer = false;
+            let coverageNodes = null;
+
+            if (activePartial && activePartial.local) {
+                const depth = activePartial.depth;
+                const local = activePartial.local;
+                winPulse[depth] = local.wins;
+                drawPulse[depth] = local.draws;
+                lossPulse[depth] = local.losses;
+                if (firstPulseDepth === null && local.wins + local.draws + local.losses > 0) {
+                    firstPulseDepth = depth;
+                }
+
+                let wins = 0, draws = 0, losses = 0;
+                for (let d = 1; d <= depth; d += 1) {
+                    wins += winPulse[d];
+                    draws += drawPulse[d];
+                    losses += lossPulse[d];
+                }
+                const frontier = local.nextFrontier.length;
+                const resolved = wins + draws + losses;
+                const total = resolved + frontier;
+                const samePairs = pcaChoose2(wins) + pcaChoose2(draws) + pcaChoose2(losses) + pcaChoose2(frontier);
+                const entry = {
+                    depth,
+                    winsAtDepth: winPulse[depth],
+                    drawsAtDepth: drawPulse[depth],
+                    lossesAtDepth: lossPulse[depth],
+                    cumulativeWins: wins,
+                    cumulativeDraws: draws,
+                    cumulativeLosses: losses,
+                    frontier,
+                    resolved,
+                    resolution: total > 0 ? resolved / total : 0,
+                    signedPulse: total > 0 ? (wins - losses) / total : 0,
+                    outcomeUncertainty: pcaEvaluationEntropy([wins, draws, losses, frontier], total),
+                    outcomeConflicts: pcaChoose2(total) - samePairs,
+                    partial: true
+                };
+                temporal = temporal.filter(item => item.depth < depth).concat([entry]);
+                lastComputedDepth = depth;
+                partialLayer = true;
+                coverageNodes = activePartial.nodes == null ? null : activePartial.nodes;
+            }
+
             const last = temporal.length > 0 ? temporal[temporal.length - 1] : null;
             const wins = last ? last.cumulativeWins : 0;
             const draws = last ? last.cumulativeDraws : 0;
@@ -1534,10 +1633,12 @@
             const signedPulse = branchesTotal > 0 ? (wins - losses) / branchesTotal : 0;
             const resolvedUncertainty = resolved > 0 ? pcaEvaluationEntropy([wins, draws, losses], resolved) : null;
             return {
-                san: state.san, uci: state.uci, depth: state.lastComputedDepth,
-                firstPulseDepth: state.firstPulseDepth, lastComputedDepth: state.lastComputedDepth,
-                complete: state.lastComputedDepth === kGuard,
-                winPulse: state.winPulse.slice(), drawPulse: state.drawPulse.slice(), lossPulse: state.lossPulse.slice(),
+                san: state.san, uci: state.uci, depth: lastComputedDepth,
+                firstPulseDepth, lastComputedDepth,
+                complete: !partialLayer && state.lastComputedDepth === kGuard,
+                partial: partialLayer,
+                coverageNodes,
+                winPulse, drawPulse, lossPulse,
                 temporal, branchesTotal, wins, draws, losses, unknown: frontier, frontier, resolved,
                 survivalRate: branchesTotal > 0 ? frontier / branchesTotal : 0,
                 outcomeUncertainty: last ? last.outcomeUncertainty : 0, resolvedUncertainty,
@@ -1564,11 +1665,16 @@
             };
         }
 
-        function pcaPulseProgressPayload(fen, guard, initialSide, rootMoves, states, context, depth, movesCompleted, status, stopReason = null) {
+        function pcaPulseProgressPayload(fen, guard, initialSide, rootMoves, states, context, depth, movesCompleted, status, stopReason = null, activePartial = null) {
             return {
                 status, fen, kGuard: guard, side: initialSide, totalMoves: rootMoves.length,
                 nodes: context.nodes, nodeGuard: context.nodeGuard, depth, movesCompleted,
-                moves: states.map(state => pcaPulseSnapshotMove(state, guard)), stopReason
+                moves: states.map((state, index) => pcaPulseSnapshotMove(
+                    state,
+                    guard,
+                    activePartial && activePartial.stateIndex === index ? activePartial : null
+                )),
+                stopReason
             };
         }
 
@@ -1596,24 +1702,35 @@
                 san: rootMove.san, uci: rootMove.from + rootMove.to + (rootMove.promotion || ''),
                 rootMove: { from: rootMove.from, to: rootMove.to, promotion: rootMove.promotion },
                 winPulse: Array(guard + 1).fill(0), drawPulse: Array(guard + 1).fill(0), lossPulse: Array(guard + 1).fill(0),
-                temporal: [], firstPulseDepth: null, lastComputedDepth: 0, frontierFens: []
+                temporal: [], firstPulseDepth: null, lastComputedDepth: 0, frontierFens: [], partial: null
             }));
 
-            function maybeReportPulseProgress(depth, state, stateIndex, moveStartNodes, layerComplete = false) {
+            function maybeReportPulseProgress(depth, state, stateIndex, moveStartNodes, local = null, layerComplete = false, force = false) {
                 if (!onProgress) return;
                 const now = Date.now();
                 const nodesElapsed = context.nodes - context.lastReportedNodes;
                 const timeElapsed = now - context.lastReportedAt;
-                if (!layerComplete &&
+                if (!force && !layerComplete &&
                     nodesElapsed < PCA_PROGRESS_NODE_INTERVAL &&
                     timeElapsed < PCA_PROGRESS_TIME_INTERVAL
                 ) return;
 
                 context.lastReportedNodes = context.nodes;
                 context.lastReportedAt = now;
+                const activePartial = !layerComplete && local ? {
+                    stateIndex,
+                    depth,
+                    nodes: context.nodes - moveStartNodes,
+                    local: {
+                        wins: local.wins,
+                        draws: local.draws,
+                        losses: local.losses,
+                        nextFrontier: local.nextFrontier.slice()
+                    }
+                } : null;
                 const snapshot = pcaPulseProgressPayload(
                     fen, guard, initialSide, rootMoves, states, context,
-                    depth, movesCompleted, 'RUNNING'
+                    depth, movesCompleted, 'RUNNING', null, activePartial
                 );
                 snapshot.activeMove = state.san;
                 snapshot.activeMoveIndex = stateIndex;
@@ -1641,12 +1758,12 @@
                             const applied = game.move(state.rootMove);
                             if (!applied) throw new Error('PCA_INVALID_ROOT_MOVE');
                             context.nodes += 1;
-                            maybeReportPulseProgress(depth, state, stateIndex, moveStartNodes);
                             const outcome = pcaEvaluationOutcome(game, initialSide);
                             if (outcome === 'WIN') local.wins += 1;
                             else if (outcome === 'DRAW') local.draws += 1;
                             else if (outcome === 'LOSS') local.losses += 1;
                             else local.nextFrontier.push(game.fen());
+                            maybeReportPulseProgress(depth, state, stateIndex, moveStartNodes, local);
                         } else {
                             for (const parentFen of parents) {
                                 const parent = new Chess(parentFen);
@@ -1658,26 +1775,42 @@
                                     const child = new Chess(parentFen);
                                     child.move({ from: move.from, to: move.to, promotion: move.promotion });
                                     context.nodes += 1;
-                                    maybeReportPulseProgress(depth, state, stateIndex, moveStartNodes);
                                     const outcome = pcaEvaluationOutcome(child, initialSide);
                                     if (outcome === 'WIN') local.wins += 1;
                                     else if (outcome === 'DRAW') local.draws += 1;
                                     else if (outcome === 'LOSS') local.losses += 1;
                                     else local.nextFrontier.push(child.fen());
+                                    maybeReportPulseProgress(depth, state, stateIndex, moveStartNodes, local);
                                 }
                             }
                         }
                     } catch (error) {
-                        if (error && error.code === 'PCA_EVAL_NODE_GUARD') { truncated = true; break outer; }
+                        if (error && error.code === 'PCA_EVAL_NODE_GUARD') {
+                            state.partial = {
+                                stateIndex,
+                                depth,
+                                nodes: context.nodes - moveStartNodes,
+                                local: {
+                                    wins: local.wins,
+                                    draws: local.draws,
+                                    losses: local.losses,
+                                    nextFrontier: local.nextFrontier.slice()
+                                }
+                            };
+                            maybeReportPulseProgress(depth, state, stateIndex, moveStartNodes, local, false, true);
+                            truncated = true;
+                            break outer;
+                        }
                         throw error;
                     }
 
+                    state.partial = null;
                     state.winPulse[depth] = local.wins; state.drawPulse[depth] = local.draws; state.lossPulse[depth] = local.losses;
                     if (state.firstPulseDepth === null && local.wins + local.draws + local.losses > 0) state.firstPulseDepth = depth;
                     state.frontierFens = local.nextFrontier; state.lastComputedDepth = depth;
                     state.temporal.push(pcaPulseTemporalEntry(state, depth, local.nextFrontier.length));
                     movesCompleted += 1;
-                    maybeReportPulseProgress(depth, state, stateIndex, moveStartNodes, true);
+                    maybeReportPulseProgress(depth, state, stateIndex, moveStartNodes, local, true);
                 }
                 completedDepth = depth;
             }
@@ -1706,6 +1839,7 @@
 
         function resetPCAEvaluation() {
             pcaLastEvaluation = null;
+            selectedPulseMoveUci = null;
             const panel = document.getElementById('pcaEvaluationPanel');
             const body = document.getElementById('pcaEvaluationBody');
             const temporalBody = document.getElementById('pcaPulseTemporalBody');
@@ -1831,7 +1965,10 @@
                 const row = document.createElement('tr');
                 if (index === 0 && evaluation.status === 'AVAILABLE') row.className = 'pca-evaluation-top';
                 row.title = 'Ver firma temporal de ' + move.san;
-                row.addEventListener('click', () => renderPCAPulseTemporal(move));
+                row.addEventListener('click', () => {
+                    selectedPulseMoveUci = move.uci;
+                    renderPCAPulseTemporal(move);
+                });
                 [
                     move.san,
                     move.lastComputedDepth || move.depth || 0,
@@ -1849,7 +1986,9 @@
                 ].forEach(value => pcaEvaluationAppendCell(row, value));
                 body.appendChild(row);
             });
-            renderPCAPulseTemporal(moves[0]);
+            const selectedMove = moves.find(move => move.uci === selectedPulseMoveUci) || moves[0];
+            if (selectedMove && !selectedPulseMoveUci) selectedPulseMoveUci = selectedMove.uci;
+            renderPCAPulseTemporal(selectedMove);
             refreshPCAEvaluationStockfish();
         }
 
@@ -1862,6 +2001,7 @@
                 pcaCanForceMate,
                 pcaRootMoveForcesMate,
                 pcaResultMetrics,
+                pcaAnalyzePositionCore,
                 pcaAnalyzePosition,
                 pcaEvaluationOutcome,
                 pcaEvaluationEntropy,
@@ -1897,7 +2037,11 @@
                 send('START', baseProgress);
                 try {
                     send('PROGRESS', baseProgress);
-                    const pcaResult = pcaAnalyzePosition(message.fen, message.kGuard);
+                    const pcaResult = pcaAnalyzePositionCore(message.fen, message.kGuard, {
+                        onProgress: snapshot => {
+                            send('PROGRESS', Object.assign({ phase: 'MATE_SEARCH' }, snapshot));
+                        }
+                    });
                     if (pcaResult.status !== 'UNRESOLVED') {
                         send('RESULT', {
                             phase: 'MATE_SEARCH',
@@ -2012,6 +2156,8 @@
                             nodeGuard: message.nodeGuard,
                             movesCompleted: message.movesCompleted,
                             totalMoves: message.totalMoves,
+                            activeMove: message.activeMove,
+                            activeMoveNodes: message.activeMoveNodes,
                             moves: message.moves || [],
                             stopReason: 'SEARCHING'
                         }
