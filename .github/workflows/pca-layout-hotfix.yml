@@ -1,0 +1,32 @@
+name: Apply PCA desktop metrics layout
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/pca-layout-hotfix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply layout patch
+        run: python tools/pca_layout_hotfix.py
+
+      - name: Commit result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/pca-layout-hotfix.yml tools/pca_layout_hotfix.py
+          git add index.html
+          git commit -m "Redesign PCA analyzer desktop metrics layout"
+          git push origin HEAD:main
