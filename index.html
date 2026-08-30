@@ -1067,6 +1067,8 @@
                                 <span id="pcaEvaluationK">K_GUARD: —</span>
                                 <span id="pcaEvaluationDepth">DEPTH: —</span>
                                 <span id="pcaEvaluationMoves">MOVES: —</span>
+                                <span id="pcaEvaluationActiveMove">ACTIVE_MOVE: —</span>
+                                <span id="pcaEvaluationActiveMoveNodes">ACTIVE_MOVE_NODES: —</span>
                                 <span id="pcaEvaluationNodes">NODES: —</span>
                                 <span id="pcaEvaluationNodeGuard">NODE_GUARD: —</span>
                                 <span id="pcaEvaluationElapsed">ELAPSED: —</span>
@@ -1275,6 +1277,8 @@
         const PCA_K_MAX = 10;
         const PCA_NODE_GUARD = 150000;
         const PCA_EVAL_NODE_GUARD = 150000;
+        const PCA_PROGRESS_NODE_INTERVAL = 750;
+        const PCA_PROGRESS_TIME_INTERVAL = 75;
 
         function pcaIsValidKGuard(k) {
             return Number.isInteger(k) &&
@@ -1582,7 +1586,12 @@
 
             const initialSide = root.turn();
             const rootMoves = root.moves({ verbose: true });
-            const context = { nodes: 0, nodeGuard };
+            const context = {
+                nodes: 0,
+                nodeGuard,
+                lastReportedNodes: 0,
+                lastReportedAt: onProgress ? Date.now() : 0
+            };
             const states = rootMoves.map(rootMove => ({
                 san: rootMove.san, uci: rootMove.from + rootMove.to + (rootMove.promotion || ''),
                 rootMove: { from: rootMove.from, to: rootMove.to, promotion: rootMove.promotion },
@@ -1590,12 +1599,37 @@
                 temporal: [], firstPulseDepth: null, lastComputedDepth: 0, frontierFens: []
             }));
 
+            function maybeReportPulseProgress(depth, state, stateIndex, moveStartNodes, layerComplete = false) {
+                if (!onProgress) return;
+                const now = Date.now();
+                const nodesElapsed = context.nodes - context.lastReportedNodes;
+                const timeElapsed = now - context.lastReportedAt;
+                if (!layerComplete &&
+                    nodesElapsed < PCA_PROGRESS_NODE_INTERVAL &&
+                    timeElapsed < PCA_PROGRESS_TIME_INTERVAL
+                ) return;
+
+                context.lastReportedNodes = context.nodes;
+                context.lastReportedAt = now;
+                const snapshot = pcaPulseProgressPayload(
+                    fen, guard, initialSide, rootMoves, states, context,
+                    depth, movesCompleted, 'RUNNING'
+                );
+                snapshot.activeMove = state.san;
+                snapshot.activeMoveIndex = stateIndex;
+                snapshot.activeMoveNodes = context.nodes - moveStartNodes;
+                snapshot.layerComplete = layerComplete;
+                onProgress(snapshot);
+            }
+
             let truncated = false, completedDepth = 0, attemptedDepth = 0, movesCompleted = 0;
             outer:
             for (let depth = 1; depth <= guard; depth += 1) {
                 attemptedDepth = depth;
                 movesCompleted = 0;
-                for (const state of states) {
+                for (let stateIndex = 0; stateIndex < states.length; stateIndex += 1) {
+                    const state = states[stateIndex];
+                    const moveStartNodes = context.nodes;
                     const local = { wins: 0, draws: 0, losses: 0, nextFrontier: [] };
                     const parents = depth === 1 ? [fen] : state.frontierFens;
                     try {
@@ -1607,6 +1641,7 @@
                             const applied = game.move(state.rootMove);
                             if (!applied) throw new Error('PCA_INVALID_ROOT_MOVE');
                             context.nodes += 1;
+                            maybeReportPulseProgress(depth, state, stateIndex, moveStartNodes);
                             const outcome = pcaEvaluationOutcome(game, initialSide);
                             if (outcome === 'WIN') local.wins += 1;
                             else if (outcome === 'DRAW') local.draws += 1;
@@ -1623,6 +1658,7 @@
                                     const child = new Chess(parentFen);
                                     child.move({ from: move.from, to: move.to, promotion: move.promotion });
                                     context.nodes += 1;
+                                    maybeReportPulseProgress(depth, state, stateIndex, moveStartNodes);
                                     const outcome = pcaEvaluationOutcome(child, initialSide);
                                     if (outcome === 'WIN') local.wins += 1;
                                     else if (outcome === 'DRAW') local.draws += 1;
@@ -1641,7 +1677,7 @@
                     state.frontierFens = local.nextFrontier; state.lastComputedDepth = depth;
                     state.temporal.push(pcaPulseTemporalEntry(state, depth, local.nextFrontier.length));
                     movesCompleted += 1;
-                    if (onProgress) onProgress(pcaPulseProgressPayload(fen, guard, initialSide, rootMoves, states, context, depth, movesCompleted, 'RUNNING'));
+                    maybeReportPulseProgress(depth, state, stateIndex, moveStartNodes, true);
                 }
                 completedDepth = depth;
             }
@@ -1765,6 +1801,9 @@
                 'MOVES: ' + (evaluation.movesCompleted == null ? 0 : evaluation.movesCompleted) +
                 ' / ' + (evaluation.totalMoves == null ? 0 : evaluation.totalMoves)
             );
+            setText('pcaEvaluationActiveMove', 'ACTIVE_MOVE: ' + (evaluation.activeMove || '—'));
+            setText('pcaEvaluationActiveMoveNodes', 'ACTIVE_MOVE_NODES: ' +
+                (evaluation.activeMoveNodes == null ? '—' : Number(evaluation.activeMoveNodes).toLocaleString()));
             setText('pcaEvaluationNodes', 'NODES: ' + Number(evaluation.nodes || 0).toLocaleString());
             setText('pcaEvaluationNodeGuard', 'NODE_GUARD: ' + Number(evaluation.nodeGuard || PCA_EVAL_NODE_GUARD).toLocaleString());
             setText('pcaEvaluationElapsed', 'ELAPSED: ' + Number(elapsedMs || 0).toLocaleString() + ' ms');
@@ -1874,13 +1913,9 @@
                         return;
                     }
 
-                    let lastProgressAt = 0;
                     const evaluation = pcaPulseEvaluateCore(message.fen, message.kGuard, {
                         nodeGuard: PCA_EVAL_NODE_GUARD,
                         onProgress: snapshot => {
-                            const now = Date.now();
-                            if (now - lastProgressAt < 75 && snapshot.movesCompleted !== snapshot.totalMoves) return;
-                            lastProgressAt = now;
                             send('PROGRESS', Object.assign({
                                 phase: 'PULSE_EVALUATION',
                                 pcaResult
@@ -1915,6 +1950,8 @@
                 'const PCA_K_MAX = ' + PCA_K_MAX + ';',
                 'const PCA_NODE_GUARD = ' + PCA_NODE_GUARD + ';',
                 'const PCA_EVAL_NODE_GUARD = ' + PCA_EVAL_NODE_GUARD + ';',
+                'const PCA_PROGRESS_NODE_INTERVAL = ' + PCA_PROGRESS_NODE_INTERVAL + ';',
+                'const PCA_PROGRESS_TIME_INTERVAL = ' + PCA_PROGRESS_TIME_INTERVAL + ';',
                 pureFunctions,
                 'self.onmessage = ' + workerHandler.toString() + ';'
             ].join('\n');
