@@ -505,6 +505,52 @@
             overflow-wrap: anywhere;
         }
 
+
+        .pca-suite {
+            margin: 9px 0 10px;
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: #fff;
+        }
+
+        .pca-suite-table-wrap {
+            overflow-x: auto;
+        }
+
+        .pca-suite-table {
+            min-width: 880px;
+        }
+
+        .pca-suite-result-pass {
+            color: #065f46 !important;
+            font-weight: 800;
+        }
+
+        .pca-suite-result-fail {
+            color: #991b1b !important;
+            font-weight: 800;
+        }
+
+        .pca-suite-summary {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 5px;
+            margin-top: 7px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.66rem;
+            font-weight: 700;
+            color: #374151;
+        }
+
+        .pca-suite-summary span {
+            padding: 4px 5px;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            background: #f9fafb;
+            overflow-wrap: anywhere;
+        }
+
         .pca-status-row {
             display: flex;
             align-items: center;
@@ -869,6 +915,9 @@
                             <button type="button" onclick="runPCARegression135()" id="pcaRegressionBtn" class="btn btn-success">
                                 <i class="fas fa-vials"></i>TEST K=1→3→5
                             </button>
+                            <button type="button" onclick="runPCAChessRegressionSuite()" id="pcaSuiteBtn" class="btn btn-warning">
+                                <i class="fas fa-clipboard-check"></i>SUITE REGRESIÓN
+                            </button>
                             <div id="pcaEngineStatus" class="pca-engine-status">Motor exacto de mate listo</div>
                         </div>
                         <div class="pca-regression" aria-live="polite">
@@ -884,6 +933,37 @@
                                     <tr><td>5</td><td>—</td><td>—</td><td>—</td></tr>
                                 </tbody>
                             </table>
+                        </div>
+                        <div class="pca-suite" aria-live="polite">
+                            <div class="pca-regression-header">
+                                <span class="pca-regression-title">Suite automática PCA-Chess</span>
+                                <span id="pcaSuiteBadge" class="pca-regression-badge">SUITE: NO EJECUTADO</span>
+                            </div>
+                            <div class="pca-suite-table-wrap">
+                                <table class="pca-regression-table pca-suite-table">
+                                    <thead>
+                                        <tr>
+                                            <th>TEST</th>
+                                            <th>K</th>
+                                            <th>EXPECTED STATUS</th>
+                                            <th>ACTUAL STATUS</th>
+                                            <th>EXPECTED MOVE</th>
+                                            <th>ACTUAL MOVE</th>
+                                            <th>NODES</th>
+                                            <th>RESULT</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="pcaSuiteBody">
+                                        <tr><td colspan="8">—</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div id="pcaSuiteSummary" class="pca-suite-summary">
+                                <span>TESTS_TOTAL: 6</span>
+                                <span>TESTS_PASS: 0</span>
+                                <span>TESTS_FAIL: 0</span>
+                                <span>TOTAL_NODES: 0</span>
+                            </div>
                         </div>
                         <div class="pca-status-row">
                             <span id="pcaStatus" class="pca-status-badge">NO EJECUTADO</span>
@@ -1393,9 +1473,178 @@
             updateButtonStates();
         }
 
+
+        const PCA_CHESS_REGRESSION_CASES = Object.freeze([
+            Object.freeze({
+                test: 'MATE-1',
+                fen: 'rnbqkb1r/pppp1ppp/5n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w - - 0 1',
+                k: 1,
+                expectedStatus: 'DECIDED',
+                expectedMove: 'Qxf7#'
+            }),
+            Object.freeze({
+                test: 'MATE-2',
+                fen: 'r4br1/3b1kpp/1q1P4/1pp1RP1N/p7/6Q1/PPB3PP/2KR4 w - - 1 1',
+                k: 1,
+                expectedStatus: 'UNRESOLVED',
+                expectedMove: null
+            }),
+            Object.freeze({
+                test: 'MATE-2',
+                fen: 'r4br1/3b1kpp/1q1P4/1pp1RP1N/p7/6Q1/PPB3PP/2KR4 w - - 1 1',
+                k: 3,
+                expectedStatus: 'DECIDED',
+                expectedMove: 'Qg6+'
+            }),
+            Object.freeze({
+                test: 'MATE-3',
+                fen: 'r5rk/5p1p/5R2/4B3/8/8/7P/7K w - - 0 1',
+                k: 1,
+                expectedStatus: 'UNRESOLVED',
+                expectedMove: null
+            }),
+            Object.freeze({
+                test: 'MATE-3',
+                fen: 'r5rk/5p1p/5R2/4B3/8/8/7P/7K w - - 0 1',
+                k: 3,
+                expectedStatus: 'UNRESOLVED',
+                expectedMove: null
+            }),
+            Object.freeze({
+                test: 'MATE-3',
+                fen: 'r5rk/5p1p/5R2/4B3/8/8/7P/7K w - - 0 1',
+                k: 5,
+                expectedStatus: 'DECIDED',
+                expectedMove: 'Ra6+'
+            })
+        ]);
+
+        function pcaSuiteAppendCell(row, value, className = '') {
+            const cell = document.createElement('td');
+            cell.textContent = value;
+            if (className) cell.className = className;
+            row.appendChild(cell);
+        }
+
+        function renderPCAChessRegressionSuite(results, phase) {
+            const badge = document.getElementById('pcaSuiteBadge');
+            const body = document.getElementById('pcaSuiteBody');
+            const summary = document.getElementById('pcaSuiteSummary');
+            if (!badge || !body || !summary) return;
+
+            body.replaceChildren();
+            if (results.length === 0) {
+                const emptyRow = document.createElement('tr');
+                const emptyCell = document.createElement('td');
+                emptyCell.colSpan = 8;
+                emptyCell.textContent = phase === 'running' ? 'EJECUTANDO...' : '—';
+                emptyRow.appendChild(emptyCell);
+                body.appendChild(emptyRow);
+            } else {
+                for (const item of results) {
+                    const row = document.createElement('tr');
+                    pcaSuiteAppendCell(row, item.test);
+                    pcaSuiteAppendCell(row, String(item.k));
+                    pcaSuiteAppendCell(row, item.expectedStatus);
+                    pcaSuiteAppendCell(row, item.actual.status);
+                    pcaSuiteAppendCell(row, item.expectedMove || '—');
+                    pcaSuiteAppendCell(row, item.actual.move || '—');
+                    pcaSuiteAppendCell(row, Number(item.actual.nodes || 0).toLocaleString());
+                    pcaSuiteAppendCell(
+                        row,
+                        item.pass ? 'PASS' : 'FAIL',
+                        item.pass ? 'pca-suite-result-pass' : 'pca-suite-result-fail'
+                    );
+                    body.appendChild(row);
+                }
+            }
+
+            const testsPass = results.filter(item => item.pass).length;
+            const testsFail = results.filter(item => !item.pass).length;
+            const totalNodes = results.reduce(
+                (total, item) => total + Number(item.actual.nodes || 0),
+                0
+            );
+            summary.replaceChildren();
+            for (const text of [
+                'TESTS_TOTAL: ' + PCA_CHESS_REGRESSION_CASES.length,
+                'TESTS_PASS: ' + testsPass,
+                'TESTS_FAIL: ' + testsFail,
+                'TOTAL_NODES: ' + totalNodes.toLocaleString()
+            ]) {
+                const value = document.createElement('span');
+                value.textContent = text;
+                summary.appendChild(value);
+            }
+
+            if (phase === 'running') {
+                badge.textContent = 'SUITE: EJECUTANDO';
+                badge.className = 'pca-regression-badge';
+                return;
+            }
+
+            const allPassed =
+                results.length === PCA_CHESS_REGRESSION_CASES.length &&
+                testsFail === 0;
+            badge.textContent = allPassed
+                ? 'SUITE: PASS'
+                : 'SUITE: FAIL · ' + testsFail + ' tests fallidos';
+            badge.className =
+                'pca-regression-badge ' + (allPassed ? 'pass' : 'fail');
+        }
+
+        async function runPCAChessRegressionSuite() {
+            if (isPcaAnalyzing) return;
+
+            const controls = [
+                document.getElementById('pcaAnalyzeBtn'),
+                document.getElementById('pcaRegressionBtn'),
+                document.getElementById('pcaSuiteBtn')
+            ].filter(Boolean);
+            const priorDisabledState = controls.map(control => control.disabled);
+            const results = [];
+
+            controls.forEach(control => { control.disabled = true; });
+            renderPCAChessRegressionSuite(results, 'running');
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            try {
+                for (const benchmark of PCA_CHESS_REGRESSION_CASES) {
+                    const fen = benchmark.fen;
+                    const kGuard = benchmark.k;
+                    let actual;
+
+                    try {
+                        actual = pcaAnalyzePosition(fen, kGuard);
+                    } catch (error) {
+                        actual = { status: 'ERROR', move: null, nodes: 0 };
+                    }
+
+                    const statusMatches = actual.status === benchmark.expectedStatus;
+                    const moveMatches =
+                        benchmark.expectedMove === null ||
+                        actual.move === benchmark.expectedMove;
+                    results.push({
+                        ...benchmark,
+                        actual,
+                        pass: statusMatches && moveMatches
+                    });
+                    renderPCAChessRegressionSuite(results, 'running');
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+
+                renderPCAChessRegressionSuite(results, 'complete');
+            } finally {
+                controls.forEach((control, index) => {
+                    control.disabled = priorDisabledState[index];
+                });
+            }
+        }
+
         window.pcaAnalyzePosition = pcaAnalyzePosition;
         window.analyzePCAChess = analyzePCAChess;
         window.runPCARegression135 = runPCARegression135;
+        window.runPCAChessRegressionSuite = runPCAChessRegressionSuite;
         window.getPCATrace = function() { return pcaLastTrace.slice(); };
 
         // Función para actualizar estado de botones
