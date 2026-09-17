@@ -1233,11 +1233,31 @@
         }
 
         function pcaIsInfiniteKGuard(k) {
-            return k === Infinity || k === Number.POSITIVE_INFINITY;
+            if (k === Infinity || k === Number.POSITIVE_INFINITY) return true;
+            if (typeof k === 'string') {
+                const normalized = k.trim().toLowerCase();
+                return normalized === 'infinity' || normalized === 'inf' || normalized === '∞';
+            }
+            return false;
         }
 
+        // When K_GUARD is ∞, NODE_GUARD is disabled (no operational node cap).
         function pcaEffectiveNodeGuard(kGuard, fallback) {
             return pcaIsInfiniteKGuard(kGuard) ? Number.POSITIVE_INFINITY : fallback;
+        }
+
+        // Infinite K always wins: options cannot re-enable a finite node limit.
+        function pcaResolveNodeGuard(kGuard, fallback, optionGuard) {
+            if (pcaIsInfiniteKGuard(kGuard)) return Number.POSITIVE_INFINITY;
+            if ((Number.isFinite(optionGuard) || pcaIsInfiniteKGuard(optionGuard)) && optionGuard > 0) {
+                return optionGuard;
+            }
+            return fallback;
+        }
+
+        function pcaNodeGuardReached(nodeGuard, nodes, inclusive = false) {
+            if (!Number.isFinite(nodeGuard)) return false;
+            return inclusive ? nodes >= nodeGuard : nodes > nodeGuard;
         }
 
         function refreshPcaStockfishComparison() {
@@ -1346,7 +1366,7 @@
 
         function pcaCanForceMate(game, attackerColor, remainingPlies, context) {
             context.nodes += 1;
-            if (Number.isFinite(context.nodeGuard) && context.nodes > context.nodeGuard) {
+            if (pcaNodeGuardReached(context.nodeGuard, context.nodes, false)) {
                 const err = new Error('PCA_NODE_GUARD');
                 err.code = 'PCA_NODE_GUARD';
                 throw err;
@@ -1424,7 +1444,7 @@
         // Función pura respecto de la interfaz: no lee ni escribe DOM, no consulta Stockfish
         // y su resultado depende sólo de fen, kGuard y las reglas de Chess.js.
         function pcaAnalyzePositionCore(fen, kGuard, options = {}) {
-            const guard = Number(kGuard);
+            const guard = pcaIsInfiniteKGuard(kGuard) ? Infinity : Number(kGuard);
             const trace = [];
             const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
 
@@ -1467,7 +1487,8 @@
             const infinite = pcaIsInfiniteKGuard(guard);
             const context = {
                 nodes: 0,
-                nodeGuard: pcaEffectiveNodeGuard(guard, PCA_NODE_GUARD),
+                // ∞ K_GUARD ⇒ no NODE_GUARD (options cannot re-enable a finite cap)
+                nodeGuard: pcaResolveNodeGuard(guard, PCA_NODE_GUARD, options.nodeGuard),
                 memo: new Map(),
                 activeDepth: 0,
                 activeMove: null,
@@ -1589,7 +1610,19 @@
         }
 
         function pcaEvaluationUnavailable(fen, kGuard, stopReason, side = null, totalMoves = 0, nodes = 0) {
-            return { status: 'UNAVAILABLE', fen, kGuard, side, totalMoves, nodes, nodeGuard: PCA_EVAL_NODE_GUARD, movesCompleted: 0, depth: 0, moves: [], stopReason };
+            return {
+                status: 'UNAVAILABLE',
+                fen,
+                kGuard,
+                side,
+                totalMoves,
+                nodes,
+                nodeGuard: pcaEffectiveNodeGuard(kGuard, PCA_EVAL_NODE_GUARD),
+                movesCompleted: 0,
+                depth: 0,
+                moves: [],
+                stopReason
+            };
         }
 
         function pcaPulseSnapshotMove(state, kGuard, partial = null) {
@@ -1709,10 +1742,8 @@
         function pcaPulseEvaluateCore(fen, kGuard, options = {}) {
             const guard = pcaIsInfiniteKGuard(kGuard) ? Infinity : Number(kGuard);
             const infinite = pcaIsInfiniteKGuard(guard);
-            const defaultNodeGuard = pcaEffectiveNodeGuard(guard, PCA_EVAL_NODE_GUARD);
-            const nodeGuard = (Number.isFinite(options.nodeGuard) || options.nodeGuard === Infinity) && options.nodeGuard > 0
-                ? options.nodeGuard
-                : defaultNodeGuard;
+            // ∞ K_GUARD ⇒ no NODE_GUARD (options cannot re-enable a finite cap)
+            const nodeGuard = pcaResolveNodeGuard(guard, PCA_EVAL_NODE_GUARD, options.nodeGuard);
             const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
             if (!pcaIsValidKGuard(guard)) return pcaEvaluationUnavailable(fen, guard, 'INVALID_K_GUARD');
 
@@ -1793,7 +1824,7 @@
                     const parents = depth === 1 ? [fen] : state.frontierFens;
                     try {
                         if (depth === 1) {
-                            if (Number.isFinite(context.nodeGuard) && context.nodes >= context.nodeGuard) {
+                            if (pcaNodeGuardReached(context.nodeGuard, context.nodes, true)) {
                                 const error = new Error('PCA_EVAL_NODE_GUARD'); error.code = 'PCA_EVAL_NODE_GUARD'; throw error;
                             }
                             const game = new Chess(fen);
@@ -1811,7 +1842,7 @@
                                 const parent = new Chess(parentFen);
                                 const moves = parent.moves({ verbose: true });
                                 for (const move of moves) {
-                                    if (Number.isFinite(context.nodeGuard) && context.nodes >= context.nodeGuard) {
+                                    if (pcaNodeGuardReached(context.nodeGuard, context.nodes, true)) {
                                         const error = new Error('PCA_EVAL_NODE_GUARD'); error.code = 'PCA_EVAL_NODE_GUARD'; throw error;
                                     }
                                     const child = new Chess(parentFen);
@@ -2003,9 +2034,15 @@
             setText(
                 'pcaEvaluationNodeGuard',
                 'NODE_GUARD: ' + (
-                    evaluation.nodeGuard === Infinity || evaluation.nodeGuard === Number.POSITIVE_INFINITY
-                        ? '∞'
-                        : Number(evaluation.nodeGuard || PCA_EVAL_NODE_GUARD).toLocaleString()
+                    pcaIsInfiniteKGuard(evaluation.kGuard) ||
+                    evaluation.nodeGuard === Infinity ||
+                    evaluation.nodeGuard === Number.POSITIVE_INFINITY
+                        ? '∞ (desactivado)'
+                        : Number(
+                            Number.isFinite(evaluation.nodeGuard)
+                                ? evaluation.nodeGuard
+                                : PCA_EVAL_NODE_GUARD
+                        ).toLocaleString()
                 )
             );
             setText('pcaEvaluationElapsed', 'ELAPSED: ' + Number(elapsedMs || 0).toLocaleString() + ' ms');
@@ -2065,6 +2102,8 @@
             const pureFunctions = [
                 pcaIsInfiniteKGuard,
                 pcaEffectiveNodeGuard,
+                pcaResolveNodeGuard,
+                pcaNodeGuardReached,
                 pcaChoose2,
                 pcaEntropyUniqueTargets,
                 pcaPositionKey,
@@ -2315,7 +2354,7 @@
             const nodeGuard = pcaEffectiveNodeGuard(guard, PCA_NODE_GUARD);
             pcaSetEngineStatus(
                 pcaIsInfiniteKGuard(guard)
-                    ? 'Iniciando Worker PCA en modo ∞ (sin límite de tiempo)...'
+                    ? 'Iniciando Worker PCA en modo ∞ (sin NODE_GUARD / sin límite de nodos)...'
                     : 'Iniciando Worker PCA...'
             );
 
