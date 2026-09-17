@@ -1470,6 +1470,7 @@
         let pcaLineTelemetry = new Map();
         let pcaLineCurrentKey = null;
         let pcaLineStartedElapsedMs = 0;
+        let pcaLineBoundaryElapsedMs = 0;
         let pcaLineFrozen = false;
         let pcaLineActiveDepth = null;
         let pcaLineResultMove = null;
@@ -1503,10 +1504,20 @@
             return status || '—';
         }
 
+        function pcaRememberActiveDepth(depthHint) {
+            if (depthHint == null || depthHint === '') return;
+            const depth = Number(depthHint);
+            if (!Number.isFinite(depth)) return;
+            if (pcaLineActiveDepth == null || depth > pcaLineActiveDepth) {
+                pcaLineActiveDepth = depth;
+            }
+        }
+
         function resetPcaLineTelemetry() {
             pcaLineTelemetry = new Map();
             pcaLineCurrentKey = null;
             pcaLineStartedElapsedMs = 0;
+            pcaLineBoundaryElapsedMs = 0;
             pcaLineFrozen = false;
             pcaLineActiveDepth = null;
             pcaLineResultMove = null;
@@ -1520,11 +1531,20 @@
                 pcaLineCurrentKey = null;
                 return;
             }
+            // Only seal EXPLORING → COMPLETE/INTERRUPTED. Never demote COMPLETE,
+            // and never promote INTERRUPTED back to COMPLETE.
             if (entry.status === 'EXPLORING') {
                 entry.status = status;
             }
             entry.sampleStable = pcaLineIsSampleStable(entry);
             entry.finishedAt = entry.finishedAt || Date.now();
+            if (entry.status === 'COMPLETE' || entry.status === 'INTERRUPTED') {
+                const started = Number(entry.startedElapsedMs);
+                const elapsed = Number(entry.elapsedMs);
+                if (Number.isFinite(started) && started >= 0 && Number.isFinite(elapsed) && elapsed >= 0) {
+                    pcaLineBoundaryElapsedMs = Math.max(pcaLineBoundaryElapsedMs, started + elapsed);
+                }
+            }
         }
 
         function pcaIngestWorkerLineTelemetry(lines, activeDepthHint) {
@@ -1542,7 +1562,21 @@
                     : pcaLineComputeNps(nodes, elapsedMs);
                 const status = raw.status === 'COMPLETE' || raw.status === 'INTERRUPTED'
                     ? raw.status
-                    : (raw.status === 'EXPLORING' ? 'EXPLORING' : 'EXPLORING');
+                    : 'EXPLORING';
+                const existing = pcaLineTelemetry.get(key);
+                // Do not demote a terminal status if a stale EXPLORING delta arrives.
+                let nextStatus = status;
+                if (existing) {
+                    if (existing.status === 'INTERRUPTED') {
+                        nextStatus = 'INTERRUPTED';
+                    } else if (existing.status === 'COMPLETE' && status === 'EXPLORING') {
+                        nextStatus = 'COMPLETE';
+                    }
+                }
+                if (status === 'EXPLORING' && key !== pcaLineCurrentKey) {
+                    pcaFinalizeCurrentLine('COMPLETE');
+                    pcaLineCurrentKey = key;
+                }
                 const entry = {
                     depth: raw.depth,
                     move: String(raw.move),
@@ -1550,10 +1584,13 @@
                     nodes: Number.isFinite(nodes) && nodes >= 0 ? nodes : 0,
                     elapsedMs: Number.isFinite(elapsedMs) && elapsedMs >= 0 ? elapsedMs : 0,
                     nps: Number.isFinite(nps) && nps >= 0 ? nps : 0,
-                    status: status,
+                    status: nextStatus,
                     sampleStable: false,
-                    startedAt: raw.startedAt,
-                    finishedAt: raw.finishedAt
+                    startedAt: raw.startedAt != null ? raw.startedAt : (existing && existing.startedAt),
+                    finishedAt: raw.finishedAt != null ? raw.finishedAt : (existing && existing.finishedAt),
+                    startedElapsedMs: raw.startedElapsedMs != null
+                        ? raw.startedElapsedMs
+                        : (existing && existing.startedElapsedMs)
                 };
                 entry.sampleStable = raw.sampleStable != null
                     ? !!raw.sampleStable
@@ -1562,6 +1599,15 @@
                 if (entry.status === 'EXPLORING') {
                     pcaLineCurrentKey = key;
                     sawActive = true;
+                } else if (entry.status === 'COMPLETE' || entry.status === 'INTERRUPTED') {
+                    const started = Number(entry.startedElapsedMs);
+                    const elapsed = Number(entry.elapsedMs);
+                    if (Number.isFinite(started) && started >= 0 && Number.isFinite(elapsed) && elapsed >= 0) {
+                        pcaLineBoundaryElapsedMs = Math.max(pcaLineBoundaryElapsedMs, started + elapsed);
+                    }
+                    if (pcaLineCurrentKey === key && entry.status !== 'EXPLORING') {
+                        pcaLineCurrentKey = null;
+                    }
                 }
                 if (maxDepth == null || entry.depth > maxDepth) maxDepth = entry.depth;
             });
@@ -1569,10 +1615,10 @@
             if (!sawActive && pcaLineCurrentKey) {
                 const current = pcaLineTelemetry.get(pcaLineCurrentKey);
                 if (current && current.status === 'EXPLORING') {
-                    // Keep explorer marker until worker marks COMPLETE.
+                    // Keep explorer marker until worker marks COMPLETE/INTERRUPTED.
                 }
             }
-            if (maxDepth != null) pcaLineActiveDepth = maxDepth;
+            pcaRememberActiveDepth(maxDepth);
             return lines.length > 0;
         }
 
@@ -1580,10 +1626,20 @@
             if (pcaLineFrozen || !snapshot) return;
             if (snapshot.phase && snapshot.phase !== 'MATE_SEARCH') return;
 
-            // Prefer worker-side line timing when present (measured outside PCA core).
+            // O(1) active-line delta from worker (preferred PROGRESS path).
+            if (snapshot.lineTelemetryDelta != null) {
+                const delta = snapshot.lineTelemetryDelta;
+                const lines = Array.isArray(delta) ? delta : [delta];
+                pcaIngestWorkerLineTelemetry(lines, snapshot.depth);
+                pcaRememberActiveDepth(snapshot.depth);
+                renderPcaLineTelemetry();
+                return;
+            }
+
+            // Full historical snapshot (RESULT / STOP reconcile only).
             if (Array.isArray(snapshot.lineTelemetry) && snapshot.lineTelemetry.length > 0) {
                 pcaIngestWorkerLineTelemetry(snapshot.lineTelemetry, snapshot.depth);
-                if (snapshot.depth != null) pcaLineActiveDepth = snapshot.depth;
+                pcaRememberActiveDepth(snapshot.depth);
                 renderPcaLineTelemetry();
                 return;
             }
@@ -1617,9 +1673,10 @@
             if (key !== pcaLineCurrentKey) {
                 pcaFinalizeCurrentLine('COMPLETE');
                 pcaLineCurrentKey = key;
-                // Worker wall-clock baseline for this root line (not inside PCA core).
-                pcaLineStartedElapsedMs = safeGlobalElapsed;
-                pcaLineActiveDepth = depth;
+                // Line start boundary: search origin (0) or previous line finish.
+                // Do NOT anchor to first PROGRESS timestamp (fast lines would get 0 ms).
+                pcaLineStartedElapsedMs = Math.min(pcaLineBoundaryElapsedMs, safeGlobalElapsed);
+                pcaRememberActiveDepth(depth);
 
                 if (!pcaLineTelemetry.has(key)) {
                     pcaLineTelemetry.set(key, {
@@ -1631,7 +1688,8 @@
                         nps: 0,
                         status: 'EXPLORING',
                         sampleStable: false,
-                        startedAt: Date.now()
+                        startedAt: Date.now(),
+                        startedElapsedMs: pcaLineStartedElapsedMs
                     });
                 }
             }
@@ -1645,17 +1703,26 @@
             } else {
                 entry.elapsedMs = Math.max(0, safeGlobalElapsed - pcaLineStartedElapsedMs);
             }
+            if (entry.elapsedMs <= 0 && entry.nodes > 0) entry.elapsedMs = 1;
             if (snapshot.lineNps != null && Number.isFinite(Number(snapshot.lineNps))) {
                 entry.nps = Math.max(0, Number(snapshot.lineNps));
             } else {
                 entry.nps = pcaLineComputeNps(entry.nodes, entry.elapsedMs);
             }
             entry.sampleStable = pcaLineIsSampleStable(entry);
-            entry.status = 'EXPLORING';
+            if (entry.status !== 'INTERRUPTED' && entry.status !== 'COMPLETE') {
+                entry.status = 'EXPLORING';
+            }
             entry.depth = depth;
             entry.move = String(move);
             entry.moveIndex = moveIndex;
-            pcaLineActiveDepth = depth;
+            entry.startedElapsedMs = pcaLineStartedElapsedMs;
+            // Advance boundary continuously so a subsequent line starts at this finish edge.
+            pcaLineBoundaryElapsedMs = Math.max(
+                pcaLineBoundaryElapsedMs,
+                pcaLineStartedElapsedMs + entry.elapsedMs
+            );
+            pcaRememberActiveDepth(depth);
 
             renderPcaLineTelemetry();
         }
@@ -1669,21 +1736,20 @@
             if (options.resultMove != null && options.resultMove !== '') {
                 pcaLineResultMove = String(options.resultMove);
             }
+            if (options.activeDepth != null) {
+                pcaRememberActiveDepth(options.activeDepth);
+            }
             pcaLineFrozen = true;
             pcaLineCurrentKey = null;
             renderPcaLineTelemetry();
         }
 
         function pcaLineRankedForDepth(depth) {
-            const lines = Array.from(pcaLineTelemetry.values())
+            // Only COMPLETE + stable samples are rankable / preselectable.
+            const rankable = Array.from(pcaLineTelemetry.values())
                 .filter(entry => entry.depth === depth)
+                .filter(entry => entry.status === 'COMPLETE')
                 .filter(entry => entry.sampleStable)
-                // Active line may appear in the table, but Top-3 only after min sample.
-                .filter(entry => entry.status !== 'EXPLORING' || pcaLineIsSampleStable(entry));
-
-            // Ranking uses only lines with enough sample; prefer completed ones for Top-3.
-            const rankable = lines
-                .filter(entry => entry.status === 'COMPLETE' || entry.status === 'INTERRUPTED')
                 .slice()
                 .sort((a, b) => {
                     const npsDiff = (Number(b.nps) || 0) - (Number(a.nps) || 0);
@@ -2740,9 +2806,17 @@
                 let lineCurrentKey = null;
                 let lineStartedAt = 0;
                 let lineStartNodes = 0;
+                // Temporal frontier: first line starts at searchStartedAt; later lines
+                // start at the previous line's finish boundary (not first PROGRESS).
+                let searchStartedAt = 0;
+                let lineStartBoundary = 0;
+                let lineBoundaryReady = false;
                 const lineTelemetryMap = new Map();
                 const buildLineTelemetrySnapshot = function() {
                     return Array.from(lineTelemetryMap.values()).map(entry => Object.assign({}, entry));
+                };
+                const cloneLineTelemetryEntry = function(entry) {
+                    return entry ? Object.assign({}, entry) : null;
                 };
                 const observeWorkerLine = function(snapshot, nowTs) {
                     const move = snapshot.activeMove;
@@ -2761,11 +2835,19 @@
                     if (key !== lineCurrentKey) {
                         if (lineCurrentKey && lineTelemetryMap.has(lineCurrentKey)) {
                             const prev = lineTelemetryMap.get(lineCurrentKey);
-                            if (prev.status === 'EXPLORING') prev.status = 'COMPLETE';
-                            prev.finishedAt = nowTs;
+                            if (prev.status === 'EXPLORING') {
+                                prev.status = 'COMPLETE';
+                                prev.sampleStable = prev.elapsedMs >= 250 || prev.nodes >= 100;
+                            }
+                            // Finish frontier of previous line becomes next line start.
+                            // Prefer last observation time of the previous line (set during its PROGRESS).
+                            const prevFinish = prev.finishedAt != null ? prev.finishedAt : nowTs;
+                            prev.finishedAt = prevFinish;
+                            lineStartBoundary = prevFinish;
                         }
                         lineCurrentKey = key;
-                        lineStartedAt = nowTs;
+                        // Known before the line can finish: search start or prior finish.
+                        lineStartedAt = lineBoundaryReady ? lineStartBoundary : nowTs;
                         lineStartNodes = globalNodes - (Number(snapshot.activeMoveNodes) || 0);
                         lineTelemetryMap.set(key, {
                             depth: depth,
@@ -2776,29 +2858,53 @@
                             nps: 0,
                             status: 'EXPLORING',
                             sampleStable: false,
-                            startedAt: nowTs
+                            startedAt: lineStartedAt,
+                            startedElapsedMs: lineBoundaryReady
+                                ? Math.max(0, lineStartedAt - searchStartedAt)
+                                : 0
                         });
                     }
                     const entry = lineTelemetryMap.get(key);
                     const lineNodes = snapshot.activeMoveNodes != null
                         ? Number(snapshot.activeMoveNodes) || 0
                         : Math.max(0, globalNodes - lineStartNodes);
-                    const lineElapsedMs = Math.max(0, nowTs - lineStartedAt);
+                    // Floor at 1ms when work happened but timer resolution collapsed to 0.
+                    let lineElapsedMs = Math.max(0, nowTs - lineStartedAt);
+                    if (lineElapsedMs <= 0 && lineNodes > 0) lineElapsedMs = 1;
                     entry.nodes = lineNodes;
                     entry.elapsedMs = lineElapsedMs;
                     entry.nps = lineElapsedMs > 0 ? lineNodes * 1000 / lineElapsedMs : 0;
                     entry.sampleStable = lineElapsedMs >= 250 || lineNodes >= 100;
-                    entry.status = 'EXPLORING';
+                    if (entry.status !== 'INTERRUPTED' && entry.status !== 'COMPLETE') {
+                        entry.status = 'EXPLORING';
+                    }
                     entry.depth = depth;
                     entry.move = move;
                     entry.moveIndex = moveIndex;
+                    entry.startedElapsedMs = lineBoundaryReady
+                        ? Math.max(0, lineStartedAt - searchStartedAt)
+                        : entry.startedElapsedMs;
+                    // Last-seen timestamp becomes this line's finish frontier for the next line.
+                    entry.finishedAt = nowTs;
                     return entry;
                 };
-                const finalizeWorkerLines = function(nowTs) {
+                const finalizeWorkerLines = function(nowTs, status) {
+                    const finalStatus = status || 'COMPLETE';
                     if (lineCurrentKey && lineTelemetryMap.has(lineCurrentKey)) {
                         const entry = lineTelemetryMap.get(lineCurrentKey);
-                        if (entry.status === 'EXPLORING') entry.status = 'COMPLETE';
-                        entry.finishedAt = nowTs;
+                        // Only the still-active EXPLORING line can be completed or interrupted.
+                        // Never demote a line already sealed as COMPLETE.
+                        if (entry.status === 'EXPLORING') {
+                            // Refresh elapsed to the true end boundary before freezing.
+                            let lineElapsedMs = Math.max(entry.elapsedMs || 0, nowTs - lineStartedAt);
+                            if (lineElapsedMs <= 0 && entry.nodes > 0) lineElapsedMs = 1;
+                            entry.elapsedMs = lineElapsedMs;
+                            entry.nps = lineElapsedMs > 0 ? entry.nodes * 1000 / lineElapsedMs : 0;
+                            entry.sampleStable = lineElapsedMs >= 250 || entry.nodes >= 100;
+                            entry.status = finalStatus;
+                            entry.finishedAt = nowTs;
+                            lineStartBoundary = nowTs;
+                        }
                     }
                     lineCurrentKey = null;
                 };
@@ -2807,9 +2913,11 @@
                     send('PROGRESS', Object.assign({}, baseProgress, {
                         elapsedMs: 0,
                         nps: 0,
-                        lineTelemetry: []
+                        lineTelemetryDelta: null
                     }));
-                    const searchStartedAt = performance.now();
+                    searchStartedAt = performance.now();
+                    lineStartBoundary = searchStartedAt;
+                    lineBoundaryReady = true;
                     const pcaResult = pcaAnalyzePositionCore(message.fen, kGuard, {
                         onProgress: snapshot => {
                             const nowTs = performance.now();
@@ -2817,6 +2925,7 @@
                             const nodes = Number(snapshot.nodes) || 0;
                             const nps = elapsedMs > 0 ? nodes * 1000 / elapsedMs : 0;
                             const activeLine = observeWorkerLine(snapshot, nowTs);
+                            // PROGRESS carries only the active-line delta (O(1)), never full history.
                             send('PROGRESS', Object.assign({ phase: 'MATE_SEARCH' }, snapshot, {
                                 nodes,
                                 elapsedMs,
@@ -2824,7 +2933,7 @@
                                 lineNodes: activeLine ? activeLine.nodes : null,
                                 lineElapsedMs: activeLine ? activeLine.elapsedMs : null,
                                 lineNps: activeLine ? activeLine.nps : null,
-                                lineTelemetry: buildLineTelemetrySnapshot()
+                                lineTelemetryDelta: cloneLineTelemetryEntry(activeLine)
                             }));
                         }
                     });
@@ -2834,7 +2943,11 @@
                         const nodes = Number(pcaResult.nodes) || 0;
                         pcaResult.elapsedMs = elapsedMs;
                         pcaResult.nps = elapsedMs > 0 ? nodes * 1000 / elapsedMs : 0;
-                        finalizeWorkerLines(nowTs);
+                        const lineEndStatus = pcaResult.stopReason === 'NODE_GUARD_REACHED'
+                            ? 'INTERRUPTED'
+                            : 'COMPLETE';
+                        finalizeWorkerLines(nowTs, lineEndStatus);
+                        // Full history only on terminal payload for UI reconcile.
                         pcaResult.lineTelemetry = buildLineTelemetrySnapshot();
                     }
                     if (pcaResult.status !== 'UNRESOLVED') {
@@ -3082,9 +3195,15 @@
                     if (Array.isArray(message.lineTelemetry)) {
                         pcaIngestWorkerLineTelemetry(message.lineTelemetry, message.depth);
                     }
+                    const stopReason = (message.pcaResult && message.pcaResult.stopReason)
+                        || message.stopReason
+                        || '';
+                    const interrupted = stopReason === 'NODE_GUARD_REACHED'
+                        || stopReason === 'USER_CANCELLED';
                     pcaFreezeLineTelemetry({
-                        interrupted: false,
-                        resultMove: message.pcaResult && message.pcaResult.move
+                        interrupted,
+                        resultMove: message.pcaResult && message.pcaResult.move,
+                        activeDepth: message.depth
                     });
                 }
                 pcaFinishWorker();
@@ -3223,14 +3342,19 @@
             published.nps = pcaCumulativeNps(nodes, published.elapsedMs);
             published.npsMode = 'cumulative';
             window.updatePCAMetrics(published);
-            // Ingest final observational lines (if worker attached them), then freeze.
+            // Ingest final observational lines (full snapshot on RESULT only), then freeze.
             if (Array.isArray(published.lineTelemetry) && published.lineTelemetry.length > 0) {
                 pcaIngestWorkerLineTelemetry(published.lineTelemetry, published.depth);
             }
-            if (published.depth != null) pcaLineActiveDepth = published.depth;
+            // Preserve the most recent observed depth (e.g. K=9 interrupted) even if
+            // published.depth reports the last fully completed horizon (e.g. K=8).
+            pcaRememberActiveDepth(published.depth);
+            const interrupted = published.stopReason === 'NODE_GUARD_REACHED'
+                || published.stopReason === 'USER_CANCELLED';
             pcaFreezeLineTelemetry({
-                interrupted: false,
-                resultMove: published.move || null
+                interrupted,
+                resultMove: published.move || null,
+                activeDepth: published.depth
             });
         }
 
