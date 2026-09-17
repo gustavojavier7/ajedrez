@@ -2008,7 +2008,7 @@
             if (!panel || !body || !evaluation) return;
             panel.hidden = false;
 
-            const ranking = evaluation.status === 'AVAILABLE'
+            const ranking = evaluation.status === 'AVAILABLE' || evaluation.status === 'DECIDED'
                 ? 'FINAL'
                 : evaluation.status === 'TRUNCATED'
                     ? 'PROVISIONAL / TRUNCATED'
@@ -2057,7 +2057,9 @@
                 cell.colSpan = 13;
                 cell.textContent = evaluation.status === 'RUNNING'
                     ? 'Calculando Pulse Evaluation...'
-                    : 'Sin métricas parciales disponibles.';
+                    : evaluation.status === 'DECIDED'
+                        ? 'Mate forzado resuelto; ranking Pulse no requerido.'
+                        : 'Sin métricas parciales disponibles.';
                 row.appendChild(cell);
                 body.appendChild(row);
                 renderPCAPulseTemporal(null);
@@ -2297,7 +2299,36 @@
 
             if (message.type === 'RESULT') {
                 if (message.pcaResult && message.pcaResult.status === 'DECIDED') {
-                    resetPCAEvaluation();
+                    // Keep bottom-panel metrics visible when mate is resolved.
+                    // Prefer any pulse evaluation payload; otherwise freeze the
+                    // final MATE_SEARCH telemetry instead of clearing the panel.
+                    const decidedEvaluation = message.evaluation || {
+                        status: 'DECIDED',
+                        kGuard: message.kGuard,
+                        depth: message.depth != null
+                            ? message.depth
+                            : (message.pcaResult.depth || 0),
+                        nodes: message.nodes != null
+                            ? message.nodes
+                            : (message.pcaResult.nodes || 0),
+                        nodeGuard: message.nodeGuard,
+                        movesCompleted: message.movesCompleted != null
+                            ? message.movesCompleted
+                            : (message.pcaResult.initialCandidates || 0),
+                        totalMoves: message.totalMoves != null
+                            ? message.totalMoves
+                            : (message.pcaResult.initialCandidates || 0),
+                        activeMove: message.activeMove || message.pcaResult.move || null,
+                        activeMoveNodes: message.activeMoveNodes,
+                        moves: message.moves || [],
+                        stopReason: message.pcaResult.stopReason || 'DECIDED'
+                    };
+                    renderPCAEvaluation(
+                        activePcaStatus,
+                        decidedEvaluation,
+                        message.phase || 'MATE_SEARCH',
+                        message.elapsedMs
+                    );
                     pcaSetEngineStatus(pcaDescribeResult(message.pcaResult));
                 } else if (message.evaluation) {
                     renderPCAEvaluation(activePcaStatus, message.evaluation, message.phase, message.elapsedMs);
