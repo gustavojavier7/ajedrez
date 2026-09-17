@@ -1096,7 +1096,7 @@
                             <div class="metric-item"><span class="metric-label">Targets restantes</span><span id="pcaTargets" class="metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label">K efectivo (plies)</span><span id="pcaDepth" class="metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label">Nodos explorados</span><span id="pcaNodes" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">NPS</span><span id="pcaNps" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label" id="pcaNpsLabel">NPS</span><span id="pcaNps" class="metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label">Tiempo PCA</span><span id="pcaElapsed" class="metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label">H estado (bits)</span><span id="pcaStateH" class="metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label">H Target (bits)</span><span id="pcaTargetH" class="metric-value">—</span></div>
@@ -1314,10 +1314,72 @@
         }
 
         let pcaMetricsState = {};
+        const PCA_NPS_WINDOW_MS = 10000;
+        let pcaNpsSamples = [];
+
+        function resetPcaNpsTracker() {
+            pcaNpsSamples = [];
+        }
+
+        function pcaCumulativeNps(nodes, elapsedMs) {
+            const n = Number(nodes);
+            const t = Number(elapsedMs);
+            if (!Number.isFinite(n) || !Number.isFinite(t) || n < 0 || t <= 0) return 0;
+            return n * 1000 / t;
+        }
+
+        // Rolling throughput over the last ~10s using cumulative (elapsed, nodes) samples.
+        function pcaRollingNps(elapsedMs, nodes) {
+            const t = Number(elapsedMs);
+            const n = Number(nodes);
+            if (!Number.isFinite(t) || !Number.isFinite(n) || t < 0 || n < 0) return 0;
+
+            pcaNpsSamples.push({ elapsedMs: t, nodes: n });
+
+            // Drop samples fully older than the window; keep one pre-cutoff baseline.
+            const cutoff = t - PCA_NPS_WINDOW_MS;
+            while (
+                pcaNpsSamples.length >= 2 &&
+                pcaNpsSamples[1].elapsedMs <= cutoff
+            ) {
+                pcaNpsSamples.shift();
+            }
+
+            const baseline = pcaNpsSamples[0];
+            let baseT = baseline.elapsedMs;
+            let baseN = baseline.nodes;
+
+            // Interpolate to the window edge so the average covers ~10s, not more.
+            if (
+                cutoff > 0 &&
+                pcaNpsSamples.length >= 2 &&
+                baseline.elapsedMs < cutoff
+            ) {
+                const next = pcaNpsSamples[1];
+                const span = next.elapsedMs - baseline.elapsedMs;
+                if (span > 0) {
+                    const frac = (cutoff - baseline.elapsedMs) / span;
+                    baseT = cutoff;
+                    baseN = baseline.nodes + (next.nodes - baseline.nodes) * frac;
+                }
+            }
+
+            const dt = t - baseT;
+            const dn = n - baseN;
+            if (dt <= 0) return pcaCumulativeNps(n, t);
+            return dn * 1000 / dt;
+        }
+
+        function pcaNpsLabelText(mode) {
+            if (mode === 'rolling') return 'NPS (10s)';
+            if (mode === 'cumulative') return 'NPS (acum.)';
+            return 'NPS';
+        }
 
         window.updatePCAMetrics = function(metrics = {}) {
             if (!metrics || Object.keys(metrics).length === 0) {
                 pcaMetricsState = {};
+                resetPcaNpsTracker();
             } else {
                 pcaMetricsState = Object.assign({}, pcaMetricsState, metrics);
             }
@@ -1335,6 +1397,8 @@
             document.getElementById('pcaNps').textContent = formatCountMetric(
                 m.nps === undefined ? null : m.nps
             );
+            const npsLabel = document.getElementById('pcaNpsLabel');
+            if (npsLabel) npsLabel.textContent = pcaNpsLabelText(m.npsMode);
             document.getElementById('pcaElapsed').textContent = formatElapsedMetric(
                 m.elapsedMs === undefined ? null : m.elapsedMs
             );
@@ -1352,6 +1416,7 @@
 
         window.resetPCAMetrics = function() {
             pcaMetricsState = {};
+            resetPcaNpsTracker();
             window.updatePCAMetrics({});
             const status = document.getElementById('pcaEngineStatus');
             if (status) status.textContent = 'Motor exacto de mate listo';
@@ -2299,7 +2364,6 @@
             // Capture last live telemetry before killing the worker.
             const lastTelemetry = {
                 nodes: pcaMetricsState.nodes,
-                nps: pcaMetricsState.nps,
                 elapsedMs: pcaMetricsState.elapsedMs,
                 depth: pcaMetricsState.depth,
                 initialCandidates: pcaMetricsState.initialCandidates,
@@ -2310,14 +2374,18 @@
                 conflicts: pcaMetricsState.conflicts,
                 progress: pcaMetricsState.progress
             };
+            // On interrupt, reveal cumulative average NPS (nodes / total elapsed).
+            const cumulativeNps = pcaCumulativeNps(lastTelemetry.nodes, lastTelemetry.elapsedMs);
             // Stop immediately: drop run id and kill the worker before any UI work.
             pcaFinishWorker();
             if (renderCancelled) {
-                // Preserve last valid nodes/NPS/time; do not invent post-stop values.
+                // Preserve last valid nodes/time; replace live rolling NPS with cumulative.
                 window.updatePCAMetrics(Object.assign({}, lastTelemetry, {
                     status: 'CANCELLED',
                     move: null,
-                    stopReason
+                    stopReason,
+                    nps: cumulativeNps,
+                    npsMode: 'cumulative'
                 }));
                 renderPCAEvaluation('CANCELLED', {
                     status: 'CANCELLED',
@@ -2365,13 +2433,19 @@
                 if (message.phase === 'MATE_SEARCH') {
                     const liveMetrics = {
                         status: 'RUNNING',
-                        stopReason: message.stopReason || 'SEARCHING'
+                        stopReason: message.stopReason || 'SEARCHING',
+                        npsMode: 'rolling'
                     };
                     if (message.depth != null) liveMetrics.depth = message.depth;
                     if (message.totalMoves != null) liveMetrics.initialCandidates = message.totalMoves;
                     if (message.nodes != null) liveMetrics.nodes = message.nodes;
-                    if (message.nps != null) liveMetrics.nps = message.nps;
                     if (message.elapsedMs != null) liveMetrics.elapsedMs = message.elapsedMs;
+                    // Live NPS is a ~10s rolling average; cumulative is revealed only at end/stop.
+                    if (message.nodes != null && message.elapsedMs != null) {
+                        liveMetrics.nps = pcaRollingNps(message.elapsedMs, message.nodes);
+                    } else if (message.nps != null) {
+                        liveMetrics.nps = message.nps;
+                    }
                     window.updatePCAMetrics(liveMetrics);
                 }
                 renderPCAEvaluation(activePcaStatus, evaluation, message.phase, message.elapsedMs);
@@ -2420,6 +2494,13 @@
                     renderPCAEvaluation(activePcaStatus, message.evaluation, message.phase, message.elapsedMs);
                     pcaSetEngineStatus(pcaDescribeResult(message.pcaResult) + ' · Pulse Evaluation disponible');
                 }
+                // Ensure final panel NPS is the cumulative average even if no pcaResult arrived.
+                if (!message.pcaResult) {
+                    pcaRevealCumulativeNps({
+                        nodes: message.nodes,
+                        elapsedMs: message.elapsedMs
+                    });
+                }
                 pcaFinishWorker();
                 return;
             }
@@ -2429,6 +2510,12 @@
                 pcaSetEngineStatus(
                     pcaDescribeResult(message.pcaResult) + ' · Pulse provisional truncado por NODE_GUARD'
                 );
+                if (!message.pcaResult) {
+                    pcaRevealCumulativeNps({
+                        nodes: message.nodes,
+                        elapsedMs: message.elapsedMs
+                    });
+                }
                 pcaFinishWorker();
                 return;
             }
@@ -2445,6 +2532,11 @@
                     moves: message.moves || [],
                     stopReason: message.error || 'WORKER_ERROR'
                 }, message.phase, message.elapsedMs);
+                pcaRevealCumulativeNps({
+                    nodes: message.nodes,
+                    elapsedMs: message.elapsedMs,
+                    stopReason: message.error || 'WORKER_ERROR'
+                });
                 pcaSetEngineStatus('Error del Worker PCA: ' + (message.error || 'UNKNOWN'));
                 pcaFinishWorker();
             }
@@ -2470,11 +2562,13 @@
             updateButtonStates();
             const nodeGuard = pcaEffectiveNodeGuard(guard, PCA_NODE_GUARD);
             pcaMetricsState = {};
+            resetPcaNpsTracker();
             window.updatePCAMetrics({
                 status: 'RUNNING',
                 move: null,
                 nodes: 0,
                 nps: 0,
+                npsMode: 'rolling',
                 elapsedMs: 0,
                 stopReason: 'STARTING'
             });
@@ -2544,7 +2638,27 @@
         }
 
         function pcaPublishResult(result) {
-            window.updatePCAMetrics(result);
+            const published = Object.assign({}, result);
+            const nodes = published.nodes != null ? published.nodes : pcaMetricsState.nodes;
+            const elapsedMs = published.elapsedMs != null
+                ? published.elapsedMs
+                : pcaMetricsState.elapsedMs;
+            // Final reveal: always show cumulative average NPS (nodes / total elapsed).
+            if (published.elapsedMs == null && elapsedMs != null) published.elapsedMs = elapsedMs;
+            published.nps = pcaCumulativeNps(nodes, published.elapsedMs);
+            published.npsMode = 'cumulative';
+            window.updatePCAMetrics(published);
+        }
+
+        function pcaRevealCumulativeNps(extra = {}) {
+            const nodes = extra.nodes != null ? extra.nodes : pcaMetricsState.nodes;
+            const elapsedMs = extra.elapsedMs != null ? extra.elapsedMs : pcaMetricsState.elapsedMs;
+            window.updatePCAMetrics(Object.assign({}, extra, {
+                nodes,
+                elapsedMs,
+                nps: pcaCumulativeNps(nodes, elapsedMs),
+                npsMode: 'cumulative'
+            }));
         }
 
         function pcaDescribeResult(result) {
