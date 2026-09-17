@@ -3078,6 +3078,15 @@
                         elapsedMs: message.elapsedMs
                     });
                 }
+                if (!pcaLineFrozen) {
+                    if (Array.isArray(message.lineTelemetry)) {
+                        pcaIngestWorkerLineTelemetry(message.lineTelemetry, message.depth);
+                    }
+                    pcaFreezeLineTelemetry({
+                        interrupted: false,
+                        resultMove: message.pcaResult && message.pcaResult.move
+                    });
+                }
                 pcaFinishWorker();
                 return;
             }
@@ -3099,6 +3108,9 @@
                     elapsedMs: message.elapsedMs,
                     stopReason: message.error || 'WORKER_ERROR'
                 });
+                if (!pcaLineFrozen) {
+                    pcaFreezeLineTelemetry({ interrupted: true });
+                }
                 pcaSetEngineStatus('Error del Worker PCA: ' + (message.error || 'UNKNOWN'));
                 pcaFinishWorker();
             }
