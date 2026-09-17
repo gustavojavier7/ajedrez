@@ -499,14 +499,6 @@
             overflow-wrap: anywhere;
         }
 
-        .pca-regression {
-            margin: 9px 0 10px;
-            padding: 8px;
-            border: 1px solid #e5e7eb;
-            border-radius: 6px;
-            background: #f9fafb;
-        }
-
         .pca-regression-header {
             display: flex;
             align-items: center;
@@ -520,18 +512,6 @@
             font-weight: 700;
             color: #374151;
         }
-
-        .pca-regression-badge {
-            padding: 3px 7px;
-            border-radius: 999px;
-            background: #e5e7eb;
-            color: #4b5563;
-            font-size: 0.66rem;
-            font-weight: 800;
-        }
-
-        .pca-regression-badge.pass { background: #d1fae5; color: #065f46; }
-        .pca-regression-badge.fail { background: #fee2e2; color: #991b1b; }
 
         .pca-regression-table {
             width: 100%;
@@ -557,53 +537,6 @@
             color: #111827;
             overflow-wrap: anywhere;
         }
-
-
-        .pca-suite {
-            margin: 9px 0 10px;
-            padding: 8px;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            background: #fff;
-        }
-
-        .pca-suite-table-wrap {
-            overflow-x: auto;
-        }
-
-        .pca-suite-table {
-            min-width: 880px;
-        }
-
-        .pca-suite-result-pass {
-            color: #065f46 !important;
-            font-weight: 800;
-        }
-
-        .pca-suite-result-fail {
-            color: #991b1b !important;
-            font-weight: 800;
-        }
-
-        .pca-suite-summary {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 5px;
-            margin-top: 7px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.66rem;
-            font-weight: 700;
-            color: #374151;
-        }
-
-        .pca-suite-summary span {
-            padding: 4px 5px;
-            border: 1px solid #e5e7eb;
-            border-radius: 4px;
-            background: #f9fafb;
-            overflow-wrap: anywhere;
-        }
-
 
         .pca-evaluation {
             margin-top: 12px;
@@ -1075,82 +1008,31 @@
                                     <option value="8">8</option>
                                     <option value="9">9</option>
                                     <option value="10">10</option>
+                                    <option value="Infinity">∞ infinito</option>
                                 </select>
                             </label>
                             <button type="button" onclick="togglePCAAnalysis()" id="pcaAnalyzeBtn" class="btn btn-primary">
                                 <i class="fas fa-project-diagram"></i>Analizar PCA
                             </button>
-                            <button type="button" onclick="runPCARegression135()" id="pcaRegressionBtn" class="btn btn-success">
-                                <i class="fas fa-vials"></i>TEST K=1→3→5
-                            </button>
-                            <button type="button" onclick="runPCAChessRegressionSuite()" id="pcaSuiteBtn" class="btn btn-warning">
-                                <i class="fas fa-clipboard-check"></i>SUITE REGRESIÓN
-                            </button>
                             <div id="pcaEngineStatus" class="pca-engine-status">Motor exacto de mate listo</div>
-                        </div>
-                        <div class="pca-regression" aria-live="polite">
-                            <div class="pca-regression-header">
-                                <span class="pca-regression-title">Regresión de profundidad sobre la FEN actual</span>
-                                <span id="pcaRegressionBadge" class="pca-regression-badge">NO EJECUTADO</span>
-                            </div>
-                            <table class="pca-regression-table">
-                                <thead><tr><th>K</th><th>STATUS</th><th>MOVE</th><th>NODOS</th></tr></thead>
-                                <tbody id="pcaRegressionBody">
-                                    <tr><td>1</td><td>—</td><td>—</td><td>—</td></tr>
-                                    <tr><td>3</td><td>—</td><td>—</td><td>—</td></tr>
-                                    <tr><td>5</td><td>—</td><td>—</td><td>—</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="pca-suite" aria-live="polite">
-                            <div class="pca-regression-header">
-                                <span class="pca-regression-title">Suite automática PCA-Chess</span>
-                                <span id="pcaSuiteBadge" class="pca-regression-badge">SUITE: NO EJECUTADO</span>
-                            </div>
-                            <div class="pca-suite-table-wrap">
-                                <table class="pca-regression-table pca-suite-table">
-                                    <thead>
-                                        <tr>
-                                            <th>TEST</th>
-                                            <th>K</th>
-                                            <th>EXPECTED STATUS</th>
-                                            <th>ACTUAL STATUS</th>
-                                            <th>EXPECTED MOVE</th>
-                                            <th>ACTUAL MOVE</th>
-                                            <th>NODES</th>
-                                            <th>RESULT</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="pcaSuiteBody">
-                                        <tr><td colspan="8">—</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div id="pcaSuiteSummary" class="pca-suite-summary">
-                                <span>TESTS_TOTAL: 6</span>
-                                <span>TESTS_PASS: 0</span>
-                                <span>TESTS_FAIL: 0</span>
-                                <span>TOTAL_NODES: 0</span>
-                            </div>
                         </div>
                         <div class="pca-status-row">
                             <span id="pcaStatus" class="pca-status-badge">NO EJECUTADO</span>
                             <span id="pcaMove" class="pca-move">—</span>
                         </div>
-
                     </div>
 
                     <div class="analysis-section analysis-card analysis-card-control">
                         <div class="section-title">
                             <i class="fas fa-microchip"></i>
                             Stockfish
-                            <span class="section-subtitle">control</span>
+                            <span class="section-subtitle">análisis y métricas</span>
                         </div>
                         <div class="engine-controls">
-                            <button onclick="toggleEngine()" id="engineToggleBtn" class="btn btn-purple">
+                            <button type="button" onclick="toggleEngine()" id="engineToggleBtn" class="btn btn-purple">
                                 <i class="fas fa-plug"></i>Conectar
                             </button>
-                            <button onclick="toggleAnalysis()" id="analysisToggleBtn" class="btn btn-success">
+                            <button type="button" onclick="toggleAnalysis()" id="analysisToggleBtn" class="btn btn-success">
                                 <i class="fas fa-play"></i>Analizar
                             </button>
                         </div>
@@ -1334,10 +1216,28 @@
         // Stockfish permanece separado y se usa sólo como control de referencia.
         function formatMetricValue(value, digits = 3) {
             if (value === null || value === undefined || value === '') return '—';
-            if (typeof value === 'number' && Number.isFinite(value)) {
-                return Number.isInteger(value) ? value.toString() : value.toFixed(digits);
+            if (typeof value === 'number') {
+                if (value === Infinity) return '∞';
+                if (Number.isFinite(value)) {
+                    return Number.isInteger(value) ? value.toString() : value.toFixed(digits);
+                }
             }
+            if (value === 'Infinity') return '∞';
             return String(value);
+        }
+
+        function pcaReadKGuard() {
+            const raw = document.getElementById('pcaKGuard')?.value;
+            if (raw === 'Infinity' || raw === 'inf' || raw === '∞') return Infinity;
+            return Number(raw);
+        }
+
+        function pcaIsInfiniteKGuard(k) {
+            return k === Infinity || k === Number.POSITIVE_INFINITY;
+        }
+
+        function pcaEffectiveNodeGuard(kGuard, fallback) {
+            return pcaIsInfiniteKGuard(kGuard) ? Number.POSITIVE_INFINITY : fallback;
         }
 
         function refreshPcaStockfishComparison() {
@@ -1406,6 +1306,7 @@
         const PCA_PROGRESS_TIME_INTERVAL = 75;
 
         function pcaIsValidKGuard(k) {
+            if (pcaIsInfiniteKGuard(k)) return true;
             return Number.isInteger(k) &&
                 k >= PCA_K_MIN &&
                 k <= PCA_K_MAX;
@@ -1445,7 +1346,7 @@
 
         function pcaCanForceMate(game, attackerColor, remainingPlies, context) {
             context.nodes += 1;
-            if (context.nodes > context.nodeGuard) {
+            if (Number.isFinite(context.nodeGuard) && context.nodes > context.nodeGuard) {
                 const err = new Error('PCA_NODE_GUARD');
                 err.code = 'PCA_NODE_GUARD';
                 throw err;
@@ -1563,13 +1464,10 @@
                 });
             }
 
-            const horizons = Array.from(
-                { length: guard },
-                (_, index) => index + 1
-            );
+            const infinite = pcaIsInfiniteKGuard(guard);
             const context = {
                 nodes: 0,
-                nodeGuard: PCA_NODE_GUARD,
+                nodeGuard: pcaEffectiveNodeGuard(guard, PCA_NODE_GUARD),
                 memo: new Map(),
                 activeDepth: 0,
                 activeMove: null,
@@ -1606,7 +1504,7 @@
             } : null;
 
             try {
-                for (const k of horizons) {
+                for (let k = 1; infinite || k <= guard; k += 1) {
                     context.activeDepth = k;
                     const winningMoves = [];
 
@@ -1757,10 +1655,15 @@
             const resolution = branchesTotal > 0 ? resolved / branchesTotal : 0;
             const signedPulse = branchesTotal > 0 ? (wins - losses) / branchesTotal : 0;
             const resolvedUncertainty = resolved > 0 ? pcaEvaluationEntropy([wins, draws, losses], resolved) : null;
+            const complete = !partialLayer && (
+                pcaIsInfiniteKGuard(kGuard)
+                    ? (state.lastComputedDepth > 0 && frontier === 0)
+                    : state.lastComputedDepth === kGuard
+            );
             return {
                 san: state.san, uci: state.uci, depth: lastComputedDepth,
                 firstPulseDepth, lastComputedDepth,
-                complete: !partialLayer && state.lastComputedDepth === kGuard,
+                complete,
                 partial: partialLayer,
                 coverageNodes,
                 winPulse, drawPulse, lossPulse,
@@ -1804,8 +1707,12 @@
         }
 
         function pcaPulseEvaluateCore(fen, kGuard, options = {}) {
-            const guard = Number(kGuard);
-            const nodeGuard = Number.isInteger(options.nodeGuard) && options.nodeGuard > 0 ? options.nodeGuard : PCA_EVAL_NODE_GUARD;
+            const guard = pcaIsInfiniteKGuard(kGuard) ? Infinity : Number(kGuard);
+            const infinite = pcaIsInfiniteKGuard(guard);
+            const defaultNodeGuard = pcaEffectiveNodeGuard(guard, PCA_EVAL_NODE_GUARD);
+            const nodeGuard = (Number.isFinite(options.nodeGuard) || options.nodeGuard === Infinity) && options.nodeGuard > 0
+                ? options.nodeGuard
+                : defaultNodeGuard;
             const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
             if (!pcaIsValidKGuard(guard)) return pcaEvaluationUnavailable(fen, guard, 'INVALID_K_GUARD');
 
@@ -1826,9 +1733,17 @@
             const states = rootMoves.map(rootMove => ({
                 san: rootMove.san, uci: rootMove.from + rootMove.to + (rootMove.promotion || ''),
                 rootMove: { from: rootMove.from, to: rootMove.to, promotion: rootMove.promotion },
-                winPulse: Array(guard + 1).fill(0), drawPulse: Array(guard + 1).fill(0), lossPulse: Array(guard + 1).fill(0),
+                winPulse: infinite ? [0] : Array(guard + 1).fill(0),
+                drawPulse: infinite ? [0] : Array(guard + 1).fill(0),
+                lossPulse: infinite ? [0] : Array(guard + 1).fill(0),
                 temporal: [], firstPulseDepth: null, lastComputedDepth: 0, frontierFens: [], partial: null
             }));
+
+            function ensurePulseCapacity(state, depth) {
+                while (state.winPulse.length <= depth) state.winPulse.push(0);
+                while (state.drawPulse.length <= depth) state.drawPulse.push(0);
+                while (state.lossPulse.length <= depth) state.lossPulse.push(0);
+            }
 
             function maybeReportPulseProgress(depth, state, stateIndex, moveStartNodes, local = null, layerComplete = false, force = false) {
                 if (!onProgress) return;
@@ -1866,17 +1781,19 @@
 
             let truncated = false, completedDepth = 0, attemptedDepth = 0, movesCompleted = 0;
             outer:
-            for (let depth = 1; depth <= guard; depth += 1) {
+            for (let depth = 1; infinite || depth <= guard; depth += 1) {
                 attemptedDepth = depth;
                 movesCompleted = 0;
+                let openFrontier = 0;
                 for (let stateIndex = 0; stateIndex < states.length; stateIndex += 1) {
                     const state = states[stateIndex];
+                    ensurePulseCapacity(state, depth);
                     const moveStartNodes = context.nodes;
                     const local = { wins: 0, draws: 0, losses: 0, nextFrontier: [] };
                     const parents = depth === 1 ? [fen] : state.frontierFens;
                     try {
                         if (depth === 1) {
-                            if (context.nodes >= context.nodeGuard) {
+                            if (Number.isFinite(context.nodeGuard) && context.nodes >= context.nodeGuard) {
                                 const error = new Error('PCA_EVAL_NODE_GUARD'); error.code = 'PCA_EVAL_NODE_GUARD'; throw error;
                             }
                             const game = new Chess(fen);
@@ -1894,7 +1811,7 @@
                                 const parent = new Chess(parentFen);
                                 const moves = parent.moves({ verbose: true });
                                 for (const move of moves) {
-                                    if (context.nodes >= context.nodeGuard) {
+                                    if (Number.isFinite(context.nodeGuard) && context.nodes >= context.nodeGuard) {
                                         const error = new Error('PCA_EVAL_NODE_GUARD'); error.code = 'PCA_EVAL_NODE_GUARD'; throw error;
                                     }
                                     const child = new Chess(parentFen);
@@ -1934,15 +1851,17 @@
                     if (state.firstPulseDepth === null && local.wins + local.draws + local.losses > 0) state.firstPulseDepth = depth;
                     state.frontierFens = local.nextFrontier; state.lastComputedDepth = depth;
                     state.temporal.push(pcaPulseTemporalEntry(state, depth, local.nextFrontier.length));
+                    openFrontier += local.nextFrontier.length;
                     movesCompleted += 1;
                     maybeReportPulseProgress(depth, state, stateIndex, moveStartNodes, local, true);
                 }
                 completedDepth = depth;
+                if (infinite && openFrontier === 0) break;
             }
 
             const result = pcaPulseProgressPayload(
                 fen, guard, initialSide, rootMoves, states, context,
-                truncated ? attemptedDepth : guard,
+                truncated ? attemptedDepth : (infinite ? completedDepth : guard),
                 truncated ? movesCompleted : rootMoves.length,
                 truncated ? 'TRUNCATED' : 'AVAILABLE',
                 truncated ? 'NODE_GUARD_REACHED' : null
@@ -2070,7 +1989,7 @@
             setText('pcaEvaluationPcaStatus', 'PCA_STATUS: ' + pcaStatus);
             setText('pcaEvaluationStatus', 'EVALUATION_STATUS: ' + evaluation.status);
             setText('pcaEvaluationPhase', 'PHASE: ' + phase);
-            setText('pcaEvaluationK', 'K_GUARD: ' + (evaluation.kGuard == null ? '—' : evaluation.kGuard));
+            setText('pcaEvaluationK', 'K_GUARD: ' + formatMetricValue(evaluation.kGuard));
             setText('pcaEvaluationDepth', 'DEPTH: ' + (evaluation.depth == null ? '—' : evaluation.depth));
             setText(
                 'pcaEvaluationMoves',
@@ -2081,7 +2000,14 @@
             setText('pcaEvaluationActiveMoveNodes', 'ACTIVE_MOVE_NODES: ' +
                 (evaluation.activeMoveNodes == null ? '—' : Number(evaluation.activeMoveNodes).toLocaleString()));
             setText('pcaEvaluationNodes', 'NODES: ' + Number(evaluation.nodes || 0).toLocaleString());
-            setText('pcaEvaluationNodeGuard', 'NODE_GUARD: ' + Number(evaluation.nodeGuard || PCA_EVAL_NODE_GUARD).toLocaleString());
+            setText(
+                'pcaEvaluationNodeGuard',
+                'NODE_GUARD: ' + (
+                    evaluation.nodeGuard === Infinity || evaluation.nodeGuard === Number.POSITIVE_INFINITY
+                        ? '∞'
+                        : Number(evaluation.nodeGuard || PCA_EVAL_NODE_GUARD).toLocaleString()
+                )
+            );
             setText('pcaEvaluationElapsed', 'ELAPSED: ' + Number(elapsedMs || 0).toLocaleString() + ' ms');
             setText('pcaEvaluationRankingStatus', 'RANKING: ' + ranking);
             setText('pcaEvaluationStopReason', 'STOP_REASON: ' + (evaluation.stopReason || '—'));
@@ -2137,6 +2063,8 @@
 
         function pcaCreateWorkerSource() {
             const pureFunctions = [
+                pcaIsInfiniteKGuard,
+                pcaEffectiveNodeGuard,
                 pcaChoose2,
                 pcaEntropyUniqueTargets,
                 pcaPositionKey,
@@ -2162,6 +2090,9 @@
                 if (message.type !== 'START') return;
                 const runId = message.runId;
                 const startedAt = Date.now();
+                const kGuard = message.kGuard;
+                const mateNodeGuard = pcaEffectiveNodeGuard(kGuard, PCA_NODE_GUARD);
+                const evalNodeGuard = pcaEffectiveNodeGuard(kGuard, PCA_EVAL_NODE_GUARD);
                 const send = (type, payload) => self.postMessage(Object.assign({
                     type,
                     runId,
@@ -2169,10 +2100,10 @@
                 }, payload));
                 const baseProgress = {
                     phase: 'MATE_SEARCH',
-                    kGuard: message.kGuard,
+                    kGuard: kGuard,
                     depth: 0,
                     nodes: 0,
-                    nodeGuard: PCA_NODE_GUARD,
+                    nodeGuard: mateNodeGuard,
                     movesCompleted: 0,
                     totalMoves: 0,
                     moves: []
@@ -2180,7 +2111,7 @@
                 send('START', baseProgress);
                 try {
                     send('PROGRESS', baseProgress);
-                    const pcaResult = pcaAnalyzePositionCore(message.fen, message.kGuard, {
+                    const pcaResult = pcaAnalyzePositionCore(message.fen, kGuard, {
                         onProgress: snapshot => {
                             send('PROGRESS', Object.assign({ phase: 'MATE_SEARCH' }, snapshot));
                         }
@@ -2188,10 +2119,10 @@
                     if (pcaResult.status !== 'UNRESOLVED') {
                         send('RESULT', {
                             phase: 'MATE_SEARCH',
-                            kGuard: message.kGuard,
+                            kGuard: kGuard,
                             depth: pcaResult.depth || 0,
                             nodes: pcaResult.nodes || 0,
-                            nodeGuard: PCA_NODE_GUARD,
+                            nodeGuard: mateNodeGuard,
                             movesCompleted: pcaResult.initialCandidates || 0,
                             totalMoves: pcaResult.initialCandidates || 0,
                             moves: [],
@@ -2200,8 +2131,8 @@
                         return;
                     }
 
-                    const evaluation = pcaPulseEvaluateCore(message.fen, message.kGuard, {
-                        nodeGuard: PCA_EVAL_NODE_GUARD,
+                    const evaluation = pcaPulseEvaluateCore(message.fen, kGuard, {
+                        nodeGuard: evalNodeGuard,
                         onProgress: snapshot => {
                             send('PROGRESS', Object.assign({
                                 phase: 'PULSE_EVALUATION',
@@ -2218,10 +2149,10 @@
                 } catch (error) {
                     send('ERROR', {
                         phase: 'PULSE_EVALUATION',
-                        kGuard: message.kGuard,
+                        kGuard: kGuard,
                         depth: 0,
                         nodes: 0,
-                        nodeGuard: PCA_EVAL_NODE_GUARD,
+                        nodeGuard: evalNodeGuard,
                         movesCompleted: 0,
                         totalMoves: 0,
                         moves: [],
@@ -2245,36 +2176,46 @@
         }
 
         function pcaFinishWorker() {
+            // Invalidate the run first so any late messages are ignored.
+            activePcaRunId = null;
+            isPcaAnalyzing = false;
             if (pcaWorker) {
-                pcaWorker.terminate();
+                try { pcaWorker.onmessage = null; } catch (e) { /* ignore */ }
+                try { pcaWorker.onerror = null; } catch (e) { /* ignore */ }
+                try { pcaWorker.terminate(); } catch (e) { /* ignore */ }
                 pcaWorker = null;
             }
             if (pcaWorkerUrl) {
                 URL.revokeObjectURL(pcaWorkerUrl);
                 pcaWorkerUrl = null;
             }
-            activePcaRunId = null;
-            isPcaAnalyzing = false;
             updateButtonStates();
         }
 
         function cancelPCAAnalysis(stopReason = 'USER_CANCELLED', renderCancelled = true) {
             if (!isPcaAnalyzing && !pcaWorker) return false;
-            const guard = Number(document.getElementById('pcaKGuard').value);
+            const guard = pcaReadKGuard();
+            // Stop immediately: drop run id and kill the worker before any UI work.
             pcaFinishWorker();
             if (renderCancelled) {
-                renderPCAEvaluation(activePcaStatus, {
+                window.updatePCAMetrics({
+                    status: 'CANCELLED',
+                    move: null,
+                    stopReason,
+                    depth: 0
+                });
+                renderPCAEvaluation('CANCELLED', {
                     status: 'CANCELLED',
                     kGuard: guard,
                     depth: 0,
                     nodes: 0,
-                    nodeGuard: PCA_EVAL_NODE_GUARD,
+                    nodeGuard: pcaEffectiveNodeGuard(guard, PCA_EVAL_NODE_GUARD),
                     movesCompleted: 0,
                     totalMoves: 0,
                     moves: [],
                     stopReason
                 }, 'PULSE_EVALUATION', 0);
-                pcaSetEngineStatus('Análisis PCA cancelado');
+                pcaSetEngineStatus('Análisis PCA detenido');
             }
             return true;
         }
@@ -2354,30 +2295,36 @@
         }
 
         function analyzePCAChess() {
-            if (isPcaAnalyzing) return;
+            if (isPcaAnalyzing) {
+                cancelPCAAnalysis('RESTARTED', false);
+            }
             const rootFen = chess.fen();
-            const guard = Number(document.getElementById('pcaKGuard').value);
+            const guard = pcaReadKGuard();
             const validation = new Chess().validate_fen(rootFen);
             if (!validation.valid || !pcaIsValidKGuard(guard)) {
                 pcaSetEngineStatus('FEN o K_GUARD inválido');
                 return;
             }
 
-            cancelPCAAnalysis('RESTARTED', false);
             resetPCAEvaluation();
             activePcaStatus = 'RUNNING';
             const runId = ++pcaRunSequence;
             activePcaRunId = runId;
             isPcaAnalyzing = true;
             updateButtonStates();
-            pcaSetEngineStatus('Iniciando Worker PCA...');
+            const nodeGuard = pcaEffectiveNodeGuard(guard, PCA_NODE_GUARD);
+            pcaSetEngineStatus(
+                pcaIsInfiniteKGuard(guard)
+                    ? 'Iniciando Worker PCA en modo ∞ (sin límite de tiempo)...'
+                    : 'Iniciando Worker PCA...'
+            );
 
             renderPCAEvaluation('RUNNING', {
                 status: 'RUNNING',
                 kGuard: guard,
                 depth: 0,
                 nodes: 0,
-                nodeGuard: PCA_NODE_GUARD,
+                nodeGuard: nodeGuard,
                 movesCompleted: 0,
                 totalMoves: 0,
                 moves: [],
@@ -2396,7 +2343,7 @@
                     kGuard: guard,
                     depth: 0,
                     nodes: 0,
-                    nodeGuard: PCA_EVAL_NODE_GUARD,
+                    nodeGuard: pcaEffectiveNodeGuard(guard, PCA_EVAL_NODE_GUARD),
                     movesCompleted: 0,
                     totalMoves: 0,
                     moves: [],
@@ -2412,7 +2359,7 @@
                     kGuard: guard,
                     depth: 0,
                     nodes: 0,
-                    nodeGuard: PCA_EVAL_NODE_GUARD,
+                    nodeGuard: pcaEffectiveNodeGuard(guard, PCA_EVAL_NODE_GUARD),
                     movesCompleted: 0,
                     totalMoves: 0,
                     moves: [],
@@ -2423,8 +2370,12 @@
         }
 
         function togglePCAAnalysis() {
-            if (isPcaAnalyzing) cancelPCAAnalysis('USER_CANCELLED', true);
-            else analyzePCAChess();
+            // Stop path first and synchronous so the click always aborts immediately.
+            if (isPcaAnalyzing || pcaWorker) {
+                cancelPCAAnalysis('USER_CANCELLED', true);
+                return;
+            }
+            analyzePCAChess();
         }
 
         function pcaPublishResult(result) {
@@ -2444,257 +2395,11 @@
             return `${result.status} K=${result.depth} · ${result.nodes.toLocaleString()} nodos`;
         }
 
-        function resetPCARegression() {
-            const badge = document.getElementById('pcaRegressionBadge');
-            const body = document.getElementById('pcaRegressionBody');
-            if (badge) {
-                badge.textContent = 'NO EJECUTADO';
-                badge.className = 'pca-regression-badge';
-            }
-            if (body) {
-                body.innerHTML = [1, 3, 5].map(k =>
-                    `<tr><td>${k}</td><td>—</td><td>—</td><td>—</td></tr>`
-                ).join('');
-            }
-        }
-
-        function renderPCARegression(results, finalState = null) {
-            const badge = document.getElementById('pcaRegressionBadge');
-            const body = document.getElementById('pcaRegressionBody');
-            if (!badge || !body) return;
-
-            body.innerHTML = results.map(({ k, result }) =>
-                `<tr><td>${k}</td><td>${result.status}</td><td>${result.move || '—'}</td><td>${result.nodes.toLocaleString()}</td></tr>`
-            ).join('') + [1,3,5].slice(results.length).map(k =>
-                `<tr><td>${k}</td><td>—</td><td>—</td><td>—</td></tr>`
-            ).join('');
-
-            if (finalState === null) {
-                badge.textContent = 'EJECUTANDO';
-                badge.className = 'pca-regression-badge';
-            } else {
-                badge.textContent = finalState ? 'PASS' : 'FAIL';
-                badge.className = `pca-regression-badge ${finalState ? 'pass' : 'fail'}`;
-            }
-        }
-
-        async function runPCARegression135() {
-            if (isPcaAnalyzing) return;
-
-            const rootFen = chess.fen();
-            const analyzeBtn = document.getElementById('pcaAnalyzeBtn');
-            const regressionBtn = document.getElementById('pcaRegressionBtn');
-            const results = [];
-
-            isPcaAnalyzing = true;
-            if (analyzeBtn) analyzeBtn.disabled = true;
-            if (regressionBtn) regressionBtn.disabled = true;
-            resetPCARegression();
-            renderPCARegression(results, null);
-
-            for (const k of [1, 3, 5]) {
-                pcaSetEngineStatus(`TEST K=${k}...`);
-                await new Promise(resolve => setTimeout(resolve, 0));
-                const result = pcaAnalyzePosition(rootFen, k);
-                results.push({ k, result });
-                renderPCARegression(results, null);
-                await new Promise(resolve => setTimeout(resolve, 0));
-            }
-
-            const [r1, r3, r5] = results.map(x => x.result);
-            const pass =
-                r1.status === 'UNRESOLVED' &&
-                r1.stopReason === 'NO_FORCED_MATE_WITHIN_K_GUARD' &&
-                r3.status === 'UNRESOLVED' &&
-                r3.stopReason === 'NO_FORCED_MATE_WITHIN_K_GUARD' &&
-                r5.status === 'DECIDED';
-
-            renderPCARegression(results, pass);
-            pcaLastTrace = r5.trace.slice();
-            pcaPublishResult(r5);
-            pcaSetEngineStatus(pass
-                ? `REGRESSION PASS · K5=${r5.move}`
-                : 'REGRESSION FAIL · la secuencia no fue UNRESOLVED → UNRESOLVED → DECIDED');
-
-            isPcaAnalyzing = false;
-            updateButtonStates();
-        }
-
-
-        const PCA_CHESS_REGRESSION_CASES = Object.freeze([
-            Object.freeze({
-                test: 'MATE-1',
-                fen: 'rnbqkb1r/pppp1ppp/5n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w - - 0 1',
-                k: 1,
-                expectedStatus: 'DECIDED',
-                expectedMove: 'Qxf7#'
-            }),
-            Object.freeze({
-                test: 'MATE-2',
-                fen: 'r4br1/3b1kpp/1q1P4/1pp1RP1N/p7/6Q1/PPB3PP/2KR4 w - - 1 1',
-                k: 1,
-                expectedStatus: 'UNRESOLVED',
-                expectedMove: null
-            }),
-            Object.freeze({
-                test: 'MATE-2',
-                fen: 'r4br1/3b1kpp/1q1P4/1pp1RP1N/p7/6Q1/PPB3PP/2KR4 w - - 1 1',
-                k: 3,
-                expectedStatus: 'DECIDED',
-                expectedMove: 'Qg6+'
-            }),
-            Object.freeze({
-                test: 'MATE-3',
-                fen: 'r5rk/5p1p/5R2/4B3/8/8/7P/7K w - - 0 1',
-                k: 1,
-                expectedStatus: 'UNRESOLVED',
-                expectedMove: null
-            }),
-            Object.freeze({
-                test: 'MATE-3',
-                fen: 'r5rk/5p1p/5R2/4B3/8/8/7P/7K w - - 0 1',
-                k: 3,
-                expectedStatus: 'UNRESOLVED',
-                expectedMove: null
-            }),
-            Object.freeze({
-                test: 'MATE-3',
-                fen: 'r5rk/5p1p/5R2/4B3/8/8/7P/7K w - - 0 1',
-                k: 5,
-                expectedStatus: 'DECIDED',
-                expectedMove: 'Ra6+'
-            })
-        ]);
-
-        function pcaSuiteAppendCell(row, value, className = '') {
-            const cell = document.createElement('td');
-            cell.textContent = value;
-            if (className) cell.className = className;
-            row.appendChild(cell);
-        }
-
-        function renderPCAChessRegressionSuite(results, phase) {
-            const badge = document.getElementById('pcaSuiteBadge');
-            const body = document.getElementById('pcaSuiteBody');
-            const summary = document.getElementById('pcaSuiteSummary');
-            if (!badge || !body || !summary) return;
-
-            body.replaceChildren();
-            if (results.length === 0) {
-                const emptyRow = document.createElement('tr');
-                const emptyCell = document.createElement('td');
-                emptyCell.colSpan = 8;
-                emptyCell.textContent = phase === 'running' ? 'EJECUTANDO...' : '—';
-                emptyRow.appendChild(emptyCell);
-                body.appendChild(emptyRow);
-            } else {
-                for (const item of results) {
-                    const row = document.createElement('tr');
-                    pcaSuiteAppendCell(row, item.test);
-                    pcaSuiteAppendCell(row, String(item.k));
-                    pcaSuiteAppendCell(row, item.expectedStatus);
-                    pcaSuiteAppendCell(row, item.actual.status);
-                    pcaSuiteAppendCell(row, item.expectedMove || '—');
-                    pcaSuiteAppendCell(row, item.actual.move || '—');
-                    pcaSuiteAppendCell(row, Number(item.actual.nodes || 0).toLocaleString());
-                    pcaSuiteAppendCell(
-                        row,
-                        item.pass ? 'PASS' : 'FAIL',
-                        item.pass ? 'pca-suite-result-pass' : 'pca-suite-result-fail'
-                    );
-                    body.appendChild(row);
-                }
-            }
-
-            const testsPass = results.filter(item => item.pass).length;
-            const testsFail = results.filter(item => !item.pass).length;
-            const totalNodes = results.reduce(
-                (total, item) => total + Number(item.actual.nodes || 0),
-                0
-            );
-            summary.replaceChildren();
-            for (const text of [
-                'TESTS_TOTAL: ' + PCA_CHESS_REGRESSION_CASES.length,
-                'TESTS_PASS: ' + testsPass,
-                'TESTS_FAIL: ' + testsFail,
-                'TOTAL_NODES: ' + totalNodes.toLocaleString()
-            ]) {
-                const value = document.createElement('span');
-                value.textContent = text;
-                summary.appendChild(value);
-            }
-
-            if (phase === 'running') {
-                badge.textContent = 'SUITE: EJECUTANDO';
-                badge.className = 'pca-regression-badge';
-                return;
-            }
-
-            const allPassed =
-                results.length === PCA_CHESS_REGRESSION_CASES.length &&
-                testsFail === 0;
-            badge.textContent = allPassed
-                ? 'SUITE: PASS'
-                : 'SUITE: FAIL · ' + testsFail + ' tests fallidos';
-            badge.className =
-                'pca-regression-badge ' + (allPassed ? 'pass' : 'fail');
-        }
-
-        async function runPCAChessRegressionSuite() {
-            if (isPcaAnalyzing) return;
-
-            const controls = [
-                document.getElementById('pcaAnalyzeBtn'),
-                document.getElementById('pcaRegressionBtn'),
-                document.getElementById('pcaSuiteBtn')
-            ].filter(Boolean);
-            const priorDisabledState = controls.map(control => control.disabled);
-            const results = [];
-
-            controls.forEach(control => { control.disabled = true; });
-            renderPCAChessRegressionSuite(results, 'running');
-            await new Promise(resolve => setTimeout(resolve, 0));
-
-            try {
-                for (const benchmark of PCA_CHESS_REGRESSION_CASES) {
-                    const fen = benchmark.fen;
-                    const kGuard = benchmark.k;
-                    let actual;
-
-                    try {
-                        actual = pcaAnalyzePosition(fen, kGuard);
-                    } catch (error) {
-                        actual = { status: 'ERROR', move: null, nodes: 0 };
-                    }
-
-                    const statusMatches = actual.status === benchmark.expectedStatus;
-                    const moveMatches =
-                        benchmark.expectedMove === null ||
-                        actual.move === benchmark.expectedMove;
-                    results.push({
-                        ...benchmark,
-                        actual,
-                        pass: statusMatches && moveMatches
-                    });
-                    renderPCAChessRegressionSuite(results, 'running');
-                    await new Promise(resolve => setTimeout(resolve, 0));
-                }
-
-                renderPCAChessRegressionSuite(results, 'complete');
-            } finally {
-                controls.forEach((control, index) => {
-                    control.disabled = priorDisabledState[index];
-                });
-            }
-        }
-
         window.pcaAnalyzePosition = pcaAnalyzePosition;
         window.pcaEvaluatePosition = pcaEvaluatePosition;
         window.analyzePCAChess = analyzePCAChess;
         window.togglePCAAnalysis = togglePCAAnalysis;
         window.cancelPCAAnalysis = cancelPCAAnalysis;
-        window.runPCARegression135 = runPCARegression135;
-        window.runPCAChessRegressionSuite = runPCAChessRegressionSuite;
         window.getPCATrace = function() { return pcaLastTrace.slice(); };
 
         // Función para actualizar estado de botones
@@ -2703,17 +2408,14 @@
             const analysisToggleBtn = document.getElementById('analysisToggleBtn');
             const showMovesBtn = document.getElementById('showMovesBtn');
             const pcaAnalyzeBtn = document.getElementById('pcaAnalyzeBtn');
-            const pcaRegressionBtn = document.getElementById('pcaRegressionBtn');
-            const pcaSuiteBtn = document.getElementById('pcaSuiteBtn');
             if (pcaAnalyzeBtn) {
-                pcaAnalyzeBtn.disabled = chess.game_over();
+                // Always keep Detener clickable while PCA is running.
+                pcaAnalyzeBtn.disabled = isPcaAnalyzing ? false : chess.game_over();
                 pcaAnalyzeBtn.innerHTML = isPcaAnalyzing
                     ? '<i class=\"fas fa-stop\"></i>Detener PCA'
                     : '<i class=\"fas fa-project-diagram\"></i>Analizar PCA';
                 pcaAnalyzeBtn.className = isPcaAnalyzing ? 'btn btn-danger' : 'btn btn-primary';
             }
-            if (pcaRegressionBtn) pcaRegressionBtn.disabled = chess.game_over() || isPcaAnalyzing;
-            if (pcaSuiteBtn) pcaSuiteBtn.disabled = isPcaAnalyzing;
 
             // Botón de motor (alternar conectar/desconectar)
             if (isEngineConnected) {
@@ -3033,7 +2735,6 @@
             parseFEN(fen);
             cancelPCAAnalysis('POSITION_CHANGED', false);
             window.resetPCAMetrics();
-            resetPCARegression();
             
             // Limpiar estadísticas
             lastStats = { 
@@ -3138,7 +2839,6 @@
             parseFEN(chess.fen());
             cancelPCAAnalysis('POSITION_CHANGED', false);
             window.resetPCAMetrics();
-            resetPCARegression();
             
             document.getElementById('fenInput').value = chess.fen();
             document.getElementById('chessboard').innerHTML = generateChessboardSVG();
