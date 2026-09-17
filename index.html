@@ -1095,6 +1095,9 @@
                             <div class="metric-item"><span class="metric-label">Supervivientes</span><span id="pcaSurvivors" class="metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label">Targets restantes</span><span id="pcaTargets" class="metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label">K efectivo (plies)</span><span id="pcaDepth" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">Nodos explorados</span><span id="pcaNodes" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">NPS</span><span id="pcaNps" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">Tiempo PCA</span><span id="pcaElapsed" class="metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label">H estado (bits)</span><span id="pcaStateH" class="metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label">H Target (bits)</span><span id="pcaTargetH" class="metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label">Conflictos</span><span id="pcaConflicts" class="metric-value">—</span></div>
@@ -1226,6 +1229,25 @@
             return String(value);
         }
 
+        function formatCountMetric(value) {
+            if (value === null || value === undefined || value === '') return '—';
+            const n = Number(value);
+            if (!Number.isFinite(n)) return '—';
+            return Math.round(n).toLocaleString('es-ES');
+        }
+
+        function formatElapsedMetric(elapsedMs) {
+            if (elapsedMs === null || elapsedMs === undefined || elapsedMs === '') return '—';
+            const ms = Number(elapsedMs);
+            if (!Number.isFinite(ms) || ms < 0) return '—';
+            if (ms < 1000) return `${Math.round(ms)} ms`;
+            const seconds = ms / 1000;
+            if (seconds < 60) return `${seconds.toFixed(2)} s`;
+            const minutes = Math.floor(seconds / 60);
+            const rem = seconds - minutes * 60;
+            return `${minutes}m ${rem.toFixed(1)}s`;
+        }
+
         function pcaReadKGuard() {
             const raw = document.getElementById('pcaKGuard')?.value;
             if (raw === 'Infinity' || raw === 'inf' || raw === '∞') return Infinity;
@@ -1291,26 +1313,45 @@
             }
         }
 
-        window.updatePCAMetrics = function(metrics = {}) {
-            document.getElementById('pcaStatus').textContent = formatMetricValue(metrics.status || 'NO EJECUTADO');
-            document.getElementById('pcaMove').textContent = formatMetricValue(metrics.move);
-            document.getElementById('pcaInitialCandidates').textContent = formatMetricValue(metrics.initialCandidates, 0);
-            document.getElementById('pcaSurvivors').textContent = formatMetricValue(metrics.survivors, 0);
-            document.getElementById('pcaTargets').textContent = formatMetricValue(metrics.targets, 0);
-            document.getElementById('pcaDepth').textContent = formatMetricValue(metrics.depth, 0);
-            document.getElementById('pcaStateH').textContent = formatMetricValue(metrics.stateUncertainty);
-            document.getElementById('pcaTargetH').textContent = formatMetricValue(metrics.targetUncertainty);
-            document.getElementById('pcaConflicts').textContent = formatMetricValue(metrics.conflicts, 0);
+        let pcaMetricsState = {};
 
-            const progress = Number(metrics.progress);
+        window.updatePCAMetrics = function(metrics = {}) {
+            if (!metrics || Object.keys(metrics).length === 0) {
+                pcaMetricsState = {};
+            } else {
+                pcaMetricsState = Object.assign({}, pcaMetricsState, metrics);
+            }
+            const m = pcaMetricsState;
+
+            document.getElementById('pcaStatus').textContent = formatMetricValue(m.status || 'NO EJECUTADO');
+            document.getElementById('pcaMove').textContent = formatMetricValue(m.move);
+            document.getElementById('pcaInitialCandidates').textContent = formatMetricValue(m.initialCandidates, 0);
+            document.getElementById('pcaSurvivors').textContent = formatMetricValue(m.survivors, 0);
+            document.getElementById('pcaTargets').textContent = formatMetricValue(m.targets, 0);
+            document.getElementById('pcaDepth').textContent = formatMetricValue(m.depth, 0);
+            document.getElementById('pcaNodes').textContent = formatCountMetric(
+                m.nodes === undefined ? null : m.nodes
+            );
+            document.getElementById('pcaNps').textContent = formatCountMetric(
+                m.nps === undefined ? null : m.nps
+            );
+            document.getElementById('pcaElapsed').textContent = formatElapsedMetric(
+                m.elapsedMs === undefined ? null : m.elapsedMs
+            );
+            document.getElementById('pcaStateH').textContent = formatMetricValue(m.stateUncertainty);
+            document.getElementById('pcaTargetH').textContent = formatMetricValue(m.targetUncertainty);
+            document.getElementById('pcaConflicts').textContent = formatMetricValue(m.conflicts, 0);
+
+            const progress = Number(m.progress);
             const safeProgress = Number.isFinite(progress) ? Math.max(0, Math.min(100, progress)) : null;
             document.getElementById('pcaProgressText').textContent = safeProgress === null ? '—' : `${safeProgress.toFixed(1)}%`;
             document.getElementById('pcaProgressBar').style.width = safeProgress === null ? '0%' : `${safeProgress}%`;
-            document.getElementById('pcaStopReason').textContent = `STOP_REASON: ${formatMetricValue(metrics.stopReason)}`;
+            document.getElementById('pcaStopReason').textContent = `STOP_REASON: ${formatMetricValue(m.stopReason)}`;
             refreshPcaStockfishComparison();
         };
 
         window.resetPCAMetrics = function() {
+            pcaMetricsState = {};
             window.updatePCAMetrics({});
             const status = document.getElementById('pcaEngineStatus');
             if (status) status.textContent = 'Motor exacto de mate listo';
@@ -2151,18 +2192,37 @@
                 };
                 send('START', baseProgress);
                 try {
-                    send('PROGRESS', baseProgress);
+                    send('PROGRESS', Object.assign({}, baseProgress, {
+                        elapsedMs: 0,
+                        nps: 0
+                    }));
+                    const searchStartedAt = performance.now();
                     const pcaResult = pcaAnalyzePositionCore(message.fen, kGuard, {
                         onProgress: snapshot => {
-                            send('PROGRESS', Object.assign({ phase: 'MATE_SEARCH' }, snapshot));
+                            const elapsedMs = performance.now() - searchStartedAt;
+                            const nodes = Number(snapshot.nodes) || 0;
+                            const nps = elapsedMs > 0 ? nodes * 1000 / elapsedMs : 0;
+                            send('PROGRESS', Object.assign({ phase: 'MATE_SEARCH' }, snapshot, {
+                                nodes,
+                                elapsedMs,
+                                nps
+                            }));
                         }
                     });
+                    {
+                        const elapsedMs = performance.now() - searchStartedAt;
+                        const nodes = Number(pcaResult.nodes) || 0;
+                        pcaResult.elapsedMs = elapsedMs;
+                        pcaResult.nps = elapsedMs > 0 ? nodes * 1000 / elapsedMs : 0;
+                    }
                     if (pcaResult.status !== 'UNRESOLVED') {
                         send('RESULT', {
                             phase: 'MATE_SEARCH',
                             kGuard: kGuard,
                             depth: pcaResult.depth || 0,
                             nodes: pcaResult.nodes || 0,
+                            elapsedMs: pcaResult.elapsedMs,
+                            nps: pcaResult.nps,
                             nodeGuard: mateNodeGuard,
                             movesCompleted: pcaResult.initialCandidates || 0,
                             totalMoves: pcaResult.initialCandidates || 0,
@@ -2236,26 +2296,40 @@
         function cancelPCAAnalysis(stopReason = 'USER_CANCELLED', renderCancelled = true) {
             if (!isPcaAnalyzing && !pcaWorker) return false;
             const guard = pcaReadKGuard();
+            // Capture last live telemetry before killing the worker.
+            const lastTelemetry = {
+                nodes: pcaMetricsState.nodes,
+                nps: pcaMetricsState.nps,
+                elapsedMs: pcaMetricsState.elapsedMs,
+                depth: pcaMetricsState.depth,
+                initialCandidates: pcaMetricsState.initialCandidates,
+                survivors: pcaMetricsState.survivors,
+                targets: pcaMetricsState.targets,
+                stateUncertainty: pcaMetricsState.stateUncertainty,
+                targetUncertainty: pcaMetricsState.targetUncertainty,
+                conflicts: pcaMetricsState.conflicts,
+                progress: pcaMetricsState.progress
+            };
             // Stop immediately: drop run id and kill the worker before any UI work.
             pcaFinishWorker();
             if (renderCancelled) {
-                window.updatePCAMetrics({
+                // Preserve last valid nodes/NPS/time; do not invent post-stop values.
+                window.updatePCAMetrics(Object.assign({}, lastTelemetry, {
                     status: 'CANCELLED',
                     move: null,
-                    stopReason,
-                    depth: 0
-                });
+                    stopReason
+                }));
                 renderPCAEvaluation('CANCELLED', {
                     status: 'CANCELLED',
                     kGuard: guard,
-                    depth: 0,
-                    nodes: 0,
+                    depth: lastTelemetry.depth || 0,
+                    nodes: lastTelemetry.nodes || 0,
                     nodeGuard: pcaEffectiveNodeGuard(guard, PCA_EVAL_NODE_GUARD),
                     movesCompleted: 0,
                     totalMoves: 0,
                     moves: [],
                     stopReason
-                }, 'PULSE_EVALUATION', 0);
+                }, 'PULSE_EVALUATION', lastTelemetry.elapsedMs || 0);
                 pcaSetEngineStatus('Análisis PCA detenido');
             }
             return true;
@@ -2288,6 +2362,18 @@
                         }
                 );
                 if (evaluation.status !== 'RUNNING') evaluation.status = 'RUNNING';
+                if (message.phase === 'MATE_SEARCH') {
+                    const liveMetrics = {
+                        status: 'RUNNING',
+                        stopReason: message.stopReason || 'SEARCHING'
+                    };
+                    if (message.depth != null) liveMetrics.depth = message.depth;
+                    if (message.totalMoves != null) liveMetrics.initialCandidates = message.totalMoves;
+                    if (message.nodes != null) liveMetrics.nodes = message.nodes;
+                    if (message.nps != null) liveMetrics.nps = message.nps;
+                    if (message.elapsedMs != null) liveMetrics.elapsedMs = message.elapsedMs;
+                    window.updatePCAMetrics(liveMetrics);
+                }
                 renderPCAEvaluation(activePcaStatus, evaluation, message.phase, message.elapsedMs);
                 pcaSetEngineStatus(
                     message.phase === 'MATE_SEARCH'
@@ -2383,6 +2469,15 @@
             isPcaAnalyzing = true;
             updateButtonStates();
             const nodeGuard = pcaEffectiveNodeGuard(guard, PCA_NODE_GUARD);
+            pcaMetricsState = {};
+            window.updatePCAMetrics({
+                status: 'RUNNING',
+                move: null,
+                nodes: 0,
+                nps: 0,
+                elapsedMs: 0,
+                stopReason: 'STARTING'
+            });
             pcaSetEngineStatus(
                 pcaIsInfiniteKGuard(guard)
                     ? 'Iniciando Worker PCA en modo ∞ (sin NODE_GUARD / sin límite de nodos)...'
