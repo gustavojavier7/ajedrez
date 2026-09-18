@@ -2862,7 +2862,7 @@
 
                     if (winningCandidates.length === 1) {
                         return pcaResultMetrics({
-                            status: 'DECIDED',
+                            status: 'DECIDED_UNIQUE',
                             move: primaryWinner.move.san,
                             initialCandidates,
                             survivors: 1,
@@ -2883,15 +2883,17 @@
                     }
 
                     if (winningCandidates.length > 1) {
+                        // Multiplicity is certified, not uncertain: all shortest mates in W_k
+                        // were verified. PCA may keep primaryWinner for telemetry only.
                         return pcaResultMetrics({
-                            status: 'UNRESOLVED',
+                            status: 'DECIDED_MULTIPLE',
                             move: null,
                             initialCandidates,
                             survivors: winningCandidates.length,
                             depth: k,
                             nodes: context.nodes,
                             trace,
-                            stopReason: 'TIED_SHORTEST_FORCED_MATE',
+                            stopReason: 'MULTIPLE_SHORTEST_FORCED_MATES',
                             cacheHits: context.exactCacheHits + context.classCacheHits,
                             descriptorHits: context.descriptorHits,
                             collisions: context.collisionMap.size,
@@ -3374,7 +3376,10 @@
             if (!panel || !body || !evaluation) return;
             panel.hidden = false;
 
-            const ranking = evaluation.status === 'AVAILABLE' || evaluation.status === 'DECIDED'
+            const ranking = evaluation.status === 'AVAILABLE' ||
+                evaluation.status === 'DECIDED' ||
+                evaluation.status === 'DECIDED_UNIQUE' ||
+                evaluation.status === 'DECIDED_MULTIPLE'
                 ? 'FINAL'
                 : evaluation.status === 'TRUNCATED'
                     ? 'PROVISIONAL / TRUNCATED'
@@ -3423,7 +3428,11 @@
                 cell.colSpan = 13;
                 cell.textContent = evaluation.status === 'RUNNING'
                     ? 'Calculando Pulse Evaluation...'
-                    : evaluation.status === 'DECIDED'
+                    : (
+                        evaluation.status === 'DECIDED' ||
+                        evaluation.status === 'DECIDED_UNIQUE' ||
+                        evaluation.status === 'DECIDED_MULTIPLE'
+                    )
                         ? 'Mate forzado resuelto; ranking Pulse no requerido.'
                         : 'Sin métricas parciales disponibles.';
                 row.appendChild(cell);
@@ -3874,12 +3883,16 @@
             }
 
             if (message.type === 'RESULT') {
-                if (message.pcaResult && message.pcaResult.status === 'DECIDED') {
+                if (message.pcaResult && (
+                    message.pcaResult.status === 'DECIDED' ||
+                    message.pcaResult.status === 'DECIDED_UNIQUE' ||
+                    message.pcaResult.status === 'DECIDED_MULTIPLE'
+                )) {
                     // Keep bottom-panel metrics visible when mate is resolved.
                     // Prefer any pulse evaluation payload; otherwise freeze the
                     // final MATE_SEARCH telemetry instead of clearing the panel.
                     const decidedEvaluation = message.evaluation || {
-                        status: 'DECIDED',
+                        status: message.pcaResult.status,
                         kGuard: message.kGuard,
                         depth: message.depth != null
                             ? message.depth
@@ -3897,7 +3910,7 @@
                         activeMove: message.activeMove || message.pcaResult.move || null,
                         activeMoveNodes: message.activeMoveNodes,
                         moves: message.moves || [],
-                        stopReason: message.pcaResult.stopReason || 'DECIDED'
+                        stopReason: message.pcaResult.stopReason || message.pcaResult.status
                     };
                     renderPCAEvaluation(
                         activePcaStatus,
@@ -4111,8 +4124,12 @@
         }
 
         function pcaDescribeResult(result) {
-            if (result.status === 'DECIDED') {
-                return `DECIDED K=${result.depth} · ${result.nodes.toLocaleString()} nodos`;
+            if (
+                result.status === 'DECIDED' ||
+                result.status === 'DECIDED_UNIQUE' ||
+                result.status === 'DECIDED_MULTIPLE'
+            ) {
+                return `${result.status} K=${result.depth} · ${result.nodes.toLocaleString()} nodos`;
             }
             if (result.stopReason === 'NODE_GUARD_REACHED') {
                 return `Límite operacional · ${result.nodes.toLocaleString()} nodos`;
