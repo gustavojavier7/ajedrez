@@ -2132,7 +2132,6 @@
                 row += rowStep;
                 col += colStep;
             }
-            between.pop();
             return between;
         }
 
@@ -2818,7 +2817,9 @@
                             infoGain: 0,
                             contractionRatio: 0
                         }));
-                    let winningCandidate = null;
+                    // W_k = { m : ExactANDOR(m, k) = MATE }. PCA only orders search;
+                    // classification must inspect every remaining root move at depth k.
+                    const winningCandidates = [];
 
                     for (const candidate of orderedRootCandidates) {
                         context.activeMove = candidate.move.san;
@@ -2835,33 +2836,34 @@
                             rootTargets
                         );
                         if (forcesMate) {
-                            winningCandidate = candidate;
+                            winningCandidates.push(candidate);
                             context.debug.rootCutoff = { type: 'ROOT_OR_CERTIFIED', move: candidate.move.san };
-                            if (context.reportProgress) context.reportProgress(true);
-                            break;
                         }
                         if (context.reportProgress) context.reportProgress(true);
                     }
 
+                    const forcedMateTargets = winningCandidates.map(candidate => candidate.move.san);
+                    const primaryWinner = winningCandidates[0] || null;
+
                     trace.push({
                         depth: k,
                         candidatesBefore: initialCandidates,
-                        forcedMateTargets: winningCandidate ? [winningCandidate.move.san] : [],
+                        forcedMateTargets,
                         hypothesesBefore: rootTargets.length,
-                        hypothesesAfter: winningCandidate
-                            ? winningCandidate.hypothesesAfter
+                        hypothesesAfter: primaryWinner
+                            ? primaryWinner.hypothesesAfter
                             : (orderedRootCandidates[0] ? orderedRootCandidates[0].hypothesesAfter : 0),
-                        contractionRatio: winningCandidate
-                            ? winningCandidate.contractionRatio
+                        contractionRatio: primaryWinner
+                            ? primaryWinner.contractionRatio
                             : (orderedRootCandidates[0] ? orderedRootCandidates[0].contractionRatio : 0),
                         nodes: context.nodes,
                         collisions: context.collisionMap.size
                     });
 
-                    if (winningCandidate) {
+                    if (winningCandidates.length === 1) {
                         return pcaResultMetrics({
                             status: 'DECIDED',
-                            move: winningCandidate.move.san,
+                            move: primaryWinner.move.san,
                             initialCandidates,
                             survivors: 1,
                             depth: k,
@@ -2872,10 +2874,33 @@
                             descriptorHits: context.descriptorHits,
                             collisions: context.collisionMap.size,
                             collisionLog: Array.from(context.collisionMap.values()),
-                            hypothesesBefore: winningCandidate.hypothesesBefore,
-                            hypothesesAfter: winningCandidate.hypothesesAfter,
-                            contractionRatio: winningCandidate.contractionRatio,
-                            semanticOrdering: context.semanticOrdering
+                            hypothesesBefore: primaryWinner.hypothesesBefore,
+                            hypothesesAfter: primaryWinner.hypothesesAfter,
+                            contractionRatio: primaryWinner.contractionRatio,
+                            semanticOrdering: context.semanticOrdering,
+                            forcedMateTargets
+                        });
+                    }
+
+                    if (winningCandidates.length > 1) {
+                        return pcaResultMetrics({
+                            status: 'UNRESOLVED',
+                            move: null,
+                            initialCandidates,
+                            survivors: winningCandidates.length,
+                            depth: k,
+                            nodes: context.nodes,
+                            trace,
+                            stopReason: 'TIED_SHORTEST_FORCED_MATE',
+                            cacheHits: context.exactCacheHits + context.classCacheHits,
+                            descriptorHits: context.descriptorHits,
+                            collisions: context.collisionMap.size,
+                            collisionLog: Array.from(context.collisionMap.values()),
+                            hypothesesBefore: primaryWinner.hypothesesBefore,
+                            hypothesesAfter: primaryWinner.hypothesesAfter,
+                            contractionRatio: primaryWinner.contractionRatio,
+                            semanticOrdering: context.semanticOrdering,
+                            forcedMateTargets
                         });
                     }
                 }
