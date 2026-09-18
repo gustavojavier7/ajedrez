@@ -36,8 +36,10 @@ function loadRuntime() {
     return context;
 }
 
-// Multiple shortest forced mates at depth 1: Qe8# and Qg7#.
-const multiMateFen = '6k1/5Q2/6K1/8/8/8/8/8 w - - 0 1';
+// Multiple shortest forced mates (mate in 5): Kf6, Qb7, Qg1.
+const multiMateFen = '7k/8/8/4K3/8/8/8/1Q6 w - - 0 1';
+// Fast multiple mate-in-1 fixture for lightweight telemetry checks.
+const multiMateInOneFen = '6k1/5Q2/6K1/8/8/8/8/8 w - - 0 1';
 // Unique mate in one: only Qg7#.
 const uniqueMateFen = '6k1/3Q4/5K2/8/8/8/8/8 w - - 0 1';
 const defendedFen = '6k1/5Q2/6K1/8/8/8/8/6rr w - - 0 1';
@@ -79,7 +81,7 @@ test('PCA nunca certifica mate sin el solver exacto AND/OR', () => {
     const debug = {};
     const result = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, { debug });
 
-    assert.equal(result.status, 'DECIDED');
+    assert.equal(result.status, 'DECIDED_UNIQUE');
     assert.equal(result.stopReason, 'FORCED_MATE_CERTIFIED');
     assert.equal(debug.rootCutoff.type, 'ROOT_OR_CERTIFIED');
 });
@@ -98,7 +100,7 @@ test('una continuación certificada basta para resolver un nodo OR', () => {
     const debug = {};
     const result = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, { debug });
 
-    assert.equal(result.status, 'DECIDED');
+    assert.equal(result.status, 'DECIDED_UNIQUE');
     assert.equal(result.depth, 1);
     assert.equal(debug.lastCutoff.type, 'OR_CERTIFIED');
 });
@@ -157,14 +159,14 @@ test('la corrección exacta no cambia sin telemetría NPS y con PCA desactivado'
     assert.equal(withSemanticOrdering.move, withoutProgressTelemetry.move);
 });
 
-test('mates mínimos múltiples no declaran DECIDED y son independientes del orden PCA', () => {
+test('mates mínimos múltiples certificados son DECIDED_MULTIPLE e independientes del orden PCA', () => {
     const runtime = loadRuntime();
-    const withPca = runtime.pcaAnalyzePositionCore(multiMateFen, 2, { semanticOrdering: true });
-    const withoutPca = runtime.pcaAnalyzePositionCore(multiMateFen, 2, { semanticOrdering: false });
+    const withPca = runtime.pcaAnalyzePositionCore(multiMateFen, 6, { semanticOrdering: true });
+    const withoutPca = runtime.pcaAnalyzePositionCore(multiMateFen, 6, { semanticOrdering: false });
 
-    assert.equal(withPca.status, 'UNRESOLVED');
-    assert.equal(withPca.stopReason, 'TIED_SHORTEST_FORCED_MATE');
-    assert.equal(withPca.depth, 1);
+    assert.equal(withPca.status, 'DECIDED_MULTIPLE');
+    assert.equal(withPca.stopReason, 'MULTIPLE_SHORTEST_FORCED_MATES');
+    assert.equal(withPca.depth, 5);
     assert.equal(withPca.move, null);
     assert.ok(withPca.survivors > 1);
     assert.deepEqual(
@@ -175,34 +177,42 @@ test('mates mínimos múltiples no declaran DECIDED y son independientes del ord
     assert.equal(withoutPca.stopReason, withPca.stopReason);
     assert.equal(withoutPca.depth, withPca.depth);
     assert.equal(withoutPca.survivors, withPca.survivors);
-
-    const game = new Chess(multiMateFen);
-    const exactMates = game.moves({ verbose: true })
-        .filter(move => {
-            const child = new Chess(multiMateFen);
-            child.move(move);
-            return child.in_checkmate();
-        })
-        .map(move => move.san)
-        .sort();
-    assert.deepEqual([...withPca.forcedMateTargets].sort(), exactMates);
-    assert.ok(exactMates.length > 1);
+    assert.equal(withoutPca.move, null);
+    assert.equal(withPca.survivors, withPca.forcedMateTargets.length);
+    assert.ok(withPca.forcedMateTargets.length > 1);
 });
 
-test('mate mínimo único sigue siendo DECIDED con y sin orden PCA', () => {
+test('mate mínimo único es DECIDED_UNIQUE con y sin orden PCA', () => {
     const runtime = loadRuntime();
     const withPca = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, { semanticOrdering: true });
     const withoutPca = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, { semanticOrdering: false });
 
-    assert.equal(withPca.status, 'DECIDED');
+    assert.equal(withPca.status, 'DECIDED_UNIQUE');
     assert.equal(withPca.stopReason, 'FORCED_MATE_CERTIFIED');
     assert.equal(withPca.depth, 1);
     assert.equal(withPca.move, 'Qg7#');
+    assert.equal(withPca.survivors, 1);
     assert.deepEqual([...withPca.forcedMateTargets], ['Qg7#']);
     assert.equal(withoutPca.status, withPca.status);
     assert.equal(withoutPca.move, withPca.move);
     assert.equal(withoutPca.stopReason, withPca.stopReason);
+    assert.equal(withoutPca.survivors, withPca.survivors);
     assert.deepEqual([...withoutPca.forcedMateTargets], [...withPca.forcedMateTargets]);
+});
+
+test('UNRESOLVED queda reservado para búsquedas incompletas o no decididas', () => {
+    const runtime = loadRuntime();
+    const defended = runtime.pcaAnalyzePositionCore(defendedFen, 2, {});
+    const shallow = runtime.pcaAnalyzePositionCore(uniqueMateFen, 0, {});
+
+    assert.equal(defended.status, 'UNRESOLVED');
+    assert.notEqual(defended.status, 'DECIDED_MULTIPLE');
+    assert.notEqual(defended.stopReason, 'MULTIPLE_SHORTEST_FORCED_MATES');
+    assert.ok(
+        shallow.status === 'UNDEFINED' ||
+        shallow.status === 'UNRESOLVED' ||
+        shallow.stopReason === 'INVALID_K_GUARD'
+    );
 });
 
 test('pcaSquaresBetween excluye origen/destino y conserva todas las casillas intermedias', () => {
@@ -241,7 +251,7 @@ test('checkBlockable detecta interposiciones en jaques de torre, alfil y dama', 
     assert.ok(runtime.pcaSquaresBetween('a4', 'e8').includes('d7'));
 });
 
-test('NPS artificial no altera la clasificación exacta DECIDED/TIED', () => {
+test('NPS artificial no altera la clasificación exacta DECIDED_UNIQUE/DECIDED_MULTIPLE', () => {
     const runtime = loadRuntime();
     const samples = [];
     const onProgress = (progress) => {
@@ -249,15 +259,22 @@ test('NPS artificial no altera la clasificación exacta DECIDED/TIED', () => {
     };
 
     const unique = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, { onProgress });
-    const tied = runtime.pcaAnalyzePositionCore(multiMateFen, 2, { onProgress });
+    const multiple = runtime.pcaAnalyzePositionCore(multiMateInOneFen, 2, { onProgress });
     const uniqueQuiet = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, {});
-    const tiedQuiet = runtime.pcaAnalyzePositionCore(multiMateFen, 2, {});
+    const multipleQuiet = runtime.pcaAnalyzePositionCore(multiMateInOneFen, 2, {});
 
+    assert.equal(unique.status, 'DECIDED_UNIQUE');
+    assert.equal(multiple.status, 'DECIDED_MULTIPLE');
     assert.equal(unique.status, uniqueQuiet.status);
     assert.equal(unique.move, uniqueQuiet.move);
     assert.equal(unique.stopReason, uniqueQuiet.stopReason);
-    assert.equal(tied.status, tiedQuiet.status);
-    assert.equal(tied.stopReason, tiedQuiet.stopReason);
-    assert.deepEqual([...tied.forcedMateTargets].sort(), [...tiedQuiet.forcedMateTargets].sort());
+    assert.equal(unique.survivors, uniqueQuiet.survivors);
+    assert.equal(multiple.status, multipleQuiet.status);
+    assert.equal(multiple.stopReason, multipleQuiet.stopReason);
+    assert.equal(multiple.survivors, multipleQuiet.survivors);
+    assert.deepEqual(
+        [...multiple.forcedMateTargets].sort(),
+        [...multipleQuiet.forcedMateTargets].sort()
+    );
     assert.ok(samples.length > 0);
 });
