@@ -1204,6 +1204,12 @@
                             <div class="metric-item"><span class="metric-label">Nodos explorados</span><span id="pcaNodes" class="metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label" id="pcaNpsLabel">NPS</span><span id="pcaNps" class="metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label">Tiempo PCA</span><span id="pcaElapsed" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">Cache hits</span><span id="pcaCacheHits" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">Descriptor hits</span><span id="pcaDescriptorHits" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">Colisiones PCA</span><span id="pcaCollisions" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">H antes</span><span id="pcaHypothesesBefore" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">H después</span><span id="pcaHypothesesAfter" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">Contracción</span><span id="pcaContractionRatio" class="metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label">H estado (bits)</span><span id="pcaStateH" class="metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label">H Target (bits)</span><span id="pcaTargetH" class="metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label">Conflictos</span><span id="pcaConflicts" class="metric-value">—</span></div>
@@ -1947,6 +1953,27 @@
             document.getElementById('pcaElapsed').textContent = formatElapsedMetric(
                 m.elapsedMs === undefined ? null : m.elapsedMs
             );
+            document.getElementById('pcaCacheHits').textContent = formatCountMetric(
+                m.cacheHits === undefined ? null : m.cacheHits
+            );
+            document.getElementById('pcaDescriptorHits').textContent = formatCountMetric(
+                m.descriptorHits === undefined ? null : m.descriptorHits
+            );
+            document.getElementById('pcaCollisions').textContent = formatCountMetric(
+                m.collisions === undefined ? null : m.collisions
+            );
+            document.getElementById('pcaHypothesesBefore').textContent = formatMetricValue(
+                m.hypothesesBefore,
+                0
+            );
+            document.getElementById('pcaHypothesesAfter').textContent = formatMetricValue(
+                m.hypothesesAfter,
+                0
+            );
+            const contractionRatio = Number(m.contractionRatio);
+            document.getElementById('pcaContractionRatio').textContent = Number.isFinite(contractionRatio)
+                ? `${(100 * contractionRatio).toFixed(1)}%`
+                : '—';
             document.getElementById('pcaStateH').textContent = formatMetricValue(m.stateUncertainty);
             document.getElementById('pcaTargetH').textContent = formatMetricValue(m.targetUncertainty);
             document.getElementById('pcaConflicts').textContent = formatMetricValue(m.conflicts, 0);
@@ -2009,6 +2036,281 @@
             return `${game.fen()}|${remainingPlies}|${attackerColor}`;
         }
 
+        function pcaFenHash(fen) {
+            return String(fen || '');
+        }
+
+        function pcaStableStringify(value) {
+            if (Array.isArray(value)) {
+                return '[' + value.map(item => pcaStableStringify(item)).join(',') + ']';
+            }
+            if (value && typeof value === 'object') {
+                return '{' + Object.keys(value).sort().map(key =>
+                    JSON.stringify(key) + ':' + pcaStableStringify(value[key])
+                ).join(',') + '}';
+            }
+            return JSON.stringify(value);
+        }
+
+        function pcaDescriptorKey(descriptor) {
+            return pcaStableStringify(descriptor);
+        }
+
+        function pcaClassCacheKey(descriptor, depth) {
+            return `${pcaDescriptorKey(descriptor)}|${depth}`;
+        }
+
+        function pcaHypothesisInformation(count) {
+            return count > 0 ? Math.log2(count) : 0;
+        }
+
+        function pcaInsideBoard(row, col) {
+            return row >= 0 && row < 8 && col >= 0 && col < 8;
+        }
+
+        function pcaSquareToCoords(square) {
+            return {
+                row: 8 - Number(square[1]),
+                col: square.charCodeAt(0) - 97
+            };
+        }
+
+        function pcaCoordsToSquare(row, col) {
+            return String.fromCharCode(97 + col) + String(8 - row);
+        }
+
+        function pcaLocateKings(boardState) {
+            const kings = { w: null, b: null };
+            for (let row = 0; row < 8; row += 1) {
+                for (let col = 0; col < 8; col += 1) {
+                    const piece = boardState[row][col];
+                    if (!piece || piece.type !== 'k') continue;
+                    kings[piece.color] = pcaCoordsToSquare(row, col);
+                }
+            }
+            return kings;
+        }
+
+        function pcaMaterialSignature(boardState) {
+            const counts = {
+                w: { p: 0, n: 0, b: 0, r: 0, q: 0, k: 0 },
+                b: { p: 0, n: 0, b: 0, r: 0, q: 0, k: 0 }
+            };
+            for (let row = 0; row < 8; row += 1) {
+                for (let col = 0; col < 8; col += 1) {
+                    const piece = boardState[row][col];
+                    if (!piece) continue;
+                    counts[piece.color][piece.type] += 1;
+                }
+            }
+            const order = ['k', 'q', 'r', 'b', 'n', 'p'];
+            return ['w', 'b'].map(color =>
+                `${color}:${order.map(type => `${type}${counts[color][type]}`).join('')}`
+            ).join('|');
+        }
+
+        function pcaSlidingDirections(pieceType) {
+            if (pieceType === 'b') return [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+            if (pieceType === 'r') return [[-1, 0], [1, 0], [0, -1], [0, 1]];
+            if (pieceType === 'q') return [
+                [-1, -1], [-1, 1], [1, -1], [1, 1],
+                [-1, 0], [1, 0], [0, -1], [0, 1]
+            ];
+            return [];
+        }
+
+        function pcaSquaresBetween(fromSquare, toSquare) {
+            const from = pcaSquareToCoords(fromSquare);
+            const to = pcaSquareToCoords(toSquare);
+            const rowStep = Math.sign(to.row - from.row);
+            const colStep = Math.sign(to.col - from.col);
+            const between = [];
+            let row = from.row + rowStep;
+            let col = from.col + colStep;
+            while (row !== to.row || col !== to.col) {
+                between.push(pcaCoordsToSquare(row, col));
+                row += rowStep;
+                col += colStep;
+            }
+            between.pop();
+            return between;
+        }
+
+        function pcaCollectCheckers(game, colorUnderCheck) {
+            const boardState = game.board();
+            const kings = pcaLocateKings(boardState);
+            const kingSquare = kings[colorUnderCheck];
+            if (!kingSquare) return [];
+            const opponent = colorUnderCheck === 'w' ? 'b' : 'w';
+            const king = pcaSquareToCoords(kingSquare);
+            const checkers = [];
+            const knightOffsets = [
+                [-2, -1], [-2, 1], [-1, -2], [-1, 2],
+                [1, -2], [1, 2], [2, -1], [2, 1]
+            ];
+            const kingOffsets = [
+                [-1, -1], [-1, 0], [-1, 1],
+                [0, -1], [0, 1],
+                [1, -1], [1, 0], [1, 1]
+            ];
+
+            for (const [rowDelta, colDelta] of knightOffsets) {
+                const row = king.row + rowDelta;
+                const col = king.col + colDelta;
+                if (!pcaInsideBoard(row, col)) continue;
+                const piece = boardState[row][col];
+                if (piece && piece.color === opponent && piece.type === 'n') {
+                    checkers.push({
+                        square: pcaCoordsToSquare(row, col),
+                        type: 'n',
+                        between: []
+                    });
+                }
+            }
+
+            for (const [rowDelta, colDelta] of kingOffsets) {
+                const row = king.row + rowDelta;
+                const col = king.col + colDelta;
+                if (!pcaInsideBoard(row, col)) continue;
+                const piece = boardState[row][col];
+                if (piece && piece.color === opponent && piece.type === 'k') {
+                    checkers.push({
+                        square: pcaCoordsToSquare(row, col),
+                        type: 'k',
+                        between: []
+                    });
+                }
+            }
+
+            const pawnSources = opponent === 'w'
+                ? [[king.row + 1, king.col - 1], [king.row + 1, king.col + 1]]
+                : [[king.row - 1, king.col - 1], [king.row - 1, king.col + 1]];
+            pawnSources.forEach(([row, col]) => {
+                if (!pcaInsideBoard(row, col)) return;
+                const piece = boardState[row][col];
+                if (piece && piece.color === opponent && piece.type === 'p') {
+                    checkers.push({
+                        square: pcaCoordsToSquare(row, col),
+                        type: 'p',
+                        between: []
+                    });
+                }
+            });
+
+            const directions = [
+                [-1, -1], [-1, 0], [-1, 1],
+                [0, -1], [0, 1],
+                [1, -1], [1, 0], [1, 1]
+            ];
+            directions.forEach(([rowDelta, colDelta]) => {
+                let row = king.row + rowDelta;
+                let col = king.col + colDelta;
+                while (pcaInsideBoard(row, col)) {
+                    const piece = boardState[row][col];
+                    if (piece) {
+                        if (piece.color === opponent) {
+                            const diagonal = rowDelta !== 0 && colDelta !== 0;
+                            const valid = diagonal
+                                ? piece.type === 'b' || piece.type === 'q'
+                                : piece.type === 'r' || piece.type === 'q';
+                            if (valid) {
+                                const square = pcaCoordsToSquare(row, col);
+                                checkers.push({
+                                    square,
+                                    type: piece.type,
+                                    between: pcaSquaresBetween(square, kingSquare)
+                                });
+                            }
+                        }
+                        break;
+                    }
+                    row += rowDelta;
+                    col += colDelta;
+                }
+            });
+
+            return checkers.sort((left, right) => left.square.localeCompare(right.square));
+        }
+
+        function pcaGeometrySignature(legalMoves) {
+            const signature = {
+                rayMoves: 0,
+                jumpMoves: 0,
+                directedMoves: 0,
+                kingMoves: 0,
+                forcingMoves: 0
+            };
+            legalMoves.forEach(move => {
+                if (move.piece === 'q' || move.piece === 'r' || move.piece === 'b') {
+                    signature.rayMoves += 1;
+                } else if (move.piece === 'n') {
+                    signature.jumpMoves += 1;
+                } else if (move.piece === 'p') {
+                    signature.directedMoves += 1;
+                } else if (move.piece === 'k') {
+                    signature.kingMoves += 1;
+                }
+                if (
+                    (typeof move.san === 'string' && (move.san.includes('+') || move.san.includes('#'))) ||
+                    (typeof move.flags === 'string' && (move.flags.includes('c') || move.flags.includes('e'))) ||
+                    move.promotion
+                ) {
+                    signature.forcingMoves += 1;
+                }
+            });
+            return signature;
+        }
+
+        function describeFEN(fen) {
+            const game = new Chess();
+            const validation = game.validate_fen(fen);
+            if (!validation.valid) {
+                throw new Error('INVALID_FEN');
+            }
+            game.load(fen);
+            const legalMoves = game.moves({ verbose: true });
+            const boardState = game.board();
+            const kings = pcaLocateKings(boardState);
+            const checkers = game.in_check() ? pcaCollectCheckers(game, game.turn()) : [];
+            const checkerSquares = new Set(checkers.map(checker => checker.square));
+            const checkerCapturable = checkers.length > 0 && legalMoves.some(move => checkerSquares.has(move.to));
+            const checkBlockable = checkers.length === 1 &&
+                checkers[0].between.length > 0 &&
+                legalMoves.some(move =>
+                    move.piece !== 'k' &&
+                    move.to !== checkers[0].square &&
+                    checkers[0].between.includes(move.to)
+                );
+
+            return {
+                sideToMove: game.turn(),
+                materialSignature: pcaMaterialSignature(boardState),
+                kingWhite: kings.w,
+                kingBlack: kings.b,
+                inCheck: game.in_check(),
+                checkerCount: checkers.length,
+                checkerType: checkers.length > 0
+                    ? checkers.map(checker => checker.type).sort().join('+')
+                    : null,
+                kingEscapeCount: legalMoves.filter(move => move.piece === 'k').length,
+                checkerCapturable,
+                checkBlockable,
+                legalMoveCount: legalMoves.length,
+                geometrySignature: pcaGeometrySignature(legalMoves)
+            };
+        }
+
+        function pcaGetDescriptor(fen, context) {
+            const key = pcaFenHash(fen);
+            if (context.descriptorCache.has(key)) {
+                context.descriptorHits += 1;
+                return context.descriptorCache.get(key);
+            }
+            const descriptor = context.describeFen(fen);
+            context.descriptorCache.set(key, descriptor);
+            return descriptor;
+        }
+
         function pcaIsDrawTerminal(game) {
             if (game.in_stalemate()) return true;
             if (game.insufficient_material()) return true;
@@ -2016,7 +2318,198 @@
             return false;
         }
 
-        function pcaCanForceMate(game, attackerColor, remainingPlies, context) {
+        function pcaIsMateTargetCompatible(descriptor, hypothesis, attackerColor) {
+            const mateDepth = Number(hypothesis && hypothesis.mateDepth);
+            if (!Number.isInteger(mateDepth) || mateDepth < 0) return false;
+            if (mateDepth === 0) {
+                return descriptor.inCheck === true &&
+                    descriptor.legalMoveCount === 0 &&
+                    descriptor.kingEscapeCount === 0 &&
+                    descriptor.checkerCapturable === false &&
+                    descriptor.checkBlockable === false;
+            }
+            const attackerTurn = descriptor.sideToMove === attackerColor;
+            const forcingMoves = descriptor.geometrySignature.forcingMoves || 0;
+            const pressureScore = (descriptor.inCheck ? 1 : 0) +
+                forcingMoves +
+                Math.max(0, 3 - descriptor.kingEscapeCount);
+            if (mateDepth === 1) {
+                return attackerTurn && pressureScore > 0;
+            }
+            if (mateDepth === 2) {
+                return pressureScore > 0 || descriptor.legalMoveCount <= 6;
+            }
+            return true;
+        }
+
+        function pcaCompatibleMateTargets(descriptor, remainingPlies, attackerColor) {
+            const targets = [];
+            for (let depth = 0; depth <= remainingPlies; depth += 1) {
+                const target = { id: `M${depth}`, mateDepth: depth };
+                if (pcaIsMateTargetCompatible(descriptor, target, attackerColor)) {
+                    targets.push(target);
+                }
+            }
+            return targets;
+        }
+
+        function pcaRestrictTargets(targets, descriptorBefore, move, descriptorAfter, remainingPlies, attackerColor) {
+            const nextTargets = new Map();
+            const maxDepth = Math.max(0, remainingPlies - 1);
+            (targets || []).forEach(target => {
+                if (!target || target.mateDepth <= 0) return;
+                const nextTarget = {
+                    id: `M${target.mateDepth - 1}`,
+                    mateDepth: target.mateDepth - 1
+                };
+                if (nextTarget.mateDepth > maxDepth) return;
+                if (pcaIsMateTargetCompatible(descriptorAfter, nextTarget, attackerColor)) {
+                    nextTargets.set(nextTarget.id, nextTarget);
+                }
+            });
+            return Array.from(nextTargets.values());
+        }
+
+        function pcaDescriptorMateScore(descriptor, classStats = null) {
+            let score = 0;
+            if (descriptor.inCheck) score += 4;
+            score += Math.max(0, 4 - descriptor.kingEscapeCount);
+            score += descriptor.checkerCount * 2;
+            score += (descriptor.geometrySignature.forcingMoves || 0) * 1.5;
+            score += Math.max(0, 8 - descriptor.legalMoveCount) * 0.25;
+            if (descriptor.checkerCapturable === false) score += 1;
+            if (descriptor.checkBlockable === false) score += 1;
+            if (classStats && classStats.total > 0) {
+                score += (classStats.outcomes.MATE - classStats.outcomes.NO_MATE) / classStats.total;
+            }
+            return score;
+        }
+
+        function pcaLookupClassStats(descriptor, remainingPlies, context) {
+            const key = pcaClassCacheKey(descriptor, remainingPlies);
+            if (!context.classCache.has(key)) return null;
+            context.classCacheHits += 1;
+            return context.classCache.get(key);
+        }
+
+        function pcaCollisionKey(descriptorKey, depth, mateFen, noMateFen) {
+            return `${descriptorKey}|${depth}|${mateFen}|${noMateFen}`;
+        }
+
+        function pcaRegisterDescriptorOutcome(descriptor, depth, isMate, fen, context) {
+            const descriptorKey = pcaDescriptorKey(descriptor);
+            const key = pcaClassCacheKey(descriptor, depth);
+            const outcome = isMate ? 'MATE' : 'NO_MATE';
+            const opposite = isMate ? 'NO_MATE' : 'MATE';
+            let entry = context.classCache.get(key);
+            if (!entry) {
+                entry = {
+                    descriptor,
+                    depth,
+                    total: 0,
+                    outcomes: { MATE: 0, NO_MATE: 0 },
+                    samples: { MATE: null, NO_MATE: null }
+                };
+            }
+            entry.total += 1;
+            entry.outcomes[outcome] += 1;
+            if (!entry.samples[outcome]) entry.samples[outcome] = fen;
+            context.classCache.set(key, entry);
+
+            if (entry.outcomes[opposite] > 0 && entry.samples[opposite]) {
+                const mateFen = isMate ? fen : entry.samples.MATE;
+                const noMateFen = isMate ? entry.samples.NO_MATE : fen;
+                const collisionKey = pcaCollisionKey(descriptorKey, depth, mateFen, noMateFen);
+                if (!context.collisionMap.has(collisionKey)) {
+                    context.collisionMap.set(collisionKey, {
+                        descriptor,
+                        fenA: mateFen,
+                        fenB: noMateFen,
+                        outcomeA: 'MATE',
+                        outcomeB: 'NO_MATE',
+                        depth
+                    });
+                }
+            }
+        }
+
+        function pcaBuildSemanticCandidates(game, moves, attackerColor, remainingPlies, context, descriptorBefore, targetsBefore) {
+            const candidates = [];
+            const hypothesesBefore = Array.isArray(targetsBefore) ? targetsBefore.length : 0;
+            for (let moveIndex = 0; moveIndex < moves.length; moveIndex += 1) {
+                const move = moves[moveIndex];
+                const child = new Chess(game.fen());
+                child.move({ from: move.from, to: move.to, promotion: move.promotion });
+                const childFen = child.fen();
+                const descriptorAfter = pcaGetDescriptor(childFen, context);
+                const targetsAfter = pcaRestrictTargets(
+                    targetsBefore,
+                    descriptorBefore,
+                    move,
+                    descriptorAfter,
+                    remainingPlies,
+                    attackerColor
+                );
+                const classStats = pcaLookupClassStats(descriptorAfter, Math.max(0, remainingPlies - 1), context);
+                const hypothesesAfter = targetsAfter.length;
+                const infoGain = pcaHypothesisInformation(hypothesesBefore) - pcaHypothesisInformation(hypothesesAfter);
+                const contractionRatio = hypothesesBefore > 0
+                    ? Math.max(0, Math.min(1, 1 - (hypothesesAfter / hypothesesBefore)))
+                    : 0;
+                const classMateRate = classStats && classStats.total > 0
+                    ? classStats.outcomes.MATE / classStats.total
+                    : null;
+                candidates.push({
+                    move,
+                    moveIndex,
+                    childFen,
+                    descriptor: descriptorAfter,
+                    targets: targetsAfter,
+                    hypothesesBefore,
+                    hypothesesAfter,
+                    infoGain,
+                    contractionRatio,
+                    classMateRate,
+                    mateScore: pcaDescriptorMateScore(descriptorAfter, classStats)
+                });
+            }
+            return candidates;
+        }
+
+        function pcaOrderSemanticCandidates(candidates, attackerTurn) {
+            return candidates.slice().sort((left, right) => {
+                if (attackerTurn) {
+                    const compatibleDiff = Number(right.hypothesesAfter > 0) - Number(left.hypothesesAfter > 0);
+                    if (compatibleDiff !== 0) return compatibleDiff;
+                    const infoGainDiff = (right.infoGain || 0) - (left.infoGain || 0);
+                    if (infoGainDiff !== 0) return infoGainDiff;
+                    const mateRateDiff = (right.classMateRate ?? -1) - (left.classMateRate ?? -1);
+                    if (mateRateDiff !== 0) return mateRateDiff;
+                    const mateScoreDiff = (right.mateScore || 0) - (left.mateScore || 0);
+                    if (mateScoreDiff !== 0) return mateScoreDiff;
+                } else {
+                    const afterDiff = (left.hypothesesAfter || 0) - (right.hypothesesAfter || 0);
+                    if (afterDiff !== 0) return afterDiff;
+                    const mateRateDiff = (left.classMateRate ?? 1) - (right.classMateRate ?? 1);
+                    if (mateRateDiff !== 0) return mateRateDiff;
+                    const mateScoreDiff = (left.mateScore || 0) - (right.mateScore || 0);
+                    if (mateScoreDiff !== 0) return mateScoreDiff;
+                    const infoGainDiff = (right.infoGain || 0) - (left.infoGain || 0);
+                    if (infoGainDiff !== 0) return infoGainDiff;
+                }
+                return left.moveIndex - right.moveIndex;
+            });
+        }
+
+        function pcaRecordSemanticSample(context, candidate) {
+            context.lastSemanticSample = candidate ? {
+                hypothesesBefore: candidate.hypothesesBefore,
+                hypothesesAfter: candidate.hypothesesAfter,
+                contractionRatio: candidate.contractionRatio
+            } : context.lastSemanticSample;
+        }
+
+        function pcaCanForceMate(game, attackerColor, remainingPlies, context, searchState = null) {
             context.nodes += 1;
             if (pcaNodeGuardReached(context.nodeGuard, context.nodes, false)) {
                 const err = new Error('PCA_NODE_GUARD');
@@ -2025,42 +2518,98 @@
             }
             if (context.reportProgress) context.reportProgress(false);
 
+            const fen = game.fen();
+            const descriptor = searchState && searchState.descriptor
+                ? searchState.descriptor
+                : pcaGetDescriptor(fen, context);
+
             if (game.in_checkmate()) {
-                return game.turn() !== attackerColor;
+                const mate = game.turn() !== attackerColor;
+                pcaRegisterDescriptorOutcome(descriptor, remainingPlies, mate, fen, context);
+                return mate;
             }
 
             if (remainingPlies <= 0 || pcaIsDrawTerminal(game)) {
+                pcaRegisterDescriptorOutcome(descriptor, remainingPlies, false, fen, context);
                 return false;
             }
 
             const key = pcaPositionKey(game, remainingPlies, attackerColor);
-            if (context.memo.has(key)) return context.memo.get(key);
+            if (context.exactCache.has(key)) {
+                context.exactCacheHits += 1;
+                return context.exactCache.get(key);
+            }
 
             const moves = game.moves({ verbose: true });
             const attackerTurn = game.turn() === attackerColor;
+            const targets = searchState && Array.isArray(searchState.targets)
+                ? searchState.targets
+                : pcaCompatibleMateTargets(descriptor, remainingPlies, attackerColor);
+            const orderedCandidates = context.semanticOrdering
+                ? pcaOrderSemanticCandidates(
+                    pcaBuildSemanticCandidates(
+                        game,
+                        moves,
+                        attackerColor,
+                        remainingPlies,
+                        context,
+                        descriptor,
+                        targets
+                    ),
+                    attackerTurn
+                )
+                : moves.map((move, moveIndex) => ({
+                    move,
+                    moveIndex,
+                    childFen: null,
+                    descriptor: null,
+                    targets: null,
+                    hypothesesBefore: targets.length,
+                    hypothesesAfter: targets.length,
+                    infoGain: 0,
+                    contractionRatio: 0,
+                    classMateRate: null,
+                    mateScore: 0
+                }));
             let result = attackerTurn ? false : true;
 
-            for (const move of moves) {
-                const child = new Chess(game.fen());
-                child.move({ from: move.from, to: move.to, promotion: move.promotion });
-                const childResult = pcaCanForceMate(child, attackerColor, remainingPlies - 1, context);
+            for (const candidate of orderedCandidates) {
+                context.activeMove = candidate.move.san;
+                context.activeMoveIndex = candidate.moveIndex;
+                context.activeMoveStartNodes = context.nodes;
+                pcaRecordSemanticSample(context, candidate);
+                const child = candidate.childFen ? new Chess(candidate.childFen) : new Chess(game.fen());
+                if (!candidate.childFen) {
+                    child.move({
+                        from: candidate.move.from,
+                        to: candidate.move.to,
+                        promotion: candidate.move.promotion
+                    });
+                }
+                const childResult = pcaCanForceMate(child, attackerColor, remainingPlies - 1, context, {
+                    descriptor: candidate.descriptor || pcaGetDescriptor(child.fen(), context),
+                    targets: candidate.targets || targets
+                });
 
                 if (attackerTurn && childResult) {
                     result = true;
+                    context.debug.lastCutoff = { type: 'OR_CERTIFIED', move: candidate.move.san };
                     break;
                 }
 
                 if (!attackerTurn && !childResult) {
                     result = false;
+                    context.debug.lastCutoff = { type: 'AND_REFUTED', move: candidate.move.san };
                     break;
                 }
             }
 
-            context.memo.set(key, result);
+            context.exactCache.set(key, result);
+            pcaRegisterDescriptorOutcome(descriptor, remainingPlies, result, fen, context);
             return result;
         }
 
-        function pcaRootMoveForcesMate(rootFen, rootMove, attackerColor, plyLimit, context) {
+        function pcaRootMoveForcesMate(rootFen, rootMove, attackerColor, plyLimit, context, rootDescriptor = null, rootTargets = null) {
             const game = new Chess(rootFen);
             const applied = game.move({
                 from: rootMove.from,
@@ -2068,28 +2617,58 @@
                 promotion: rootMove.promotion
             });
             if (!applied) return false;
-            if (game.in_checkmate()) return true;
+            const descriptor = pcaGetDescriptor(game.fen(), context);
+            const targets = pcaRestrictTargets(
+                rootTargets || pcaCompatibleMateTargets(rootDescriptor || pcaGetDescriptor(rootFen, context), plyLimit, attackerColor),
+                rootDescriptor || pcaGetDescriptor(rootFen, context),
+                rootMove,
+                descriptor,
+                plyLimit,
+                attackerColor
+            );
+            if (game.in_checkmate()) {
+                context.debug.lastCutoff = { type: 'OR_CERTIFIED', move: rootMove.san };
+                pcaRegisterDescriptorOutcome(descriptor, Math.max(0, plyLimit - 1), true, game.fen(), context);
+                return true;
+            }
             if (plyLimit <= 1) return false;
-            return pcaCanForceMate(game, attackerColor, plyLimit - 1, context);
+            return pcaCanForceMate(game, attackerColor, plyLimit - 1, context, {
+                descriptor,
+                targets
+            });
         }
 
         function pcaResultMetrics(result) {
-            const initialCandidates = result.initialCandidates || 0;
-            const survivors = result.survivors || 0;
-            const targets = survivors;
-            const initialConflicts = pcaChoose2(initialCandidates);
-            const conflicts = pcaChoose2(survivors);
-            const progress = initialConflicts > 0
-                ? 100 * (1 - conflicts / initialConflicts)
+            const hypothesesBefore = result.hypothesesBefore ?? result.initialCandidates ?? 0;
+            const hypothesesAfter = result.hypothesesAfter ?? result.survivors ?? 0;
+            const targets = hypothesesAfter;
+            const stateUncertainty = hypothesesBefore > 0 ? pcaHypothesisInformation(hypothesesBefore) : null;
+            const targetUncertainty = hypothesesAfter > 0 ? pcaHypothesisInformation(hypothesesAfter) : 0;
+            const progress = hypothesesBefore > 0
+                ? 100 * (1 - (hypothesesAfter / hypothesesBefore))
                 : 100;
-
             return {
                 ...result,
                 targets,
-                stateUncertainty: survivors > 0 ? pcaEntropyUniqueTargets(survivors) : null,
-                targetUncertainty: survivors > 0 ? pcaEntropyUniqueTargets(targets) : null,
-                conflicts: survivors > 0 ? conflicts : null,
-                progress: survivors > 0 ? progress : null
+                stateUncertainty,
+                targetUncertainty,
+                conflicts: hypothesesAfter > 0 ? pcaChoose2(hypothesesAfter) : 0,
+                progress,
+                contractionRatio: result.contractionRatio ?? (
+                    hypothesesBefore > 0 ? 1 - (hypothesesAfter / hypothesesBefore) : 0
+                )
+            };
+        }
+
+        function pcaRefineDescriptor(baseDescribeFEN, coordinateName, coordinateFn) {
+            return function refinedDescribeFEN(fen) {
+                const base = baseDescribeFEN(fen);
+                const refinementValue = coordinateFn(fen, base);
+                return Object.assign({}, base, {
+                    refinements: Object.assign({}, base.refinements || {}, {
+                        [coordinateName]: refinementValue
+                    })
+                });
             };
         }
 
@@ -2103,7 +2682,8 @@
             if (!pcaIsValidKGuard(guard)) {
                 return pcaResultMetrics({
                     status: 'UNDEFINED', move: null, initialCandidates: 0, survivors: 0,
-                    depth: 0, nodes: 0, trace, stopReason: 'INVALID_K_GUARD'
+                    depth: 0, nodes: 0, trace, stopReason: 'INVALID_K_GUARD',
+                    cacheHits: 0, descriptorHits: 0, collisions: 0
                 });
             }
 
@@ -2112,44 +2692,72 @@
             if (!validation.valid) {
                 return pcaResultMetrics({
                     status: 'UNDEFINED', move: null, initialCandidates: 0, survivors: 0,
-                    depth: 0, nodes: 0, trace, stopReason: 'INVALID_FEN'
+                    depth: 0, nodes: 0, trace, stopReason: 'INVALID_FEN',
+                    cacheHits: 0, descriptorHits: 0, collisions: 0
                 });
             }
 
             root.load(fen);
-            if (root.game_over()) {
-                return pcaResultMetrics({
-                    status: 'UNRESOLVED', move: null, initialCandidates: 0, survivors: 0,
-                    depth: 0, nodes: 0, trace, stopReason: 'POSITION_ALREADY_TERMINAL'
-                });
-            }
-
-            const rootColor = root.turn();
             const rootMoves = root.moves({ verbose: true });
             const initialCandidates = rootMoves.length;
-
-            if (initialCandidates === 1) {
-                trace.push({ depth: 0, candidatesBefore: 1, forcedMateTargets: [], nodes: 0 });
-                return pcaResultMetrics({
-                    status: 'DECIDED', move: rootMoves[0].san, initialCandidates: 1,
-                    survivors: 1, depth: 0, nodes: 0, trace, stopReason: 'ONLY_LEGAL_MOVE'
-                });
-            }
-
             const infinite = pcaIsInfiniteKGuard(guard);
             const context = {
                 nodes: 0,
-                // ∞ K_GUARD ⇒ no NODE_GUARD (options cannot re-enable a finite cap)
                 nodeGuard: pcaResolveNodeGuard(guard, PCA_NODE_GUARD, options.nodeGuard),
-                memo: new Map(),
+                exactCache: new Map(),
+                descriptorCache: new Map(),
+                classCache: new Map(),
+                collisionMap: new Map(),
+                descriptorHits: 0,
+                exactCacheHits: 0,
+                classCacheHits: 0,
+                describeFen: typeof options.describeFEN === 'function' ? options.describeFEN : describeFEN,
+                semanticOrdering: options.semanticOrdering !== false,
                 activeDepth: 0,
                 activeMove: null,
                 activeMoveIndex: -1,
                 activeMoveStartNodes: 0,
                 lastReportedNodes: 0,
                 lastReportedAt: onProgress ? Date.now() : 0,
-                reportProgress: null
+                lastSemanticSample: { hypothesesBefore: 0, hypothesesAfter: 0, contractionRatio: 0 },
+                reportProgress: null,
+                debug: options.debug || {}
             };
+            const baseDescriptor = pcaGetDescriptor(fen, context);
+
+            if (root.in_checkmate()) {
+                pcaRegisterDescriptorOutcome(baseDescriptor, 0, true, fen, context);
+                return pcaResultMetrics({
+                    status: 'DECIDED',
+                    move: null,
+                    initialCandidates,
+                    survivors: 1,
+                    depth: 0,
+                    nodes: 0,
+                    trace,
+                    stopReason: 'POSITION_ALREADY_CHECKMATE',
+                    cacheHits: 0,
+                    descriptorHits: context.descriptorHits,
+                    collisions: context.collisionMap.size,
+                    collisionLog: Array.from(context.collisionMap.values()),
+                    hypothesesBefore: 1,
+                    hypothesesAfter: 1,
+                    contractionRatio: 0
+                });
+            }
+
+            if (pcaIsDrawTerminal(root) || root.game_over()) {
+                pcaRegisterDescriptorOutcome(baseDescriptor, 0, false, fen, context);
+                return pcaResultMetrics({
+                    status: 'UNRESOLVED', move: null, initialCandidates, survivors: 0,
+                    depth: 0, nodes: 0, trace, stopReason: 'POSITION_ALREADY_TERMINAL',
+                    cacheHits: 0, descriptorHits: context.descriptorHits, collisions: context.collisionMap.size,
+                    collisionLog: Array.from(context.collisionMap.values()),
+                    hypothesesBefore: 0, hypothesesAfter: 0, contractionRatio: 0
+                });
+            }
+
+            const rootColor = root.turn();
             context.reportProgress = onProgress ? function(force = false) {
                 const now = Date.now();
                 const nodesElapsed = context.nodes - context.lastReportedNodes;
@@ -2166,6 +2774,12 @@
                     depth: context.activeDepth,
                     nodes: context.nodes,
                     nodeGuard: context.nodeGuard,
+                    cacheHits: context.exactCacheHits + context.classCacheHits,
+                    descriptorHits: context.descriptorHits,
+                    collisions: context.collisionMap.size,
+                    hypothesesBefore: context.lastSemanticSample.hypothesesBefore,
+                    hypothesesAfter: context.lastSemanticSample.hypothesesAfter,
+                    contractionRatio: context.lastSemanticSample.contractionRatio,
                     movesCompleted: Math.max(0, context.activeMoveIndex + (force ? 1 : 0)),
                     totalMoves: initialCandidates,
                     activeMove: context.activeMove,
@@ -2179,15 +2793,52 @@
             try {
                 for (let k = 1; infinite || k <= guard; k += 1) {
                     context.activeDepth = k;
-                    const winningMoves = [];
+                    const rootTargets = pcaCompatibleMateTargets(baseDescriptor, k, rootColor);
+                    const orderedRootCandidates = context.semanticOrdering
+                        ? pcaOrderSemanticCandidates(
+                            pcaBuildSemanticCandidates(
+                                root,
+                                rootMoves,
+                                rootColor,
+                                k,
+                                context,
+                                baseDescriptor,
+                                rootTargets
+                            ),
+                            true
+                        )
+                        : rootMoves.map((move, moveIndex) => ({
+                            move,
+                            moveIndex,
+                            descriptor: null,
+                            targets: rootTargets,
+                            childFen: null,
+                            hypothesesBefore: rootTargets.length,
+                            hypothesesAfter: rootTargets.length,
+                            infoGain: 0,
+                            contractionRatio: 0
+                        }));
+                    let winningCandidate = null;
 
-                    for (let moveIndex = 0; moveIndex < rootMoves.length; moveIndex += 1) {
-                        const move = rootMoves[moveIndex];
-                        context.activeMove = move.san;
-                        context.activeMoveIndex = moveIndex;
+                    for (const candidate of orderedRootCandidates) {
+                        context.activeMove = candidate.move.san;
+                        context.activeMoveIndex = candidate.moveIndex;
                         context.activeMoveStartNodes = context.nodes;
-                        if (pcaRootMoveForcesMate(fen, move, rootColor, k, context)) {
-                            winningMoves.push(move);
+                        pcaRecordSemanticSample(context, candidate);
+                        const forcesMate = pcaRootMoveForcesMate(
+                            fen,
+                            candidate.move,
+                            rootColor,
+                            k,
+                            context,
+                            baseDescriptor,
+                            rootTargets
+                        );
+                        if (forcesMate) {
+                            winningCandidate = candidate;
+                            context.debug.rootCutoff = { type: 'ROOT_OR_CERTIFIED', move: candidate.move.san };
+                            if (context.reportProgress) context.reportProgress(true);
+                            break;
                         }
                         if (context.reportProgress) context.reportProgress(true);
                     }
@@ -2195,46 +2846,84 @@
                     trace.push({
                         depth: k,
                         candidatesBefore: initialCandidates,
-                        forcedMateTargets: winningMoves.map(m => m.san),
-                        nodes: context.nodes
+                        forcedMateTargets: winningCandidate ? [winningCandidate.move.san] : [],
+                        hypothesesBefore: rootTargets.length,
+                        hypothesesAfter: winningCandidate
+                            ? winningCandidate.hypothesesAfter
+                            : (orderedRootCandidates[0] ? orderedRootCandidates[0].hypothesesAfter : 0),
+                        contractionRatio: winningCandidate
+                            ? winningCandidate.contractionRatio
+                            : (orderedRootCandidates[0] ? orderedRootCandidates[0].contractionRatio : 0),
+                        nodes: context.nodes,
+                        collisions: context.collisionMap.size
                     });
 
-                    if (winningMoves.length > 0) {
-                        const unique = winningMoves.length === 1;
+                    if (winningCandidate) {
                         return pcaResultMetrics({
-                            status: unique ? 'DECIDED' : 'UNRESOLVED',
-                            move: unique ? winningMoves[0].san : `EMPATE (${winningMoves.length})`,
+                            status: 'DECIDED',
+                            move: winningCandidate.move.san,
                             initialCandidates,
-                            survivors: winningMoves.length,
+                            survivors: 1,
                             depth: k,
                             nodes: context.nodes,
                             trace,
-                            stopReason: unique
-                                ? 'UNIQUE_SHORTEST_FORCED_MATE'
-                                : 'TIED_SHORTEST_FORCED_MATE'
+                            stopReason: 'FORCED_MATE_CERTIFIED',
+                            cacheHits: context.exactCacheHits + context.classCacheHits,
+                            descriptorHits: context.descriptorHits,
+                            collisions: context.collisionMap.size,
+                            collisionLog: Array.from(context.collisionMap.values()),
+                            hypothesesBefore: winningCandidate.hypothesesBefore,
+                            hypothesesAfter: winningCandidate.hypothesesAfter,
+                            contractionRatio: winningCandidate.contractionRatio,
+                            semanticOrdering: context.semanticOrdering
                         });
                     }
                 }
 
                 return pcaResultMetrics({
                     status: 'UNRESOLVED', move: null, initialCandidates,
-                    survivors: initialCandidates, depth: guard, nodes: context.nodes, trace,
-                    stopReason: 'NO_FORCED_MATE_WITHIN_K_GUARD'
+                    survivors: 0, depth: guard, nodes: context.nodes, trace,
+                    stopReason: 'NO_FORCED_MATE_WITHIN_K_GUARD',
+                    cacheHits: context.exactCacheHits + context.classCacheHits,
+                    descriptorHits: context.descriptorHits,
+                    collisions: context.collisionMap.size,
+                    collisionLog: Array.from(context.collisionMap.values()),
+                    hypothesesBefore: trace.length > 0 ? trace[trace.length - 1].hypothesesBefore : 0,
+                    hypothesesAfter: trace.length > 0 ? trace[trace.length - 1].hypothesesAfter : 0,
+                    contractionRatio: trace.length > 0 ? trace[trace.length - 1].contractionRatio : 0,
+                    semanticOrdering: context.semanticOrdering
                 });
             } catch (error) {
                 if (error && error.code === 'PCA_NODE_GUARD') {
                     return pcaResultMetrics({
                         status: 'UNRESOLVED', move: null, initialCandidates,
-                        survivors: initialCandidates,
+                        survivors: 0,
                         depth: trace.length ? trace[trace.length - 1].depth : 0,
-                        nodes: context.nodes, trace, stopReason: 'NODE_GUARD_REACHED'
+                        nodes: context.nodes, trace, stopReason: 'NODE_GUARD_REACHED',
+                        cacheHits: context.exactCacheHits + context.classCacheHits,
+                        descriptorHits: context.descriptorHits,
+                        collisions: context.collisionMap.size,
+                        collisionLog: Array.from(context.collisionMap.values()),
+                        hypothesesBefore: context.lastSemanticSample.hypothesesBefore,
+                        hypothesesAfter: context.lastSemanticSample.hypothesesAfter,
+                        contractionRatio: context.lastSemanticSample.contractionRatio,
+                        semanticOrdering: context.semanticOrdering
                     });
                 }
 
                 return pcaResultMetrics({
                     status: 'UNDEFINED', move: null, initialCandidates,
-                    survivors: initialCandidates, depth: 0, nodes: context.nodes, trace,
-                    stopReason: 'CONTRACT_VIOLATION'
+                    survivors: 0, depth: 0, nodes: context.nodes, trace,
+                    stopReason: 'CONTRACT_VIOLATION',
+                    cacheHits: context.exactCacheHits + context.classCacheHits,
+                    descriptorHits: context.descriptorHits,
+                    collisions: context.collisionMap.size,
+                    collisionLog: Array.from(context.collisionMap.values()),
+                    hypothesesBefore: context.lastSemanticSample.hypothesesBefore,
+                    hypothesesAfter: context.lastSemanticSample.hypothesesAfter,
+                    contractionRatio: context.lastSemanticSample.contractionRatio,
+                    semanticOrdering: context.semanticOrdering,
+                    error: error && error.message ? error.message : String(error)
                 });
             }
         }
@@ -2761,10 +3450,37 @@
                 pcaChoose2,
                 pcaEntropyUniqueTargets,
                 pcaPositionKey,
+                pcaFenHash,
+                pcaStableStringify,
+                pcaDescriptorKey,
+                pcaClassCacheKey,
+                pcaHypothesisInformation,
+                pcaInsideBoard,
+                pcaSquareToCoords,
+                pcaCoordsToSquare,
+                pcaLocateKings,
+                pcaMaterialSignature,
+                pcaSlidingDirections,
+                pcaSquaresBetween,
+                pcaCollectCheckers,
+                pcaGeometrySignature,
+                describeFEN,
+                pcaGetDescriptor,
                 pcaIsDrawTerminal,
+                pcaIsMateTargetCompatible,
+                pcaCompatibleMateTargets,
+                pcaRestrictTargets,
+                pcaDescriptorMateScore,
+                pcaLookupClassStats,
+                pcaCollisionKey,
+                pcaRegisterDescriptorOutcome,
+                pcaBuildSemanticCandidates,
+                pcaOrderSemanticCandidates,
+                pcaRecordSemanticSample,
                 pcaCanForceMate,
                 pcaRootMoveForcesMate,
                 pcaResultMetrics,
+                pcaRefineDescriptor,
                 pcaAnalyzePositionCore,
                 pcaAnalyzePosition,
                 pcaEvaluationOutcome,
@@ -3383,6 +4099,10 @@
         }
 
         window.pcaAnalyzePosition = pcaAnalyzePosition;
+        window.describeFEN = describeFEN;
+        window.pcaRefineDescriptor = pcaRefineDescriptor;
+        window.pcaOrderSemanticCandidates = pcaOrderSemanticCandidates;
+        window.pcaCompatibleMateTargets = pcaCompatibleMateTargets;
         window.pcaEvaluatePosition = pcaEvaluatePosition;
         window.analyzePCAChess = analyzePCAChess;
         window.togglePCAAnalysis = togglePCAAnalysis;

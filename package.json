@@ -1,0 +1,20 @@
+{
+  "name": "ajedrez",
+  "version": "1.0.0",
+  "description": "Versión simplificada del analizador de ajedrez basada en Stockfish.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://localhost:26831/gustavojavier7/ajedrez"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "chess.js": "^0.10.3"
+  }
+}
