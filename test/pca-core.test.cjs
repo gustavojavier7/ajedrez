@@ -278,3 +278,106 @@ test('NPS artificial no altera la clasificación exacta DECIDED_UNIQUE/DECIDED_M
     );
     assert.ok(samples.length > 0);
 });
+
+// ---------------------------------------------------------------------------
+// BASELINE PCA
+// Frozen pre-telescopic exact-solver contract. Later phases must keep:
+//   policy disabled == BASELINE PCA
+// Comparable fields: status, move, depth, stopReason, survivors, forcedMateTargets.
+// Fixtures: unique min-mate, multiple min-mate, defended/unresolved, descriptor collision.
+// ---------------------------------------------------------------------------
+
+function pcaBaselineExactSlice(result) {
+    return {
+        status: result.status,
+        move: result.move,
+        depth: result.depth,
+        stopReason: result.stopReason,
+        survivors: result.survivors,
+        forcedMateTargets: Array.isArray(result.forcedMateTargets)
+            ? [...result.forcedMateTargets]
+            : result.forcedMateTargets
+    };
+}
+
+function pcaBaselineExactSliceCanonical(result) {
+    const slice = pcaBaselineExactSlice(result);
+    return Object.assign({}, slice, {
+        forcedMateTargets: Array.isArray(slice.forcedMateTargets)
+            ? [...slice.forcedMateTargets].sort()
+            : slice.forcedMateTargets
+    });
+}
+
+test('BASELINE PCA: forcedMateTargets completo es idéntico con y sin orden semántico', () => {
+    const runtime = loadRuntime();
+
+    const uniqueOn = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, { semanticOrdering: true });
+    const uniqueOff = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, { semanticOrdering: false });
+    const multiOn = runtime.pcaAnalyzePositionCore(multiMateFen, 6, { semanticOrdering: true });
+    const multiOff = runtime.pcaAnalyzePositionCore(multiMateFen, 6, { semanticOrdering: false });
+    const defendedOn = runtime.pcaAnalyzePositionCore(defendedFen, 2, { semanticOrdering: true });
+    const defendedOff = runtime.pcaAnalyzePositionCore(defendedFen, 2, { semanticOrdering: false });
+
+    assert.deepEqual(
+        pcaBaselineExactSliceCanonical(uniqueOn),
+        pcaBaselineExactSliceCanonical(uniqueOff)
+    );
+    assert.deepEqual([...uniqueOn.forcedMateTargets], ['Qg7#']);
+    assert.deepEqual([...uniqueOff.forcedMateTargets], ['Qg7#']);
+
+    assert.deepEqual(
+        pcaBaselineExactSliceCanonical(multiOn),
+        pcaBaselineExactSliceCanonical(multiOff)
+    );
+    assert.ok(multiOn.forcedMateTargets.length > 1);
+    assert.deepEqual(
+        [...multiOn.forcedMateTargets].sort(),
+        [...multiOff.forcedMateTargets].sort()
+    );
+    // Full content equality of the mate set (not only .move).
+    assert.equal(multiOn.forcedMateTargets.length, multiOn.survivors);
+    assert.equal(multiOff.forcedMateTargets.length, multiOff.survivors);
+
+    assert.equal(defendedOn.status, 'UNRESOLVED');
+    assert.equal(defendedOff.status, 'UNRESOLVED');
+    assert.deepEqual(
+        pcaBaselineExactSliceCanonical(defendedOn),
+        pcaBaselineExactSliceCanonical(defendedOff)
+    );
+});
+
+test('BASELINE PCA: fingerprint contractual de fixtures canónicos', () => {
+    const runtime = loadRuntime();
+    const baseline = {
+        unique: pcaBaselineExactSlice(
+            runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, { semanticOrdering: true })
+        ),
+        multiple: pcaBaselineExactSliceCanonical(
+            runtime.pcaAnalyzePositionCore(multiMateFen, 6, { semanticOrdering: true })
+        ),
+        defended: pcaBaselineExactSlice(
+            runtime.pcaAnalyzePositionCore(defendedFen, 2, { semanticOrdering: true })
+        )
+    };
+
+    assert.deepEqual(baseline.unique, {
+        status: 'DECIDED_UNIQUE',
+        move: 'Qg7#',
+        depth: 1,
+        stopReason: 'FORCED_MATE_CERTIFIED',
+        survivors: 1,
+        forcedMateTargets: ['Qg7#']
+    });
+    assert.equal(baseline.multiple.status, 'DECIDED_MULTIPLE');
+    assert.equal(baseline.multiple.move, null);
+    assert.equal(baseline.multiple.depth, 5);
+    assert.equal(baseline.multiple.stopReason, 'MULTIPLE_SHORTEST_FORCED_MATES');
+    assert.ok(baseline.multiple.survivors > 1);
+    assert.equal(baseline.multiple.forcedMateTargets.length, baseline.multiple.survivors);
+    assert.equal(baseline.defended.status, 'UNRESOLVED');
+    assert.equal(baseline.defended.move, null);
+    assert.equal(baseline.defended.depth, 2);
+    assert.equal(baseline.defended.survivors, 0);
+    assert.equal(baseline.defended.stopReason, 'NO_FORCED_MATE_WITHIN_K_GUARD');
+});
