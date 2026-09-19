@@ -2389,6 +2389,27 @@
                     classMateRate: null,
                     mateScore: 0
                 }));
+            // Recursive SHADOW seam: observe complete semantic candidate list only.
+            // Must not reorder, prune, touch exactCache, or alter AND/OR cuts/result.
+            if (context.telescopicMode === PCA_TELESCOPIC_MODE.SHADOW &&
+                context.telescopicTelemetry) {
+                const sample = orderedCandidates[0] || null;
+                const observation = pcaObserveTelescopicContext({
+                    query: context.telescopicQuery || null,
+                    stateIdentity: fen,
+                    descriptor,
+                    depth: remainingPlies,
+                    remainingPlies,
+                    attackerTurn,
+                    hypothesesBefore: sample ? sample.hypothesesBefore : targets.length,
+                    hypothesesAfter: sample ? sample.hypothesesAfter : targets.length,
+                    informationGain: sample ? sample.infoGain : 0,
+                    contractionRatio: sample ? sample.contractionRatio : 0,
+                    descriptorClass: pcaDescriptorKey(descriptor),
+                    candidateIdentities: orderedCandidates.map(candidate => candidate.move.san)
+                }, context.telescopicOptions || {});
+                pcaMergeTelescopicTelemetry(context.telescopicTelemetry, observation);
+            }
             let result = attackerTurn ? false : true;
 
             for (const candidate of orderedCandidates) {
@@ -2526,13 +2547,17 @@
             SHADOW: 'shadow'
         });
 
+        // Effective Chess.js rules identity used by the exact solver.
+        // Single source of truth — do not hardcode alternate versions elsewhere.
+        const CHESS_RULES_VERSION = 'chess.js@0.10.3';
+
         function pcaCreateQuery(partial = {}) {
             const horizonValue = partial.horizon && partial.horizon.value != null
                 ? partial.horizon.value
                 : (partial.horizonValue != null ? partial.horizonValue : null);
             return Object.freeze({
                 domainId: partial.domainId || 'CHESS',
-                rulesVersion: partial.rulesVersion || 'chess.js',
+                rulesVersion: partial.rulesVersion || CHESS_RULES_VERSION,
                 goal: partial.goal || 'ALL_SHORTEST_FORCED_MATES',
                 horizon: Object.freeze({
                     unit: (partial.horizon && partial.horizon.unit) || 'PLIES',
@@ -2657,6 +2682,8 @@
                 contractionRatio: view.contractionRatio != null ? view.contractionRatio : null,
                 descriptorClass: view.descriptorClass != null ? view.descriptorClass : null,
                 depth: view.depth != null ? view.depth : null,
+                remainingPlies: view.remainingPlies != null ? view.remainingPlies : null,
+                attackerTurn: view.attackerTurn != null ? !!view.attackerTurn : null,
                 candidateIdentities: Object.freeze(candidateIdentities.slice())
             });
         }
@@ -2781,7 +2808,12 @@
                 lastReportedAt: onProgress ? Date.now() : 0,
                 lastSemanticSample: { hypothesesBefore: 0, hypothesesAfter: 0, contractionRatio: 0 },
                 reportProgress: null,
-                debug: options.debug || {}
+                debug: options.debug || {},
+                // Shadow telescopic plumbing only — never consulted by exact AND/OR decisions.
+                telescopicMode,
+                telescopicTelemetry,
+                telescopicQuery,
+                telescopicOptions: options
             };
             const baseDescriptor = pcaGetDescriptor(fen, context);
 
@@ -3879,6 +3911,7 @@
                 'const PCA_FAILURE_REASON = ' + JSON.stringify(PCA_FAILURE_REASON) + ';',
                 'const PCA_EVIDENCE_LEVEL = ' + JSON.stringify(PCA_EVIDENCE_LEVEL) + ';',
                 'const PCA_TELESCOPIC_MODE = ' + JSON.stringify(PCA_TELESCOPIC_MODE) + ';',
+                'const CHESS_RULES_VERSION = ' + JSON.stringify(CHESS_RULES_VERSION) + ';',
                 pureFunctions,
                 'self.onmessage = ' + workerHandler.toString() + ';'
             ].join('\n');
@@ -4277,6 +4310,7 @@
         window.PCA_FAILURE_REASON = PCA_FAILURE_REASON;
         window.PCA_EVIDENCE_LEVEL = PCA_EVIDENCE_LEVEL;
         window.PCA_TELESCOPIC_MODE = PCA_TELESCOPIC_MODE;
+        window.CHESS_RULES_VERSION = CHESS_RULES_VERSION;
         window.pcaCreateQuery = pcaCreateQuery;
         window.pcaCreateTelescopicProposal = pcaCreateTelescopicProposal;
         window.pcaCreateNoTelescopicPolicy = pcaCreateNoTelescopicPolicy;
