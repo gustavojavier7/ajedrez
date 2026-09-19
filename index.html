@@ -265,11 +265,31 @@
         .pca-metrics-card {
             border-left: 4px solid #2563eb;
             background: #ffffff;
+            padding: 10px 12px 12px;
         }
 
         .pca-metrics-card > .section-title {
-            margin-bottom: 10px;
-            font-size: 0.95rem;
+            margin-bottom: 8px;
+            font-size: 0.92rem;
+        }
+
+        .pca-score-item {
+            background: #eff6ff;
+            border-color: #bfdbfe;
+        }
+
+        .pca-score-item .metric-value {
+            font-size: 1.05rem;
+            color: #1d4ed8;
+        }
+
+        .pca-score-sublabel {
+            display: block;
+            margin-top: 2px;
+            font-size: 0.64rem;
+            font-weight: 600;
+            color: #64748b;
+            letter-spacing: 0.01em;
         }
 
         .pca-selected-summary {
@@ -638,71 +658,65 @@
         .metric-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 7px;
+            gap: 5px;
+        }
+
+        .pca-live-grid {
+            gap: 5px;
         }
 
         .metric-item {
             border: 1px solid #f0f1f3;
             border-radius: 6px;
-            padding: 7px 8px;
+            padding: 5px 7px;
             min-width: 0;
         }
 
         .metric-label {
             display: block;
-            font-size: 0.68rem;
+            font-size: 0.66rem;
             color: #6b7280;
-            margin-bottom: 2px;
-            line-height: 1.2;
+            margin-bottom: 1px;
+            line-height: 1.15;
         }
 
         .metric-value {
             display: block;
             font-family: 'Courier New', monospace;
-            font-size: 0.86rem;
+            font-size: 0.84rem;
             font-weight: 700;
             color: #111827;
             overflow-wrap: anywhere;
         }
 
-        .pca-progress-track {
-            height: 7px;
-            border-radius: 999px;
-            background: #e5e7eb;
-            overflow: hidden;
-            margin-top: 8px;
-        }
-
-        .pca-progress-fill {
-            width: 0%;
-            height: 100%;
-            background: #3b82f6;
-            transition: width 0.2s ease;
-        }
-
         .stop-reason {
-            margin-top: 8px;
-            font-size: 0.74rem;
+            margin-top: 6px;
+            font-size: 0.7rem;
             color: #6b7280;
             overflow-wrap: anywhere;
         }
 
         .pca-line-telemetry {
-            margin-top: 12px;
-            padding: 10px;
+            margin-top: 8px;
+            padding: 7px 8px;
             border: 1px solid #dbeafe;
-            border-radius: 7px;
+            border-radius: 6px;
             background: #f8fbff;
         }
 
+        .pca-line-telemetry > .section-title {
+            margin-bottom: 4px;
+            font-size: 0.78rem;
+        }
+
         .pca-line-live {
-            margin-top: 6px;
+            margin-top: 2px;
             font-family: 'Courier New', monospace;
             font-size: 0.74rem;
             font-weight: 700;
             color: #111827;
             overflow-wrap: anywhere;
-            line-height: 1.4;
+            line-height: 1.35;
         }
 
         .pca-line-live.pca-line-status-exploring { color: #1d4ed8; }
@@ -1097,34 +1111,26 @@
                         MÉTRICAS PCA
                         <span class="section-subtitle">telemetría en vivo</span>
                     </div>
-                        <div class="metric-grid">
-                            <div class="metric-item"><span class="metric-label">Hipótesis iniciales</span><span id="pcaInitialCandidates" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">Supervivientes</span><span id="pcaSurvivors" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">Targets restantes</span><span id="pcaTargets" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">K efectivo (plies)</span><span id="pcaDepth" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">Nodos explorados</span><span id="pcaNodes" class="metric-value">—</span></div>
+                        <div class="metric-grid pca-live-grid" aria-label="Telemetría PCA consolidada">
+                            <div class="metric-item pca-score-item">
+                                <span class="metric-label">PCA SCORE</span>
+                                <span id="pcaDiagnosticScore" class="metric-value">—</span>
+                                <span class="pca-score-sublabel">provisional / decisional</span>
+                            </div>
+                            <div class="metric-item"><span class="metric-label">K</span><span id="pcaDepth" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">Nodos</span><span id="pcaNodes" class="metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label" id="pcaNpsLabel">NPS</span><span id="pcaNps" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">Tiempo PCA</span><span id="pcaElapsed" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">Cache hits</span><span id="pcaCacheHits" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">Descriptor hits</span><span id="pcaDescriptorHits" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">Colisiones PCA</span><span id="pcaCollisions" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">H antes</span><span id="pcaHypothesesBefore" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">H después</span><span id="pcaHypothesesAfter" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">Tiempo</span><span id="pcaElapsed" class="metric-value">—</span></div>
+                            <div class="metric-item"><span class="metric-label">H</span><span id="pcaHypotheses" class="metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label">Contracción</span><span id="pcaContractionRatio" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">H estado (bits)</span><span id="pcaStateH" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">H Target (bits)</span><span id="pcaTargetH" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">Conflictos</span><span id="pcaConflicts" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">Progreso decisional</span><span id="pcaProgressText" class="metric-value">—</span></div>
-                        </div>
-                        <div class="pca-progress-track" aria-label="Progreso decisional PCA">
-                            <div id="pcaProgressBar" class="pca-progress-fill"></div>
+                            <div class="metric-item"><span class="metric-label">Colisiones</span><span id="pcaCollisions" class="metric-value">—</span></div>
                         </div>
                         <div id="pcaStopReason" class="stop-reason">STOP_REASON: —</div>
                         <div id="pcaLineTelemetryPanel" class="pca-line-telemetry" aria-label="Línea PCA NPS en vivo">
                             <div class="section-title">
                                 <i class="fas fa-stream"></i>
-                                LÍNEA PCA — NPS
-                                <span class="section-subtitle">en vivo</span>
+                                LÍNEA ACTIVA
+                                <span class="section-subtitle">PCA / NPS</span>
                             </div>
                             <div id="pcaLineLive" class="pca-line-live pca-line-status-idle" aria-live="polite">—</div>
                         </div>
@@ -1746,6 +1752,75 @@
             return 'NPS';
         }
 
+        function pcaSetMetricText(id, text) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = text;
+        }
+
+        function pcaFormatHypothesesPair(before, after) {
+            const hasBefore = before !== null && before !== undefined && before !== '';
+            const hasAfter = after !== null && after !== undefined && after !== '';
+            if (!hasBefore && !hasAfter) return '—';
+            return `${formatMetricValue(before, 0)} → ${formatMetricValue(after, 0)}`;
+        }
+
+        function pcaFormatDiagnosticScore(score) {
+            if (score === null || score === undefined || score === '') return '—';
+            const n = Number(score);
+            if (!Number.isFinite(n)) return '—';
+            return `${Math.round(n)}/100`;
+        }
+
+        // Diagnostic sample score only. Never feeds ordering, cache, cutoffs, AND/OR, or certification.
+        function pcaComputeDiagnosticScore(sample) {
+            if (!sample || sample.valid !== true) return null;
+            const contraction = Number(sample.contractionRatio);
+            if (!Number.isFinite(contraction)) return null;
+            const C = Math.max(0, Math.min(1, contraction));
+            const hypothesesBefore = Number(sample.hypothesesBefore);
+            const informationGain = Number(
+                sample.informationGain != null ? sample.informationGain : sample.infoGain
+            );
+            let igNorm = C;
+            if (Number.isFinite(hypothesesBefore) && hypothesesBefore > 1) {
+                const denom = Math.log2(hypothesesBefore);
+                const raw = Number.isFinite(informationGain) && denom > 0
+                    ? informationGain / denom
+                    : 0;
+                igNorm = Math.max(0, Math.min(1, raw));
+            }
+            const score = Math.round(100 * ((0.60 * C) + (0.40 * igNorm)));
+            return Math.max(0, Math.min(100, score));
+        }
+
+        function pcaResolveDiagnosticScore(metrics = {}) {
+            if (metrics.pcaScore !== undefined) {
+                if (metrics.pcaScore === null || metrics.pcaScore === '') return null;
+                const direct = Number(metrics.pcaScore);
+                return Number.isFinite(direct) ? Math.max(0, Math.min(100, Math.round(direct))) : null;
+            }
+            if (metrics.semanticSampleValid === false) return null;
+            if (
+                metrics.contractionRatio === undefined &&
+                metrics.hypothesesBefore === undefined &&
+                metrics.informationGain === undefined
+            ) {
+                return null;
+            }
+            return pcaComputeDiagnosticScore({
+                valid: metrics.semanticSampleValid !== false && (
+                    metrics.contractionRatio != null ||
+                    metrics.hypothesesBefore != null ||
+                    metrics.informationGain != null
+                ),
+                contractionRatio: metrics.contractionRatio,
+                hypothesesBefore: metrics.hypothesesBefore,
+                informationGain: metrics.informationGain != null
+                    ? metrics.informationGain
+                    : metrics.infoGain
+            });
+        }
+
         window.updatePCAMetrics = function(metrics = {}) {
             if (!metrics || Object.keys(metrics).length === 0) {
                 pcaMetricsState = {};
@@ -1754,54 +1829,46 @@
                 pcaMetricsState = Object.assign({}, pcaMetricsState, metrics);
             }
             const m = pcaMetricsState;
+            if (metrics && Object.prototype.hasOwnProperty.call(metrics, 'pcaScore')) {
+                // Explicit LIVE/RESULT score, including null ("sin datos").
+            } else {
+                const resolvedScore = pcaResolveDiagnosticScore(m);
+                if (resolvedScore !== null) m.pcaScore = resolvedScore;
+            }
 
-            document.getElementById('pcaStatus').textContent = formatMetricValue(m.status || 'NO EJECUTADO');
-            document.getElementById('pcaMove').textContent = formatMetricValue(m.move);
-            document.getElementById('pcaInitialCandidates').textContent = formatMetricValue(m.initialCandidates, 0);
-            document.getElementById('pcaSurvivors').textContent = formatMetricValue(m.survivors, 0);
-            document.getElementById('pcaTargets').textContent = formatMetricValue(m.targets, 0);
-            document.getElementById('pcaDepth').textContent = formatMetricValue(m.depth, 0);
-            document.getElementById('pcaNodes').textContent = formatCountMetric(
+            pcaSetMetricText('pcaStatus', formatMetricValue(m.status || 'NO EJECUTADO'));
+            pcaSetMetricText('pcaMove', formatMetricValue(m.move));
+            pcaSetMetricText('pcaDepth', formatMetricValue(m.depth, 0));
+            pcaSetMetricText('pcaNodes', formatCountMetric(
                 m.nodes === undefined ? null : m.nodes
-            );
-            document.getElementById('pcaNps').textContent = formatCountMetric(
+            ));
+            pcaSetMetricText('pcaNps', formatCountMetric(
                 m.nps === undefined ? null : m.nps
-            );
+            ));
             const npsLabel = document.getElementById('pcaNpsLabel');
             if (npsLabel) npsLabel.textContent = pcaNpsLabelText(m.npsMode);
-            document.getElementById('pcaElapsed').textContent = formatElapsedMetric(
+            pcaSetMetricText('pcaElapsed', formatElapsedMetric(
                 m.elapsedMs === undefined ? null : m.elapsedMs
-            );
-            document.getElementById('pcaCacheHits').textContent = formatCountMetric(
-                m.cacheHits === undefined ? null : m.cacheHits
-            );
-            document.getElementById('pcaDescriptorHits').textContent = formatCountMetric(
-                m.descriptorHits === undefined ? null : m.descriptorHits
-            );
-            document.getElementById('pcaCollisions').textContent = formatCountMetric(
+            ));
+            pcaSetMetricText('pcaCollisions', formatCountMetric(
                 m.collisions === undefined ? null : m.collisions
-            );
-            document.getElementById('pcaHypothesesBefore').textContent = formatMetricValue(
-                m.hypothesesBefore,
-                0
-            );
-            document.getElementById('pcaHypothesesAfter').textContent = formatMetricValue(
-                m.hypothesesAfter,
-                0
+            ));
+            pcaSetMetricText(
+                'pcaHypotheses',
+                pcaFormatHypothesesPair(m.hypothesesBefore, m.hypothesesAfter)
             );
             const contractionRatio = Number(m.contractionRatio);
-            document.getElementById('pcaContractionRatio').textContent = Number.isFinite(contractionRatio)
-                ? `${(100 * contractionRatio).toFixed(1)}%`
-                : '—';
-            document.getElementById('pcaStateH').textContent = formatMetricValue(m.stateUncertainty);
-            document.getElementById('pcaTargetH').textContent = formatMetricValue(m.targetUncertainty);
-            document.getElementById('pcaConflicts').textContent = formatMetricValue(m.conflicts, 0);
-
-            const progress = Number(m.progress);
-            const safeProgress = Number.isFinite(progress) ? Math.max(0, Math.min(100, progress)) : null;
-            document.getElementById('pcaProgressText').textContent = safeProgress === null ? '—' : `${safeProgress.toFixed(1)}%`;
-            document.getElementById('pcaProgressBar').style.width = safeProgress === null ? '0%' : `${safeProgress}%`;
-            document.getElementById('pcaStopReason').textContent = `STOP_REASON: ${formatMetricValue(m.stopReason)}`;
+            pcaSetMetricText(
+                'pcaContractionRatio',
+                Number.isFinite(contractionRatio)
+                    ? `${(100 * contractionRatio).toFixed(1)}%`
+                    : '—'
+            );
+            pcaSetMetricText(
+                'pcaDiagnosticScore',
+                pcaFormatDiagnosticScore(m.pcaScore)
+            );
+            pcaSetMetricText('pcaStopReason', `STOP_REASON: ${formatMetricValue(m.stopReason)}`);
             refreshPcaStockfishComparison();
         };
 
@@ -2320,11 +2387,18 @@
         }
 
         function pcaRecordSemanticSample(context, candidate) {
-            context.lastSemanticSample = candidate ? {
+            if (!candidate) return context.lastSemanticSample;
+            const informationGain = candidate.informationGain != null
+                ? candidate.informationGain
+                : (candidate.infoGain != null ? candidate.infoGain : 0);
+            context.lastSemanticSample = {
+                valid: true,
                 hypothesesBefore: candidate.hypothesesBefore,
                 hypothesesAfter: candidate.hypothesesAfter,
-                contractionRatio: candidate.contractionRatio
-            } : context.lastSemanticSample;
+                contractionRatio: candidate.contractionRatio,
+                informationGain
+            };
+            return context.lastSemanticSample;
         }
 
         function pcaCanForceMate(game, attackerColor, remainingPlies, context, searchState = null) {
@@ -2510,6 +2584,28 @@
             const progress = hypothesesBefore > 0
                 ? 100 * (1 - (hypothesesAfter / hypothesesBefore))
                 : 100;
+            const contractionRatio = result.contractionRatio ?? (
+                hypothesesBefore > 0 ? 1 - (hypothesesAfter / hypothesesBefore) : 0
+            );
+            const informationGain = result.informationGain != null
+                ? result.informationGain
+                : (
+                    pcaHypothesisInformation(hypothesesBefore) -
+                    pcaHypothesisInformation(hypothesesAfter)
+                );
+            const semanticSampleValid = result.semanticSampleValid === true ||
+                result.hypothesesBefore != null ||
+                result.contractionRatio != null ||
+                result.informationGain != null;
+            const pcaScore = result.pcaScore !== undefined
+                ? result.pcaScore
+                : pcaComputeDiagnosticScore({
+                    valid: semanticSampleValid,
+                    hypothesesBefore,
+                    hypothesesAfter,
+                    contractionRatio,
+                    informationGain
+                });
             return {
                 ...result,
                 targets,
@@ -2517,9 +2613,10 @@
                 targetUncertainty,
                 conflicts: hypothesesAfter > 0 ? pcaChoose2(hypothesesAfter) : 0,
                 progress,
-                contractionRatio: result.contractionRatio ?? (
-                    hypothesesBefore > 0 ? 1 - (hypothesesAfter / hypothesesBefore) : 0
-                )
+                contractionRatio,
+                informationGain,
+                semanticSampleValid,
+                pcaScore
             };
         }
 
@@ -3198,7 +3295,13 @@
                 activeMoveStartNodes: 0,
                 lastReportedNodes: 0,
                 lastReportedAt: onProgress ? Date.now() : 0,
-                lastSemanticSample: { hypothesesBefore: 0, hypothesesAfter: 0, contractionRatio: 0 },
+                lastSemanticSample: {
+                    valid: false,
+                    hypothesesBefore: null,
+                    hypothesesAfter: null,
+                    contractionRatio: null,
+                    informationGain: null
+                },
                 reportProgress: null,
                 debug: options.debug || {},
                 // Shadow telescopic plumbing only — never consulted by exact AND/OR decisions.
@@ -3272,6 +3375,9 @@
                 ) return;
                 context.lastReportedNodes = context.nodes;
                 context.lastReportedAt = now;
+                const sample = context.lastSemanticSample || { valid: false };
+                const sampleValid = sample.valid === true;
+                const diagnosticScore = pcaComputeDiagnosticScore(sample);
                 onProgress({
                     status: 'RUNNING',
                     kGuard: guard,
@@ -3281,9 +3387,12 @@
                     cacheHits: context.exactCacheHits + context.classCacheHits,
                     descriptorHits: context.descriptorHits,
                     collisions: context.collisionMap.size,
-                    hypothesesBefore: context.lastSemanticSample.hypothesesBefore,
-                    hypothesesAfter: context.lastSemanticSample.hypothesesAfter,
-                    contractionRatio: context.lastSemanticSample.contractionRatio,
+                    semanticSampleValid: sampleValid,
+                    hypothesesBefore: sampleValid ? sample.hypothesesBefore : null,
+                    hypothesesAfter: sampleValid ? sample.hypothesesAfter : null,
+                    informationGain: sampleValid ? sample.informationGain : null,
+                    contractionRatio: sampleValid ? sample.contractionRatio : null,
+                    pcaScore: diagnosticScore,
                     movesCompleted: Math.max(0, context.activeMoveIndex + (force ? 1 : 0)),
                     totalMoves: initialCandidates,
                     activeMove: context.activeMove,
@@ -3509,6 +3618,8 @@
                         hypothesesBefore: context.lastSemanticSample.hypothesesBefore,
                         hypothesesAfter: context.lastSemanticSample.hypothesesAfter,
                         contractionRatio: context.lastSemanticSample.contractionRatio,
+                        informationGain: context.lastSemanticSample.informationGain,
+                        semanticSampleValid: context.lastSemanticSample.valid === true,
                         semanticOrdering: context.semanticOrdering,
                         telescopicMode: telescopicTelemetry.telescopicMode,
                         proposalCount: telescopicTelemetry.proposalCount,
@@ -3534,6 +3645,8 @@
                     hypothesesBefore: context.lastSemanticSample.hypothesesBefore,
                     hypothesesAfter: context.lastSemanticSample.hypothesesAfter,
                     contractionRatio: context.lastSemanticSample.contractionRatio,
+                    informationGain: context.lastSemanticSample.informationGain,
+                    semanticSampleValid: context.lastSemanticSample.valid === true,
                     semanticOrdering: context.semanticOrdering,
                     telescopicMode: telescopicTelemetry.telescopicMode,
                     proposalCount: telescopicTelemetry.proposalCount,
@@ -4106,6 +4219,7 @@
                 pcaBuildSemanticCandidates,
                 pcaOrderSemanticCandidates,
                 pcaRecordSemanticSample,
+                pcaComputeDiagnosticScore,
                 pcaCanForceMate,
                 pcaRootMoveForcesMate,
                 pcaResultMetrics,
@@ -4409,6 +4523,13 @@
                 initialCandidates: pcaMetricsState.initialCandidates,
                 survivors: pcaMetricsState.survivors,
                 targets: pcaMetricsState.targets,
+                collisions: pcaMetricsState.collisions,
+                hypothesesBefore: pcaMetricsState.hypothesesBefore,
+                hypothesesAfter: pcaMetricsState.hypothesesAfter,
+                informationGain: pcaMetricsState.informationGain,
+                contractionRatio: pcaMetricsState.contractionRatio,
+                semanticSampleValid: pcaMetricsState.semanticSampleValid,
+                pcaScore: pcaMetricsState.pcaScore,
                 stateUncertainty: pcaMetricsState.stateUncertainty,
                 targetUncertainty: pcaMetricsState.targetUncertainty,
                 conflicts: pcaMetricsState.conflicts,
@@ -4487,6 +4608,28 @@
                         liveMetrics.nps = pcaRollingNps(message.elapsedMs, message.nodes);
                     } else if (message.nps != null) {
                         liveMetrics.nps = message.nps;
+                    }
+                    // Semantic LIVE fields produced during reportProgress (not only RESULT).
+                    if (message.collisions != null) liveMetrics.collisions = message.collisions;
+                    if (message.semanticSampleValid != null) {
+                        liveMetrics.semanticSampleValid = message.semanticSampleValid;
+                    }
+                    if (message.hypothesesBefore != null) {
+                        liveMetrics.hypothesesBefore = message.hypothesesBefore;
+                    }
+                    if (message.hypothesesAfter != null) {
+                        liveMetrics.hypothesesAfter = message.hypothesesAfter;
+                    }
+                    if (message.informationGain != null) {
+                        liveMetrics.informationGain = message.informationGain;
+                    }
+                    if (message.contractionRatio != null) {
+                        liveMetrics.contractionRatio = message.contractionRatio;
+                    }
+                    if (message.pcaScore !== undefined) {
+                        liveMetrics.pcaScore = message.pcaScore;
+                    } else if (message.semanticSampleValid === false) {
+                        liveMetrics.pcaScore = null;
                     }
                     window.updatePCAMetrics(liveMetrics);
                     // Line NPS is measured from worker elapsedMs + activeMove* snapshots.
@@ -4789,6 +4932,8 @@
         window.pcaTelescopicPublicTelemetry = pcaTelescopicPublicTelemetry;
         window.pcaRegisterDescriptorOutcome = pcaRegisterDescriptorOutcome;
         window.pcaBuildSemanticCandidates = pcaBuildSemanticCandidates;
+        window.pcaRecordSemanticSample = pcaRecordSemanticSample;
+        window.pcaComputeDiagnosticScore = pcaComputeDiagnosticScore;
         window.pcaCanForceMate = pcaCanForceMate;
         window.pcaRootMoveForcesMate = pcaRootMoveForcesMate;
 
