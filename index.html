@@ -2527,11 +2527,23 @@
                     lastExample: scoped.entry.lastExample
                 };
             }
-            // Legacy same-session classCache (single analysis scope).
+            // Legacy same-session classCache (single analysis scope) — now scope-validated.
+            // If options.classCache is reused across different semantics/versions,
+            // we must not let foreign-scope stats influence ranking.
             const key = pcaClassCacheKey(descriptor, remainingPlies);
             if (context.classCache && context.classCache.has(key)) {
+                const cached = context.classCache.get(key);
+                if (!cached || cached.scopeKey !== context.scopeKey) {
+                    if (cached && cached.scopeKey !== context.scopeKey) {
+                        if (context.evidenceTelemetry) {
+                            context.evidenceTelemetry.scopeMismatches =
+                                (context.evidenceTelemetry.scopeMismatches || 0) + 1;
+                        }
+                    }
+                    return null;
+                }
                 context.classCacheHits += 1;
-                return context.classCache.get(key);
+                return cached;
             }
             return null;
         }
