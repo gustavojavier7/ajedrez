@@ -2363,7 +2363,7 @@
             const targets = searchState && Array.isArray(searchState.targets)
                 ? searchState.targets
                 : pcaCompatibleMateTargets(descriptor, remainingPlies, attackerColor);
-            const orderedCandidates = context.semanticOrdering
+            let orderedCandidates = context.semanticOrdering
                 ? pcaOrderSemanticCandidates(
                     pcaBuildSemanticCandidates(
                         game,
@@ -2389,8 +2389,9 @@
                     classMateRate: null,
                     mateScore: 0
                 }));
-            // Recursive SHADOW seam: observe complete semantic candidate list only.
-            // Must not reorder, prune, touch exactCache, or alter AND/OR cuts/result.
+            // Recursive telescopic seam (Phase 1 shadow observe / Phase 2 active rank).
+            // Shadow: observe only. Active: may permute candidates after semantic order.
+            // Must not prune, touch exactCache, or certify outside exact AND/OR.
             if (context.telescopicMode === PCA_TELESCOPIC_MODE.SHADOW &&
                 context.telescopicTelemetry) {
                 const sample = orderedCandidates[0] || null;
@@ -2406,9 +2407,32 @@
                     informationGain: sample ? sample.infoGain : 0,
                     contractionRatio: sample ? sample.contractionRatio : 0,
                     descriptorClass: pcaDescriptorKey(descriptor),
-                    candidateIdentities: orderedCandidates.map(candidate => candidate.move.san)
+                    candidateIdentities: orderedCandidates.map(candidate => candidate.move.san),
+                    candidateViews: pcaCandidateSemanticViews(orderedCandidates)
                 }, context.telescopicOptions || {});
                 pcaMergeTelescopicTelemetry(context.telescopicTelemetry, observation);
+            } else if (context.telescopicMode === PCA_TELESCOPIC_MODE.ACTIVE &&
+                context.telescopicTelemetry) {
+                const sample = orderedCandidates[0] || null;
+                orderedCandidates = pcaApplyActiveTelescopicRanking(
+                    orderedCandidates,
+                    {
+                        query: context.telescopicQuery || null,
+                        stateIdentity: fen,
+                        descriptor,
+                        depth: remainingPlies,
+                        remainingPlies,
+                        attackerTurn,
+                        hypothesesBefore: sample ? sample.hypothesesBefore : targets.length,
+                        hypothesesAfter: sample ? sample.hypothesesAfter : targets.length,
+                        informationGain: sample ? sample.infoGain : 0,
+                        contractionRatio: sample ? sample.contractionRatio : 0,
+                        descriptorClass: pcaDescriptorKey(descriptor)
+                    },
+                    context.telescopicOptions || {},
+                    context.telescopicTelemetry,
+                    'internal'
+                );
             }
             let result = attackerTurn ? false : true;
 
@@ -2512,8 +2536,9 @@
         }
 
         // ------------------------------------------------------------------
-        // Telescopic PCA contracts (Phase 1) — observation only.
-        // Authority: policy proposes → engine executes → exact solver decides.
+        // Telescopic PCA contracts (Phase 1 shadow / Phase 2 active).
+        // Authority: policy proposes/ranks → engine executes → exact solver decides.
+        // Active may only permute existing candidates (π(C)); never certify/prune.
         // A proposal is NOT a proven move, NOT a certified mate, NOT a prune.
         // ------------------------------------------------------------------
 
@@ -2544,7 +2569,8 @@
 
         const PCA_TELESCOPIC_MODE = Object.freeze({
             DISABLED: 'disabled',
-            SHADOW: 'shadow'
+            SHADOW: 'shadow',
+            ACTIVE: 'active'
         });
 
         // Effective Chess.js rules identity used by the exact solver.
@@ -2606,6 +2632,7 @@
             const customPropose = typeof options.propose === 'function' ? options.propose : null;
             return Object.freeze({
                 name: 'ShadowTelescopicPolicy',
+                mode: PCA_TELESCOPIC_MODE.SHADOW,
                 propose: function pcaShadowTelescopicPropose(context) {
                     if (customPropose) {
                         const raw = customPropose(context);
@@ -2616,10 +2643,101 @@
             });
         }
 
+        // Phase 2: active policy may only permute existing candidate identities.
+        // rank() returns π(C); never add/remove/certify/prune.
+        function pcaDefaultActiveRank(context, candidateIdentities) {
+            const identities = Array.isArray(candidateIdentities)
+                ? candidateIdentities.map(id => (id == null ? null : String(id)))
+                : [];
+            const views = Array.isArray(context && context.candidateViews)
+                ? context.candidateViews.slice()
+                : [];
+            const buckets = new Map();
+            for (let i = 0; i < views.length; i += 1) {
+                const view = views[i] || {};
+                const id = view.identity != null
+                    ? String(view.identity)
+                    : (identities[i] != null ? String(identities[i]) : String(i));
+                if (!buckets.has(id)) buckets.set(id, []);
+                buckets.get(id).push(view);
+            }
+            const entries = identities.map((id, index) => {
+                const bucket = buckets.get(id);
+                const view = bucket && bucket.length
+                    ? bucket.shift()
+                    : { identity: id, moveIndex: index };
+                return { id, index, view };
+            });
+            // Root active observations may omit attackerTurn; treat as OR (attacker).
+            const attackerTurn = !context || context.attackerTurn == null
+                ? true
+                : !!context.attackerTurn;
+            entries.sort((left, right) => {
+                const lv = left.view || {};
+                const rv = right.view || {};
+                if (attackerTurn) {
+                    // OR: prioritize certification-looking signals (not a proof).
+                    const mateDiff = (rv.mateScore || 0) - (lv.mateScore || 0);
+                    if (mateDiff !== 0) return mateDiff;
+                    const contrDiff = (rv.contractionRatio || 0) - (lv.contractionRatio || 0);
+                    if (contrDiff !== 0) return contrDiff;
+                    const infoDiff = (rv.informationGain || 0) - (lv.informationGain || 0);
+                    if (infoDiff !== 0) return infoDiff;
+                    const rateDiff = (rv.classMateRate ?? -1) - (lv.classMateRate ?? -1);
+                    if (rateDiff !== 0) return rateDiff;
+                    const hypDiff = Number((rv.hypothesesAfter || 0) > 0) -
+                        Number((lv.hypothesesAfter || 0) > 0);
+                    if (hypDiff !== 0) return hypDiff;
+                } else {
+                    // AND: prioritize refutation-looking signals (not a proof).
+                    const hypDiff = (lv.hypothesesAfter || 0) - (rv.hypothesesAfter || 0);
+                    if (hypDiff !== 0) return hypDiff;
+                    const rateDiff = (lv.classMateRate ?? 1) - (rv.classMateRate ?? 1);
+                    if (rateDiff !== 0) return rateDiff;
+                    const mateDiff = (lv.mateScore || 0) - (rv.mateScore || 0);
+                    if (mateDiff !== 0) return mateDiff;
+                    const contrDiff = (rv.contractionRatio || 0) - (lv.contractionRatio || 0);
+                    if (contrDiff !== 0) return contrDiff;
+                    const infoDiff = (rv.informationGain || 0) - (lv.informationGain || 0);
+                    if (infoDiff !== 0) return infoDiff;
+                }
+                // Tie-break deliberately differs from pcaOrderSemanticCandidates.
+                const leftIdx = lv.moveIndex != null ? lv.moveIndex : left.index;
+                const rightIdx = rv.moveIndex != null ? rv.moveIndex : right.index;
+                return rightIdx - leftIdx;
+            });
+            return entries.map(entry => entry.id);
+        }
+
+        function pcaCreateActiveTelescopicPolicy(options = {}) {
+            const customPropose = typeof options.propose === 'function' ? options.propose : null;
+            const customRank = typeof options.rank === 'function' ? options.rank : null;
+            return Object.freeze({
+                name: 'ActiveTelescopicPolicy',
+                mode: PCA_TELESCOPIC_MODE.ACTIVE,
+                propose: function pcaActiveTelescopicPropose(context) {
+                    if (customPropose) {
+                        const raw = customPropose(context);
+                        return Array.isArray(raw) ? raw : [];
+                    }
+                    return [];
+                },
+                rank: function pcaActiveTelescopicRank(context, candidateIdentities) {
+                    if (customRank) {
+                        return customRank(context, candidateIdentities);
+                    }
+                    return pcaDefaultActiveRank(context, candidateIdentities);
+                }
+            });
+        }
+
         function pcaResolveTelescopicMode(options = {}) {
             const raw = options.telescopicPolicy;
             if (raw == null || raw === false || raw === PCA_TELESCOPIC_MODE.DISABLED) {
                 return PCA_TELESCOPIC_MODE.DISABLED;
+            }
+            if (raw === PCA_TELESCOPIC_MODE.ACTIVE) {
+                return PCA_TELESCOPIC_MODE.ACTIVE;
             }
             if (raw === true || raw === PCA_TELESCOPIC_MODE.SHADOW) {
                 return PCA_TELESCOPIC_MODE.SHADOW;
@@ -2628,7 +2746,19 @@
                 if (raw.mode === PCA_TELESCOPIC_MODE.DISABLED) {
                     return PCA_TELESCOPIC_MODE.DISABLED;
                 }
-                // Policy instance or { mode: 'shadow', policy } → shadow observation only.
+                if (raw.mode === PCA_TELESCOPIC_MODE.ACTIVE) {
+                    return PCA_TELESCOPIC_MODE.ACTIVE;
+                }
+                if (raw.mode === PCA_TELESCOPIC_MODE.SHADOW) {
+                    return PCA_TELESCOPIC_MODE.SHADOW;
+                }
+                // rank() grants active authority; propose-only stays shadow (Phase 1).
+                if (typeof raw.rank === 'function') {
+                    return PCA_TELESCOPIC_MODE.ACTIVE;
+                }
+                if (raw.policy && typeof raw.policy.rank === 'function') {
+                    return PCA_TELESCOPIC_MODE.ACTIVE;
+                }
                 return PCA_TELESCOPIC_MODE.SHADOW;
             }
             return PCA_TELESCOPIC_MODE.DISABLED;
@@ -2637,12 +2767,20 @@
         function pcaResolveTelescopicPolicy(options = {}) {
             const raw = options.telescopicPolicy;
             if (raw && typeof raw === 'object') {
-                if (typeof raw.propose === 'function') return raw;
-                if (raw.policy && typeof raw.policy.propose === 'function') return raw.policy;
+                if (typeof raw.rank === 'function' || typeof raw.propose === 'function') return raw;
+                if (raw.policy &&
+                    (typeof raw.policy.rank === 'function' ||
+                        typeof raw.policy.propose === 'function')) {
+                    return raw.policy;
+                }
             }
             if (options.telescopicPolicyInstance &&
-                typeof options.telescopicPolicyInstance.propose === 'function') {
+                (typeof options.telescopicPolicyInstance.propose === 'function' ||
+                    typeof options.telescopicPolicyInstance.rank === 'function')) {
                 return options.telescopicPolicyInstance;
+            }
+            if (pcaResolveTelescopicMode(options) === PCA_TELESCOPIC_MODE.ACTIVE) {
+                return pcaCreateActiveTelescopicPolicy();
             }
             return pcaCreateNoTelescopicPolicy();
         }
@@ -2653,14 +2791,63 @@
                 proposalCount: 0,
                 proposalKinds: [],
                 shadowInvocations: 0,
-                proposals: []
+                proposals: [],
+                activeInvocations: 0,
+                reordersApplied: 0,
+                reordersRejected: 0,
+                orderFallbacks: 0,
+                rootReorders: 0,
+                internalReorders: 0
+            };
+        }
+
+        function pcaTelescopicPublicTelemetry(telemetry) {
+            const src = telemetry || pcaEmptyTelescopicTelemetry();
+            return {
+                telescopicMode: src.telescopicMode,
+                proposalCount: src.proposalCount || 0,
+                proposalKinds: Array.isArray(src.proposalKinds) ? src.proposalKinds.slice() : [],
+                shadowInvocations: src.shadowInvocations || 0,
+                activeInvocations: src.activeInvocations || 0,
+                reordersApplied: src.reordersApplied || 0,
+                reordersRejected: src.reordersRejected || 0,
+                orderFallbacks: src.orderFallbacks || 0,
+                rootReorders: src.rootReorders || 0,
+                internalReorders: src.internalReorders || 0
             };
         }
 
         function pcaBuildTelescopicContext(view = {}) {
-            // Explicit semantic context for a future policy. No NPS/DOM/Stockfish/time.
+            // Explicit semantic context for a policy. No NPS/DOM/Stockfish/time.
             const candidateIdentities = Array.isArray(view.candidateIdentities)
                 ? view.candidateIdentities.map(id => (id == null ? null : String(id)))
+                : [];
+            const candidateViews = Array.isArray(view.candidateViews)
+                ? view.candidateViews.map((candidateView, index) => {
+                    const src = candidateView && typeof candidateView === 'object'
+                        ? candidateView
+                        : {};
+                    return Object.freeze({
+                        identity: src.identity != null
+                            ? String(src.identity)
+                            : (candidateIdentities[index] != null
+                                ? String(candidateIdentities[index])
+                                : null),
+                        moveIndex: src.moveIndex != null ? src.moveIndex : index,
+                        hypothesesAfter: src.hypothesesAfter != null ? src.hypothesesAfter : null,
+                        informationGain: src.informationGain != null
+                            ? src.informationGain
+                            : (src.infoGain != null ? src.infoGain : null),
+                        contractionRatio: src.contractionRatio != null
+                            ? src.contractionRatio
+                            : null,
+                        classMateRate: src.classMateRate != null ? src.classMateRate : null,
+                        mateScore: src.mateScore != null ? src.mateScore : null,
+                        descriptorClass: src.descriptorClass != null
+                            ? src.descriptorClass
+                            : null
+                    });
+                })
                 : [];
             const descriptor = view.descriptor
                 ? Object.freeze(Object.assign({}, view.descriptor, {
@@ -2684,7 +2871,8 @@
                 depth: view.depth != null ? view.depth : null,
                 remainingPlies: view.remainingPlies != null ? view.remainingPlies : null,
                 attackerTurn: view.attackerTurn != null ? !!view.attackerTurn : null,
-                candidateIdentities: Object.freeze(candidateIdentities.slice())
+                candidateIdentities: Object.freeze(candidateIdentities.slice()),
+                candidateViews: Object.freeze(candidateViews)
             });
         }
 
@@ -2697,6 +2885,179 @@
                 out.push(pcaCreateTelescopicProposal(item));
             }
             return out;
+        }
+
+        // Fail-closed permutation guard: proposed order must be π(original).
+        function pcaValidatePermutation(original, proposed) {
+            if (!Array.isArray(original) || !Array.isArray(proposed)) {
+                return { ok: false, reason: 'POLICY_ORDER_INVALID' };
+            }
+            if (proposed.length !== original.length) {
+                return { ok: false, reason: 'POLICY_ORDER_INVALID' };
+            }
+            const originalCounts = new Map();
+            for (let i = 0; i < original.length; i += 1) {
+                const id = original[i] == null ? null : String(original[i]);
+                originalCounts.set(id, (originalCounts.get(id) || 0) + 1);
+            }
+            const proposedCounts = new Map();
+            for (let i = 0; i < proposed.length; i += 1) {
+                const id = proposed[i] == null ? null : String(proposed[i]);
+                if (!originalCounts.has(id)) {
+                    return { ok: false, reason: 'POLICY_ORDER_INVALID' };
+                }
+                proposedCounts.set(id, (proposedCounts.get(id) || 0) + 1);
+            }
+            for (const [id, count] of originalCounts) {
+                if ((proposedCounts.get(id) || 0) !== count) {
+                    return { ok: false, reason: 'POLICY_ORDER_INVALID' };
+                }
+            }
+            return { ok: true, reason: null };
+        }
+
+        function pcaReorderCandidatesByIdentities(candidates, proposedIdentities) {
+            if (!Array.isArray(candidates) || !Array.isArray(proposedIdentities)) return null;
+            if (candidates.length !== proposedIdentities.length) return null;
+            const pool = candidates.map(candidate => ({ candidate, used: false }));
+            const out = [];
+            for (let i = 0; i < proposedIdentities.length; i += 1) {
+                const id = proposedIdentities[i] == null ? null : String(proposedIdentities[i]);
+                let found = -1;
+                for (let j = 0; j < pool.length; j += 1) {
+                    if (pool[j].used) continue;
+                    const candidateId = pool[j].candidate && pool[j].candidate.move
+                        ? pool[j].candidate.move.san
+                        : null;
+                    if (candidateId === id) {
+                        found = j;
+                        break;
+                    }
+                }
+                if (found < 0) return null;
+                pool[found].used = true;
+                out.push(pool[found].candidate);
+            }
+            return out;
+        }
+
+        function pcaCandidateIdentityList(candidates) {
+            if (!Array.isArray(candidates)) return [];
+            return candidates.map(candidate => (
+                candidate && candidate.move ? candidate.move.san : null
+            ));
+        }
+
+        function pcaCandidateSemanticViews(candidates) {
+            if (!Array.isArray(candidates)) return [];
+            return candidates.map((candidate, index) => ({
+                identity: candidate && candidate.move ? candidate.move.san : null,
+                moveIndex: candidate && candidate.moveIndex != null ? candidate.moveIndex : index,
+                hypothesesAfter: candidate ? candidate.hypothesesAfter : null,
+                informationGain: candidate ? candidate.infoGain : null,
+                contractionRatio: candidate ? candidate.contractionRatio : null,
+                classMateRate: candidate ? candidate.classMateRate : null,
+                mateScore: candidate ? candidate.mateScore : null,
+                descriptorClass: candidate && candidate.descriptor
+                    ? pcaDescriptorKey(candidate.descriptor)
+                    : null
+            }));
+        }
+
+        // Active seam: POLICY OUTPUT → VALIDATE PERMUTATION → reorder or legacy fallback.
+        // Never throws into the exact solver; invalid policy → legacy semantic order.
+        function pcaApplyActiveTelescopicRanking(
+            orderedCandidates,
+            contextView,
+            options,
+            telemetry,
+            scope
+        ) {
+            if (!Array.isArray(orderedCandidates) || !telemetry) {
+                return orderedCandidates;
+            }
+            telemetry.activeInvocations = (telemetry.activeInvocations || 0) + 1;
+
+            const identities = pcaCandidateIdentityList(orderedCandidates);
+            const frozenContext = pcaBuildTelescopicContext(Object.assign({}, contextView || {}, {
+                candidateIdentities: identities,
+                candidateViews: pcaCandidateSemanticViews(orderedCandidates)
+            }));
+            const policy = pcaResolveTelescopicPolicy(options || {});
+
+            if (policy && typeof policy.propose === 'function') {
+                try {
+                    const rawProposals = policy.propose(frozenContext);
+                    const proposals = pcaNormalizeShadowProposals(rawProposals);
+                    telemetry.proposalCount = (telemetry.proposalCount || 0) + proposals.length;
+                    if (!Array.isArray(telemetry.proposals)) telemetry.proposals = [];
+                    if (!Array.isArray(telemetry.proposalKinds)) telemetry.proposalKinds = [];
+                    for (let i = 0; i < proposals.length; i += 1) {
+                        telemetry.proposals.push(proposals[i]);
+                        telemetry.proposalKinds.push(proposals[i].kind);
+                    }
+                } catch (error) {
+                    if (!telemetry.policyError) {
+                        telemetry.policyError = error && error.message
+                            ? error.message
+                            : String(error);
+                    }
+                }
+            }
+
+            let proposed = null;
+            try {
+                if (policy && typeof policy.rank === 'function') {
+                    proposed = policy.rank(frozenContext, identities.slice());
+                } else {
+                    proposed = pcaDefaultActiveRank(frozenContext, identities.slice());
+                }
+            } catch (error) {
+                telemetry.reordersRejected = (telemetry.reordersRejected || 0) + 1;
+                telemetry.orderFallbacks = (telemetry.orderFallbacks || 0) + 1;
+                telemetry.lastOrderRejection = 'POLICY_ORDER_INVALID';
+                if (!telemetry.policyError) {
+                    telemetry.policyError = error && error.message
+                        ? error.message
+                        : String(error);
+                }
+                return orderedCandidates;
+            }
+
+            const validation = pcaValidatePermutation(identities, proposed);
+            if (!validation.ok) {
+                telemetry.reordersRejected = (telemetry.reordersRejected || 0) + 1;
+                telemetry.orderFallbacks = (telemetry.orderFallbacks || 0) + 1;
+                telemetry.lastOrderRejection = validation.reason || 'POLICY_ORDER_INVALID';
+                return orderedCandidates;
+            }
+
+            const reordered = pcaReorderCandidatesByIdentities(orderedCandidates, proposed);
+            if (!reordered) {
+                telemetry.reordersRejected = (telemetry.reordersRejected || 0) + 1;
+                telemetry.orderFallbacks = (telemetry.orderFallbacks || 0) + 1;
+                telemetry.lastOrderRejection = 'POLICY_ORDER_INVALID';
+                return orderedCandidates;
+            }
+
+            let changed = false;
+            for (let i = 0; i < identities.length; i += 1) {
+                const left = identities[i] == null ? null : String(identities[i]);
+                const right = proposed[i] == null ? null : String(proposed[i]);
+                if (left !== right) {
+                    changed = true;
+                    break;
+                }
+            }
+            if (changed) {
+                telemetry.reordersApplied = (telemetry.reordersApplied || 0) + 1;
+                if (scope === 'root') {
+                    telemetry.rootReorders = (telemetry.rootReorders || 0) + 1;
+                } else {
+                    telemetry.internalReorders = (telemetry.internalReorders || 0) + 1;
+                }
+            }
+            return reordered;
         }
 
         // Small pure seam usable later at root and inside AND/OR expansion.
@@ -2730,20 +3091,39 @@
         function pcaMergeTelescopicTelemetry(target, observation) {
             if (!observation) return target;
             target.telescopicMode = observation.telescopicMode || target.telescopicMode;
-            target.shadowInvocations += Number(observation.shadowInvocations) || 0;
-            target.proposalCount += Number(observation.proposalCount) || 0;
+            target.shadowInvocations =
+                (target.shadowInvocations || 0) + (Number(observation.shadowInvocations) || 0);
+            target.proposalCount =
+                (target.proposalCount || 0) + (Number(observation.proposalCount) || 0);
+            target.activeInvocations =
+                (target.activeInvocations || 0) + (Number(observation.activeInvocations) || 0);
+            target.reordersApplied =
+                (target.reordersApplied || 0) + (Number(observation.reordersApplied) || 0);
+            target.reordersRejected =
+                (target.reordersRejected || 0) + (Number(observation.reordersRejected) || 0);
+            target.orderFallbacks =
+                (target.orderFallbacks || 0) + (Number(observation.orderFallbacks) || 0);
+            target.rootReorders =
+                (target.rootReorders || 0) + (Number(observation.rootReorders) || 0);
+            target.internalReorders =
+                (target.internalReorders || 0) + (Number(observation.internalReorders) || 0);
             if (Array.isArray(observation.proposalKinds)) {
+                if (!Array.isArray(target.proposalKinds)) target.proposalKinds = [];
                 for (let i = 0; i < observation.proposalKinds.length; i += 1) {
                     target.proposalKinds.push(observation.proposalKinds[i]);
                 }
             }
             if (Array.isArray(observation.proposals)) {
+                if (!Array.isArray(target.proposals)) target.proposals = [];
                 for (let i = 0; i < observation.proposals.length; i += 1) {
                     target.proposals.push(observation.proposals[i]);
                 }
             }
             if (observation.policyError && !target.policyError) {
                 target.policyError = observation.policyError;
+            }
+            if (observation.lastOrderRejection && !target.lastOrderRejection) {
+                target.lastOrderRejection = observation.lastOrderRejection;
             }
             return target;
         }
@@ -2766,7 +3146,13 @@
                     telescopicMode: telescopicTelemetry.telescopicMode,
                     proposalCount: telescopicTelemetry.proposalCount,
                     proposalKinds: telescopicTelemetry.proposalKinds.slice(),
-                    shadowInvocations: telescopicTelemetry.shadowInvocations
+                    shadowInvocations: telescopicTelemetry.shadowInvocations,
+                    activeInvocations: telescopicTelemetry.activeInvocations,
+                    reordersApplied: telescopicTelemetry.reordersApplied,
+                    reordersRejected: telescopicTelemetry.reordersRejected,
+                    orderFallbacks: telescopicTelemetry.orderFallbacks,
+                    rootReorders: telescopicTelemetry.rootReorders,
+                    internalReorders: telescopicTelemetry.internalReorders
                 });
             }
 
@@ -2780,7 +3166,13 @@
                     telescopicMode: telescopicTelemetry.telescopicMode,
                     proposalCount: telescopicTelemetry.proposalCount,
                     proposalKinds: telescopicTelemetry.proposalKinds.slice(),
-                    shadowInvocations: telescopicTelemetry.shadowInvocations
+                    shadowInvocations: telescopicTelemetry.shadowInvocations,
+                    activeInvocations: telescopicTelemetry.activeInvocations,
+                    reordersApplied: telescopicTelemetry.reordersApplied,
+                    reordersRejected: telescopicTelemetry.reordersRejected,
+                    orderFallbacks: telescopicTelemetry.orderFallbacks,
+                    rootReorders: telescopicTelemetry.rootReorders,
+                    internalReorders: telescopicTelemetry.internalReorders
                 });
             }
 
@@ -2838,7 +3230,13 @@
                     telescopicMode: telescopicTelemetry.telescopicMode,
                     proposalCount: telescopicTelemetry.proposalCount,
                     proposalKinds: telescopicTelemetry.proposalKinds.slice(),
-                    shadowInvocations: telescopicTelemetry.shadowInvocations
+                    shadowInvocations: telescopicTelemetry.shadowInvocations,
+                    activeInvocations: telescopicTelemetry.activeInvocations,
+                    reordersApplied: telescopicTelemetry.reordersApplied,
+                    reordersRejected: telescopicTelemetry.reordersRejected,
+                    orderFallbacks: telescopicTelemetry.orderFallbacks,
+                    rootReorders: telescopicTelemetry.rootReorders,
+                    internalReorders: telescopicTelemetry.internalReorders
                 });
             }
 
@@ -2853,7 +3251,13 @@
                     telescopicMode: telescopicTelemetry.telescopicMode,
                     proposalCount: telescopicTelemetry.proposalCount,
                     proposalKinds: telescopicTelemetry.proposalKinds.slice(),
-                    shadowInvocations: telescopicTelemetry.shadowInvocations
+                    shadowInvocations: telescopicTelemetry.shadowInvocations,
+                    activeInvocations: telescopicTelemetry.activeInvocations,
+                    reordersApplied: telescopicTelemetry.reordersApplied,
+                    reordersRejected: telescopicTelemetry.reordersRejected,
+                    orderFallbacks: telescopicTelemetry.orderFallbacks,
+                    rootReorders: telescopicTelemetry.rootReorders,
+                    internalReorders: telescopicTelemetry.internalReorders
                 });
             }
 
@@ -2894,7 +3298,7 @@
                 for (let k = 1; infinite || k <= guard; k += 1) {
                     context.activeDepth = k;
                     const rootTargets = pcaCompatibleMateTargets(baseDescriptor, k, rootColor);
-                    const orderedRootCandidates = context.semanticOrdering
+                    let orderedRootCandidates = context.semanticOrdering
                         ? pcaOrderSemanticCandidates(
                             pcaBuildSemanticCandidates(
                                 root,
@@ -2918,8 +3322,8 @@
                             infoGain: 0,
                             contractionRatio: 0
                         }));
-                    // Shadow telescopic seam: observe only. Must not reorder/prune/decide.
-                    // Pass immutable identity views — never mutable candidate/cache refs.
+                    // Root telescopic seam: shadow observes; active may permute only.
+                    // Pass immutable identity/views — never mutable candidate/cache refs.
                     if (telescopicMode === PCA_TELESCOPIC_MODE.SHADOW) {
                         const sample = orderedRootCandidates[0] || null;
                         const observation = pcaObserveTelescopicContext({
@@ -2932,9 +3336,31 @@
                             contractionRatio: sample ? sample.contractionRatio : 0,
                             descriptorClass: pcaDescriptorKey(baseDescriptor),
                             depth: k,
-                            candidateIdentities: orderedRootCandidates.map(candidate => candidate.move.san)
+                            attackerTurn: true,
+                            candidateIdentities: orderedRootCandidates.map(candidate => candidate.move.san),
+                            candidateViews: pcaCandidateSemanticViews(orderedRootCandidates)
                         }, options);
                         pcaMergeTelescopicTelemetry(telescopicTelemetry, observation);
+                    } else if (telescopicMode === PCA_TELESCOPIC_MODE.ACTIVE) {
+                        const sample = orderedRootCandidates[0] || null;
+                        orderedRootCandidates = pcaApplyActiveTelescopicRanking(
+                            orderedRootCandidates,
+                            {
+                                query: telescopicQuery,
+                                stateIdentity: fen,
+                                descriptor: baseDescriptor,
+                                hypothesesBefore: sample ? sample.hypothesesBefore : rootTargets.length,
+                                hypothesesAfter: sample ? sample.hypothesesAfter : rootTargets.length,
+                                informationGain: sample ? sample.infoGain : 0,
+                                contractionRatio: sample ? sample.contractionRatio : 0,
+                                descriptorClass: pcaDescriptorKey(baseDescriptor),
+                                depth: k,
+                                attackerTurn: true
+                            },
+                            options,
+                            telescopicTelemetry,
+                            'root'
+                        );
                     }
                     // W_k = { m : ExactANDOR(m, k) = MATE }. PCA only orders search;
                     // classification must inspect every remaining root move at depth k.
@@ -3001,7 +3427,13 @@
                             telescopicMode: telescopicTelemetry.telescopicMode,
                             proposalCount: telescopicTelemetry.proposalCount,
                             proposalKinds: telescopicTelemetry.proposalKinds.slice(),
-                            shadowInvocations: telescopicTelemetry.shadowInvocations
+                            shadowInvocations: telescopicTelemetry.shadowInvocations,
+                            activeInvocations: telescopicTelemetry.activeInvocations,
+                            reordersApplied: telescopicTelemetry.reordersApplied,
+                            reordersRejected: telescopicTelemetry.reordersRejected,
+                            orderFallbacks: telescopicTelemetry.orderFallbacks,
+                            rootReorders: telescopicTelemetry.rootReorders,
+                            internalReorders: telescopicTelemetry.internalReorders
                         });
                     }
 
@@ -3029,7 +3461,13 @@
                             telescopicMode: telescopicTelemetry.telescopicMode,
                             proposalCount: telescopicTelemetry.proposalCount,
                             proposalKinds: telescopicTelemetry.proposalKinds.slice(),
-                            shadowInvocations: telescopicTelemetry.shadowInvocations
+                            shadowInvocations: telescopicTelemetry.shadowInvocations,
+                            activeInvocations: telescopicTelemetry.activeInvocations,
+                            reordersApplied: telescopicTelemetry.reordersApplied,
+                            reordersRejected: telescopicTelemetry.reordersRejected,
+                            orderFallbacks: telescopicTelemetry.orderFallbacks,
+                            rootReorders: telescopicTelemetry.rootReorders,
+                            internalReorders: telescopicTelemetry.internalReorders
                         });
                     }
                 }
@@ -3049,7 +3487,13 @@
                     telescopicMode: telescopicTelemetry.telescopicMode,
                     proposalCount: telescopicTelemetry.proposalCount,
                     proposalKinds: telescopicTelemetry.proposalKinds.slice(),
-                    shadowInvocations: telescopicTelemetry.shadowInvocations
+                    shadowInvocations: telescopicTelemetry.shadowInvocations,
+                    activeInvocations: telescopicTelemetry.activeInvocations,
+                    reordersApplied: telescopicTelemetry.reordersApplied,
+                    reordersRejected: telescopicTelemetry.reordersRejected,
+                    orderFallbacks: telescopicTelemetry.orderFallbacks,
+                    rootReorders: telescopicTelemetry.rootReorders,
+                    internalReorders: telescopicTelemetry.internalReorders
                 });
             } catch (error) {
                 if (error && error.code === 'PCA_NODE_GUARD') {
@@ -3069,7 +3513,13 @@
                         telescopicMode: telescopicTelemetry.telescopicMode,
                         proposalCount: telescopicTelemetry.proposalCount,
                         proposalKinds: telescopicTelemetry.proposalKinds.slice(),
-                        shadowInvocations: telescopicTelemetry.shadowInvocations
+                        shadowInvocations: telescopicTelemetry.shadowInvocations,
+                        activeInvocations: telescopicTelemetry.activeInvocations,
+                        reordersApplied: telescopicTelemetry.reordersApplied,
+                        reordersRejected: telescopicTelemetry.reordersRejected,
+                        orderFallbacks: telescopicTelemetry.orderFallbacks,
+                        rootReorders: telescopicTelemetry.rootReorders,
+                        internalReorders: telescopicTelemetry.internalReorders
                     });
                 }
 
@@ -3089,6 +3539,12 @@
                     proposalCount: telescopicTelemetry.proposalCount,
                     proposalKinds: telescopicTelemetry.proposalKinds.slice(),
                     shadowInvocations: telescopicTelemetry.shadowInvocations,
+                    activeInvocations: telescopicTelemetry.activeInvocations,
+                    reordersApplied: telescopicTelemetry.reordersApplied,
+                    reordersRejected: telescopicTelemetry.reordersRejected,
+                    orderFallbacks: telescopicTelemetry.orderFallbacks,
+                    rootReorders: telescopicTelemetry.rootReorders,
+                    internalReorders: telescopicTelemetry.internalReorders,
                     error: error && error.message ? error.message : String(error)
                 });
             }
@@ -3658,11 +4114,19 @@
                 pcaCreateTelescopicProposal,
                 pcaCreateNoTelescopicPolicy,
                 pcaCreateShadowTelescopicPolicy,
+                pcaDefaultActiveRank,
+                pcaCreateActiveTelescopicPolicy,
                 pcaResolveTelescopicMode,
                 pcaResolveTelescopicPolicy,
                 pcaEmptyTelescopicTelemetry,
+                pcaTelescopicPublicTelemetry,
                 pcaBuildTelescopicContext,
                 pcaNormalizeShadowProposals,
+                pcaValidatePermutation,
+                pcaReorderCandidatesByIdentities,
+                pcaCandidateIdentityList,
+                pcaCandidateSemanticViews,
+                pcaApplyActiveTelescopicRanking,
                 pcaObserveTelescopicContext,
                 pcaMergeTelescopicTelemetry,
                 pcaAnalyzePositionCore,
@@ -4315,8 +4779,14 @@
         window.pcaCreateTelescopicProposal = pcaCreateTelescopicProposal;
         window.pcaCreateNoTelescopicPolicy = pcaCreateNoTelescopicPolicy;
         window.pcaCreateShadowTelescopicPolicy = pcaCreateShadowTelescopicPolicy;
+        window.pcaDefaultActiveRank = pcaDefaultActiveRank;
+        window.pcaCreateActiveTelescopicPolicy = pcaCreateActiveTelescopicPolicy;
+        window.pcaValidatePermutation = pcaValidatePermutation;
+        window.pcaReorderCandidatesByIdentities = pcaReorderCandidatesByIdentities;
+        window.pcaApplyActiveTelescopicRanking = pcaApplyActiveTelescopicRanking;
         window.pcaBuildTelescopicContext = pcaBuildTelescopicContext;
         window.pcaObserveTelescopicContext = pcaObserveTelescopicContext;
+        window.pcaTelescopicPublicTelemetry = pcaTelescopicPublicTelemetry;
         window.pcaRegisterDescriptorOutcome = pcaRegisterDescriptorOutcome;
         window.pcaBuildSemanticCandidates = pcaBuildSemanticCandidates;
         window.pcaCanForceMate = pcaCanForceMate;

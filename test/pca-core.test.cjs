@@ -968,3 +968,429 @@ test('D-rec: contexto telescópico recursivo no contiene NPS/tiempo/DOM/Stockfis
         }
     }
 });
+
+// ---------------------------------------------------------------------------
+// FASE 2 — telescopic ACTIVE mode (permutation-only authority)
+// RESULT(BASELINE) == RESULT(DISABLED) == RESULT(SHADOW) == RESULT(ACTIVE)
+// nodes may differ under ACTIVE; exact truth must not.
+// ---------------------------------------------------------------------------
+
+function pcaExactTruthSlice(result) {
+    return {
+        status: result.status,
+        move: result.move,
+        depth: result.depth,
+        stopReason: result.stopReason,
+        survivors: result.survivors,
+        forcedMateTargets: Array.isArray(result.forcedMateTargets)
+            ? [...result.forcedMateTargets].sort()
+            : result.forcedMateTargets
+    };
+}
+
+function pcaMultisetEqual(left, right) {
+    if (!Array.isArray(left) || !Array.isArray(right)) return false;
+    if (left.length !== right.length) return false;
+    const counts = new Map();
+    for (const item of left) {
+        const key = item == null ? null : String(item);
+        counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    for (const item of right) {
+        const key = item == null ? null : String(item);
+        const next = (counts.get(key) || 0) - 1;
+        if (next < 0) return false;
+        counts.set(key, next);
+    }
+    for (const value of counts.values()) {
+        if (value !== 0) return false;
+    }
+    return true;
+}
+
+test('FASE2 contratos active mode + ActiveTelescopicPolicy existen', () => {
+    const runtime = loadRuntime();
+    assert.equal(runtime.PCA_TELESCOPIC_MODE.ACTIVE, 'active');
+    assert.equal(typeof runtime.pcaCreateActiveTelescopicPolicy, 'function');
+    assert.equal(typeof runtime.pcaValidatePermutation, 'function');
+    assert.equal(typeof runtime.pcaDefaultActiveRank, 'function');
+    assert.equal(typeof runtime.pcaApplyActiveTelescopicRanking, 'function');
+
+    const policy = runtime.pcaCreateActiveTelescopicPolicy();
+    assert.equal(policy.mode, 'active');
+    assert.equal(typeof policy.propose, 'function');
+    assert.equal(typeof policy.rank, 'function');
+    const proposals = policy.propose({ candidateIdentities: ['a'] });
+    assert.ok(Array.isArray(proposals));
+    assert.equal(proposals.length, 0);
+});
+
+test('A-active: active es una permutación del universo semántico', () => {
+    const runtime = loadRuntime();
+    const baseCandidates = [
+        { moveIndex: 0, hypothesesAfter: 2, infoGain: 1, classMateRate: 0.1, mateScore: 1, contractionRatio: 0.2 },
+        { moveIndex: 1, hypothesesAfter: 1, infoGain: 3, classMateRate: 0.9, mateScore: 4, contractionRatio: 0.8 },
+        { moveIndex: 2, hypothesesAfter: 3, infoGain: 0, classMateRate: 0.0, mateScore: 0, contractionRatio: 0.1 }
+    ];
+    const semantic = runtime.pcaOrderSemanticCandidates(baseCandidates, true);
+    const semanticIds = semantic.map(candidate => String(candidate.moveIndex));
+
+    const context = runtime.pcaBuildTelescopicContext({
+        attackerTurn: true,
+        candidateIdentities: semanticIds,
+        candidateViews: semantic.map(candidate => ({
+            identity: String(candidate.moveIndex),
+            moveIndex: candidate.moveIndex,
+            hypothesesAfter: candidate.hypothesesAfter,
+            informationGain: candidate.infoGain,
+            contractionRatio: candidate.contractionRatio,
+            classMateRate: candidate.classMateRate,
+            mateScore: candidate.mateScore
+        }))
+    });
+    const ranked = runtime.pcaDefaultActiveRank(context, semanticIds.slice());
+    assert.equal(ranked.length, semanticIds.length);
+    assert.equal(new Set(ranked).size, ranked.length);
+    assert.equal(pcaMultisetEqual(ranked, semanticIds), true);
+
+    const validation = runtime.pcaValidatePermutation(semanticIds, ranked);
+    assert.equal(validation.ok, true);
+
+    // Live solver: capture root/internal candidate universes under reverse-rank policy.
+    const observed = [];
+    const reversePolicy = runtime.pcaCreateActiveTelescopicPolicy({
+        rank: (ctx, ids) => ids.slice().reverse()
+    });
+    const active = runtime.pcaAnalyzePositionCore(multiMateFen, 6, {
+        semanticOrdering: true,
+        telescopicPolicy: reversePolicy
+    });
+    assert.equal(active.telescopicMode, 'active');
+    assert.ok(active.activeInvocations >= 1);
+    assert.ok(active.reordersApplied >= 1);
+
+    // Direct apply path must preserve candidate object multiset.
+    const fakeMoves = ['Aa', 'Bb', 'Cc'].map((san, moveIndex) => ({
+        move: { san },
+        moveIndex,
+        hypothesesAfter: moveIndex,
+        infoGain: 3 - moveIndex,
+        contractionRatio: 0.1 * moveIndex,
+        classMateRate: 0.2 * moveIndex,
+        mateScore: moveIndex
+    }));
+    const telemetry = {
+        activeInvocations: 0,
+        reordersApplied: 0,
+        reordersRejected: 0,
+        orderFallbacks: 0,
+        rootReorders: 0,
+        internalReorders: 0,
+        proposalCount: 0,
+        proposalKinds: [],
+        proposals: []
+    };
+    const reordered = runtime.pcaApplyActiveTelescopicRanking(
+        fakeMoves,
+        { attackerTurn: true, depth: 2 },
+        { telescopicPolicy: reversePolicy },
+        telemetry,
+        'root'
+    );
+    assert.equal(reordered.length, fakeMoves.length);
+    const reorderedSans = reordered.map(c => c.move.san);
+    const baseSans = fakeMoves.map(c => c.move.san);
+    assert.equal(pcaMultisetEqual(reorderedSans, baseSans), true);
+    assert.equal(reorderedSans.join(','), 'Cc,Bb,Aa');
+    assert.equal(telemetry.reordersApplied, 1);
+    assert.equal(telemetry.rootReorders, 1);
+});
+
+test('B-active: política inválida falla cerrada y preserva resultado exacto', () => {
+    const runtime = loadRuntime();
+    const disabled = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, {
+        semanticOrdering: true,
+        telescopicPolicy: 'disabled'
+    });
+
+    const cases = [
+        {
+            label: 'elimina candidato',
+            rank: (ctx, ids) => ids.slice(0, Math.max(0, ids.length - 1))
+        },
+        {
+            label: 'duplica candidato',
+            rank: (ctx, ids) => (ids.length ? ids.slice(0, -1).concat([ids[0]]) : ids)
+        },
+        {
+            label: 'inventa candidato',
+            rank: (ctx, ids) => ids.map((id, index) => (index === 0 ? 'ZZ_FAKE' : id))
+        },
+        {
+            label: 'devuelve null',
+            rank: () => null
+        },
+        {
+            label: 'devuelve undefined',
+            rank: () => undefined
+        },
+        {
+            label: 'lanza excepción',
+            rank: () => {
+                throw new Error('boom-policy');
+            }
+        }
+    ];
+
+    for (const scenario of cases) {
+        const policy = runtime.pcaCreateActiveTelescopicPolicy({
+            rank: scenario.rank
+        });
+        const active = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, {
+            semanticOrdering: true,
+            telescopicPolicy: policy
+        });
+        assert.deepEqual(
+            pcaExactTruthSlice(active),
+            pcaExactTruthSlice(disabled),
+            scenario.label
+        );
+        assert.equal(active.telescopicMode, 'active', scenario.label);
+        assert.ok(active.activeInvocations >= 1, scenario.label);
+        assert.ok(active.orderFallbacks >= 1, scenario.label + ' fallback');
+        assert.ok(active.reordersRejected >= 1, scenario.label + ' rejected');
+        assert.equal(active.reordersApplied, 0, scenario.label + ' no apply');
+    }
+
+    // Unit-level validatePermutation coverage.
+    assert.equal(runtime.pcaValidatePermutation(['a', 'b'], ['a']).ok, false);
+    assert.equal(runtime.pcaValidatePermutation(['a', 'b'], ['a', 'a']).ok, false);
+    assert.equal(runtime.pcaValidatePermutation(['a', 'b'], ['a', 'c']).ok, false);
+    assert.equal(runtime.pcaValidatePermutation(['a', 'b'], null).ok, false);
+    assert.equal(runtime.pcaValidatePermutation(['a', 'b'], ['b', 'a']).ok, true);
+});
+
+test('C-active: resultado exacto conserva verdad disabled == active', () => {
+    const runtime = loadRuntime();
+    const fixtures = [
+        { fen: uniqueMateFen, k: 2, label: 'mate único' },
+        { fen: multiMateFen, k: 6, label: 'mate múltiple' },
+        { fen: multiMateInOneFen, k: 2, label: 'mate múltiple en 1' },
+        { fen: defendedFen, k: 2, label: 'posición defendida / UNRESOLVED' }
+    ];
+
+    for (const fixture of fixtures) {
+        const disabled = runtime.pcaAnalyzePositionCore(fixture.fen, fixture.k, {
+            semanticOrdering: true,
+            telescopicPolicy: 'disabled'
+        });
+        const shadow = runtime.pcaAnalyzePositionCore(fixture.fen, fixture.k, {
+            semanticOrdering: true,
+            telescopicPolicy: 'shadow'
+        });
+        const active = runtime.pcaAnalyzePositionCore(fixture.fen, fixture.k, {
+            semanticOrdering: true,
+            telescopicPolicy: 'active'
+        });
+        const reverse = runtime.pcaAnalyzePositionCore(fixture.fen, fixture.k, {
+            semanticOrdering: true,
+            telescopicPolicy: runtime.pcaCreateActiveTelescopicPolicy({
+                rank: (ctx, ids) => ids.slice().reverse()
+            })
+        });
+
+        assert.deepEqual(
+            pcaExactTruthSlice(active),
+            pcaExactTruthSlice(disabled),
+            fixture.label + ' active'
+        );
+        assert.deepEqual(
+            pcaExactTruthSlice(shadow),
+            pcaExactTruthSlice(disabled),
+            fixture.label + ' shadow'
+        );
+        assert.deepEqual(
+            pcaExactTruthSlice(reverse),
+            pcaExactTruthSlice(disabled),
+            fixture.label + ' reverse-active'
+        );
+        assert.equal(active.telescopicMode, 'active', fixture.label);
+        assert.equal(shadow.nodes, disabled.nodes, fixture.label + ' shadow nodes');
+    }
+});
+
+test('D-active: ACTIVE reordena root e internos AND/OR', () => {
+    const runtime = loadRuntime();
+    let rootRanks = 0;
+    let internalRanks = 0;
+    const policy = runtime.pcaCreateActiveTelescopicPolicy({
+        rank: (ctx, ids) => {
+            if (ctx.remainingPlies != null) internalRanks += 1;
+            else rootRanks += 1;
+            return ids.slice().reverse();
+        }
+    });
+    const active = runtime.pcaAnalyzePositionCore(multiMateFen, 6, {
+        semanticOrdering: true,
+        telescopicPolicy: policy
+    });
+
+    assert.equal(active.telescopicMode, 'active');
+    assert.ok(active.activeInvocations >= 1);
+    assert.ok(rootRanks >= 1, 'expected root active ranking');
+    assert.ok(internalRanks >= 1, 'expected internal AND/OR active ranking');
+    assert.ok(active.rootReorders >= 1, 'expected rootReorders telemetry');
+    assert.ok(active.internalReorders >= 1, 'expected internalReorders telemetry');
+    assert.equal(active.activeInvocations, rootRanks + internalRanks);
+});
+
+test('E-active: NPS artificial no altera ranking telescópico activo', () => {
+    const runtime = loadRuntime();
+    const identities = ['m0', 'm1', 'm2'];
+    const viewsA = [
+        { identity: 'm0', moveIndex: 0, hypothesesAfter: 2, informationGain: 1, contractionRatio: 0.2, classMateRate: 0.1, mateScore: 1, nps: 9999 },
+        { identity: 'm1', moveIndex: 1, hypothesesAfter: 1, informationGain: 3, contractionRatio: 0.8, classMateRate: 0.9, mateScore: 4, nps: 1 },
+        { identity: 'm2', moveIndex: 2, hypothesesAfter: 0, informationGain: 0, contractionRatio: 0.0, classMateRate: 0.0, mateScore: 0, nps: 500 }
+    ];
+    const viewsB = viewsA.map(view => Object.assign({}, view, {
+        nps: view.nps === 9999 ? 1 : view.nps === 1 ? 9999 : 42
+    }));
+
+    const ctxA = runtime.pcaBuildTelescopicContext({
+        attackerTurn: true,
+        candidateIdentities: identities,
+        candidateViews: viewsA
+    });
+    const ctxB = runtime.pcaBuildTelescopicContext({
+        attackerTurn: true,
+        candidateIdentities: identities,
+        candidateViews: viewsB
+    });
+
+    assert.equal(Object.prototype.hasOwnProperty.call(ctxA, 'nps'), false);
+    assert.ok(ctxA.candidateViews.every(view => !Object.prototype.hasOwnProperty.call(view, 'nps')));
+    assert.deepEqual(
+        runtime.pcaDefaultActiveRank(ctxA, identities.slice()),
+        runtime.pcaDefaultActiveRank(ctxB, identities.slice())
+    );
+
+    const samples = [];
+    const policy = runtime.pcaCreateActiveTelescopicPolicy({
+        rank: (ctx, ids) => {
+            samples.push(ctx);
+            return ids.slice().reverse();
+        }
+    });
+    const withProgress = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, {
+        semanticOrdering: true,
+        telescopicPolicy: policy,
+        onProgress: () => {}
+    });
+    const quiet = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, {
+        semanticOrdering: true,
+        telescopicPolicy: 'active'
+    });
+
+    assert.deepEqual(pcaExactTruthSlice(withProgress), pcaExactTruthSlice(quiet));
+    assert.ok(samples.length >= 1);
+    for (const ctx of samples) {
+        assert.equal(Object.prototype.hasOwnProperty.call(ctx, 'nps'), false);
+        assert.equal(ctx.nps, undefined);
+        assert.equal(Object.prototype.hasOwnProperty.call(ctx, 'elapsedMs'), false);
+        assert.ok(Array.isArray(ctx.candidateViews));
+        assert.ok(ctx.candidateViews.every(view => !Object.prototype.hasOwnProperty.call(view, 'nps')));
+    }
+});
+
+test('F-active: experimento causal nodes disabled vs active', () => {
+    const runtime = loadRuntime();
+    const fixtures = [
+        { fen: uniqueMateFen, k: 2, label: 'mate único' },
+        { fen: multiMateInOneFen, k: 2, label: 'mate múltiple en 1' },
+        { fen: multiMateFen, k: 6, label: 'mate múltiple' },
+        { fen: defendedFen, k: 2, label: 'defendida' }
+    ];
+
+    const report = [];
+    let foundDelta = false;
+    for (const fixture of fixtures) {
+        const disabled = runtime.pcaAnalyzePositionCore(fixture.fen, fixture.k, {
+            semanticOrdering: true,
+            telescopicPolicy: 'disabled'
+        });
+        const shadow = runtime.pcaAnalyzePositionCore(fixture.fen, fixture.k, {
+            semanticOrdering: true,
+            telescopicPolicy: 'shadow'
+        });
+        const activeDefault = runtime.pcaAnalyzePositionCore(fixture.fen, fixture.k, {
+            semanticOrdering: true,
+            telescopicPolicy: 'active'
+        });
+        const activeReverse = runtime.pcaAnalyzePositionCore(fixture.fen, fixture.k, {
+            semanticOrdering: true,
+            telescopicPolicy: runtime.pcaCreateActiveTelescopicPolicy({
+                rank: (ctx, ids) => ids.slice().reverse()
+            })
+        });
+
+        assert.deepEqual(pcaExactTruthSlice(activeDefault), pcaExactTruthSlice(disabled));
+        assert.deepEqual(pcaExactTruthSlice(activeReverse), pcaExactTruthSlice(disabled));
+        assert.equal(shadow.nodes, disabled.nodes);
+
+        const row = {
+            label: fixture.label,
+            disabledNodes: disabled.nodes,
+            shadowNodes: shadow.nodes,
+            activeDefaultNodes: activeDefault.nodes,
+            activeReverseNodes: activeReverse.nodes,
+            activeInvocations: activeReverse.activeInvocations,
+            reordersApplied: activeReverse.reordersApplied,
+            rootReorders: activeReverse.rootReorders,
+            internalReorders: activeReverse.internalReorders
+        };
+        report.push(row);
+        if (activeDefault.nodes !== disabled.nodes || activeReverse.nodes !== disabled.nodes) {
+            foundDelta = true;
+        }
+    }
+
+    // Experimental note only — do not fabricate fixtures solely to force a delta.
+    if (!foundDelta) {
+        console.log('FASE2 causal experiment: no node delta on existing fixtures');
+        console.log(JSON.stringify(report, null, 2));
+    } else {
+        console.log('FASE2 causal experiment: node delta observed');
+        console.log(JSON.stringify(report, null, 2));
+    }
+    assert.ok(report.length >= 1);
+    assert.ok(report.every(row => row.activeInvocations >= 1));
+});
+
+test('FASE2 active no usa NPS y shadow/disabled siguen intactos', () => {
+    const runtime = loadRuntime();
+    const baseline = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, {
+        semanticOrdering: true
+    });
+    const disabled = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, {
+        semanticOrdering: true,
+        telescopicPolicy: 'disabled'
+    });
+    const shadow = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, {
+        semanticOrdering: true,
+        telescopicPolicy: 'shadow'
+    });
+    const active = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, {
+        semanticOrdering: true,
+        telescopicPolicy: 'active'
+    });
+
+    assert.deepEqual(pcaExactTruthSlice(disabled), pcaExactTruthSlice(baseline));
+    assert.deepEqual(pcaExactTruthSlice(shadow), pcaExactTruthSlice(baseline));
+    assert.deepEqual(pcaExactTruthSlice(active), pcaExactTruthSlice(baseline));
+    assert.equal(disabled.nodes, baseline.nodes);
+    assert.equal(shadow.nodes, baseline.nodes);
+    assert.equal(disabled.activeInvocations, 0);
+    assert.equal(shadow.activeInvocations, 0);
+    assert.ok(active.activeInvocations >= 1);
+    assert.equal(active.shadowInvocations, 0);
+});
