@@ -1504,3 +1504,329 @@ test('PROGRESS transporta H/contracción/colisiones/score durante MATE_SEARCH', 
     );
     assert.equal(Object.prototype.hasOwnProperty.call(result, 'pcaScore'), true);
 });
+
+// ---------------------------------------------------------------------------
+// FASE 3 — Evidencia y memoria contextual
+// memoria ≠ prueba; observación ≠ certificado; pureza empírica ≠ poda
+// ---------------------------------------------------------------------------
+
+function pcaMakeEvidenceContext(runtime, scopePartial = {}) {
+    const evidenceScope = runtime.pcaCreateEvidenceScope(scopePartial);
+    const context = {
+        evidenceScope,
+        scopeKey: runtime.pcaEvidenceScopeKey(evidenceScope),
+        exactCache: new Map(),
+        classCache: new Map(),
+        collisionMap: new Map(),
+        descriptorClassStore: new Map(),
+        counterexampleStore: new Map(),
+        evidenceStore: new Map(),
+        evidenceTelemetry: runtime.pcaEmptyEvidenceTelemetry(),
+        evidenceSource: 'EXACT_SOLVER'
+    };
+    runtime.pcaEnsureEvidenceContext(context);
+    return context;
+}
+
+test('FASE3 contratos: Query versionado, stores y SCOPE_MISMATCH', () => {
+    const runtime = loadRuntime();
+    const query = runtime.pcaCreateQuery({ horizonValue: 4 });
+    assert.equal(query.rulesVersion, 'chess.js@0.10.3');
+    assert.equal(query.semanticsVersion, 'pca-forced-mate-v1');
+    assert.equal(query.descriptorVersion, 'pca-descriptor-v1');
+    assert.equal(runtime.CHESS_RULES_VERSION, 'chess.js@0.10.3');
+    assert.equal(runtime.PCA_SEMANTICS_VERSION, 'pca-forced-mate-v1');
+    assert.equal(runtime.PCA_DESCRIPTOR_VERSION, 'pca-descriptor-v1');
+    assert.equal(runtime.PCA_FAILURE_REASON.SCOPE_MISMATCH, 'SCOPE_MISMATCH');
+    assert.equal(runtime.PCA_CLASS_STATE.EMPIRICALLY_PURE, 'EMPIRICALLY_PURE');
+    assert.equal(runtime.PCA_CLASS_STATE.MIXED, 'MIXED');
+    assert.equal(runtime.PCA_CLASS_STATE.INSUFFICIENT_DATA, 'INSUFFICIENT_DATA');
+    assert.notEqual(runtime.PCA_CLASS_STATE.EMPIRICALLY_PURE, 'CERTIFIED_PURE');
+    assert.equal(runtime.PCA_CLAIM_KIND.OUTCOME_OBSERVED, 'OUTCOME_OBSERVED');
+    assert.equal(runtime.PCA_CLAIM_KIND.DESCRIPTOR_CLASS_OBSERVED, 'DESCRIPTOR_CLASS_OBSERVED');
+    assert.equal(runtime.PCA_CLAIM_KIND.COLLISION_OBSERVED, 'COLLISION_OBSERVED');
+    assert.equal(runtime.PCA_EVIDENCE_STATUS.OBSERVED, 'OBSERVED');
+    assert.equal(runtime.PCA_EVIDENCE_STATUS.EXACT_CONFIRMED, 'EXACT_CONFIRMED');
+    assert.equal(runtime.PCA_EVIDENCE_STATUS.CONFLICTED, 'CONFLICTED');
+    assert.equal(typeof runtime.pcaCreateEvidenceScope, 'function');
+    assert.equal(typeof runtime.pcaEvidenceScopeKey, 'function');
+    assert.equal(typeof runtime.pcaLookupScopedDescriptorClass, 'function');
+    assert.equal(typeof runtime.pcaAppendEvidenceRecord, 'function');
+});
+
+test('FASE3 A: scope isolation — versions/horizon distintos no comparten evidencia', () => {
+    const runtime = loadRuntime();
+    const descriptor = runtime.describeFEN(uniqueMateFen);
+    const baseScope = {
+        horizonValue: 4,
+        semanticsVersion: 'pca-forced-mate-v1',
+        descriptorVersion: 'pca-descriptor-v1'
+    };
+    const ctxA = pcaMakeEvidenceContext(runtime, baseScope);
+    runtime.pcaRegisterDescriptorOutcome(descriptor, 2, true, uniqueMateFen, ctxA);
+    assert.ok(ctxA.descriptorClassStore.size >= 1);
+    const foreignKey = Array.from(ctxA.descriptorClassStore.keys())[0];
+    const descriptorKeyFromEntry = ctxA.descriptorClassStore.get(foreignKey).descriptorKey;
+
+    const variants = [
+        { ...baseScope, descriptorVersion: 'pca-descriptor-v2' },
+        { ...baseScope, semanticsVersion: 'pca-forced-mate-v2' },
+        { ...baseScope, horizonValue: 7 }
+    ];
+
+    for (const partial of variants) {
+        const ctxB = pcaMakeEvidenceContext(runtime, partial);
+        // Shared physical maps still isolate by scopeKey.
+        ctxB.descriptorClassStore = ctxA.descriptorClassStore;
+        ctxB.counterexampleStore = ctxA.counterexampleStore;
+        ctxB.evidenceStore = ctxA.evidenceStore;
+        const lookup = runtime.pcaLookupScopedDescriptorClass(
+            ctxB,
+            ctxA.scopeKey,
+            descriptorKeyFromEntry,
+            2
+        );
+        assert.equal(lookup.ok, false);
+        assert.equal(lookup.reason, runtime.PCA_FAILURE_REASON.SCOPE_MISMATCH);
+        assert.equal(lookup.entry, null);
+        assert.ok(ctxB.evidenceTelemetry.scopeMismatches >= 1);
+
+        // Same descriptor under ctxB scope does not see ctxA samples.
+        const local = runtime.pcaLookupClassStats(descriptor, 2, ctxB);
+        assert.equal(local, null);
+        assert.notEqual(ctxA.scopeKey, ctxB.scopeKey);
+    }
+});
+
+test('FASE3 B: clase benigna — mismo descriptor y outcome sin colisión estratégica', () => {
+    const runtime = loadRuntime();
+    const descriptor = runtime.describeFEN(uniqueMateFen);
+    // Two FENs that share the same coarse descriptor when material/side match.
+    // uniqueMateFen descriptor registered twice with MATE → pure, no counterexample.
+    const ctx = pcaMakeEvidenceContext(runtime, { horizonValue: 3 });
+    runtime.pcaRegisterDescriptorOutcome(descriptor, 1, true, uniqueMateFen, ctx);
+    runtime.pcaRegisterDescriptorOutcome(descriptor, 1, true, uniqueMateFen, ctx);
+
+    assert.equal(ctx.counterexampleStore.size, 0);
+    assert.equal(ctx.collisionMap.size, 0);
+    const stats = runtime.pcaLookupClassStats(descriptor, 1, ctx);
+    assert.ok(stats);
+    assert.equal(stats.classState, runtime.PCA_CLASS_STATE.EMPIRICALLY_PURE);
+    assert.equal(stats.outcomes.MATE, 2);
+    assert.equal(stats.outcomes.NO_MATE, 0);
+    assert.equal(stats.total, 2);
+});
+
+test('FASE3 C: colisión estratégica → MIXED + Counterexample', () => {
+    const runtime = loadRuntime();
+    const descriptor = runtime.describeFEN(uniqueMateFen);
+    const ctx = pcaMakeEvidenceContext(runtime, { horizonValue: 3 });
+    runtime.pcaRegisterDescriptorOutcome(descriptor, 2, true, uniqueMateFen, ctx);
+    runtime.pcaRegisterDescriptorOutcome(descriptor, 2, false, defendedFen, ctx);
+
+    const stats = runtime.pcaLookupClassStats(descriptor, 2, ctx);
+    assert.equal(stats.classState, runtime.PCA_CLASS_STATE.MIXED);
+    assert.ok(stats.outcomes.MATE >= 1);
+    assert.ok(stats.outcomes.NO_MATE >= 1);
+    assert.equal(ctx.counterexampleStore.size, 1);
+    assert.equal(ctx.collisionMap.size, 1);
+    const counter = Array.from(ctx.counterexampleStore.values())[0];
+    assert.equal(counter.outcomeA, 'MATE');
+    assert.equal(counter.outcomeB, 'NO_MATE');
+    assert.equal(counter.depth, 2);
+    assert.equal(counter.scopeKey, ctx.scopeKey);
+    assert.equal(counter.reason, runtime.PCA_FAILURE_REASON.STRATEGIC_COLLISION);
+
+    const collisionEvidence = Array.from(ctx.evidenceStore.values())
+        .filter(record => record.claimKind === runtime.PCA_CLAIM_KIND.COLLISION_OBSERVED);
+    assert.ok(collisionEvidence.length >= 1);
+    assert.equal(collisionEvidence[0].status, runtime.PCA_EVIDENCE_STATUS.CONFLICTED);
+    assert.ok(ctx.evidenceTelemetry.mixedClasses >= 1);
+    assert.ok(ctx.evidenceTelemetry.counterexamples >= 1);
+});
+
+test('FASE3 D: no autoridad — stores vacíos/poblados/conflictivos no cambian verdad exacta', () => {
+    const runtime = loadRuntime();
+    const descriptor = runtime.describeFEN(uniqueMateFen);
+
+    const empty = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, { semanticOrdering: true });
+
+    const populatedCtx = pcaMakeEvidenceContext(runtime, { horizonValue: 2 });
+    runtime.pcaRegisterDescriptorOutcome(descriptor, 1, true, uniqueMateFen, populatedCtx);
+    runtime.pcaRegisterDescriptorOutcome(descriptor, 1, true, uniqueMateFen, populatedCtx);
+    const populated = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, {
+        semanticOrdering: true,
+        descriptorClassStore: populatedCtx.descriptorClassStore,
+        counterexampleStore: populatedCtx.counterexampleStore,
+        evidenceStore: populatedCtx.evidenceStore,
+        evidenceScope: populatedCtx.evidenceScope,
+        scopeKey: populatedCtx.scopeKey
+    });
+
+    const conflictCtx = pcaMakeEvidenceContext(runtime, { horizonValue: 2 });
+    runtime.pcaRegisterDescriptorOutcome(descriptor, 1, true, uniqueMateFen, conflictCtx);
+    runtime.pcaRegisterDescriptorOutcome(descriptor, 1, false, defendedFen, conflictCtx);
+    const conflicted = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, {
+        semanticOrdering: true,
+        descriptorClassStore: conflictCtx.descriptorClassStore,
+        counterexampleStore: conflictCtx.counterexampleStore,
+        evidenceStore: conflictCtx.evidenceStore,
+        evidenceScope: conflictCtx.evidenceScope,
+        scopeKey: conflictCtx.scopeKey
+    });
+
+    for (const result of [empty, populated, conflicted]) {
+        assert.equal(result.status, 'DECIDED_UNIQUE');
+        assert.equal(result.move, 'Qg7#');
+        assert.equal(result.depth, 1);
+        assert.equal(result.stopReason, 'FORCED_MATE_CERTIFIED');
+    }
+    assert.equal(populated.status, empty.status);
+    assert.equal(populated.move, empty.move);
+    assert.equal(conflicted.status, empty.status);
+    assert.equal(conflicted.move, empty.move);
+});
+
+test('FASE3 E: memoria no contamina exactCache', () => {
+    const runtime = loadRuntime();
+    const ctx = pcaMakeEvidenceContext(runtime, { horizonValue: 5 });
+    ctx.evidenceSource = 'MANUAL';
+    const descriptor = runtime.describeFEN(uniqueMateFen);
+
+    // Invented/manual MATE evidence must never become exactCache truth.
+    runtime.pcaAppendEvidenceRecord(ctx, {
+        subjectKey: 'manual-subject',
+        claimKind: runtime.PCA_CLAIM_KIND.OUTCOME_OBSERVED,
+        source: 'MANUAL',
+        status: runtime.PCA_EVIDENCE_STATUS.OBSERVED,
+        observations: [{ fen: uniqueMateFen, outcome: 'MATE', remainingPlies: 3 }],
+        exactReferences: []
+    });
+    runtime.pcaRegisterDescriptorOutcome(descriptor, 3, true, uniqueMateFen, ctx);
+
+    assert.ok(ctx.evidenceStore.size >= 1);
+    assert.ok(ctx.descriptorClassStore.size >= 1);
+    assert.equal(ctx.exactCache.size, 0);
+
+    // Even with class memory claiming MATE, defended position truth stays UNRESOLVED.
+    const defended = runtime.pcaAnalyzePositionCore(defendedFen, 2, {
+        descriptorClassStore: ctx.descriptorClassStore,
+        evidenceStore: ctx.evidenceStore,
+        counterexampleStore: ctx.counterexampleStore
+    });
+    assert.equal(defended.status, 'UNRESOLVED');
+
+    // Direct exactCache probe: evidence APIs alone never insert exact truth.
+    // (Map comes from the VM realm — avoid cross-realm instanceof.)
+    const debug = {};
+    runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, { debug });
+    assert.equal(typeof debug.exactCache?.get, 'function');
+    assert.equal(typeof debug.exactCache?.set, 'function');
+    assert.equal(typeof debug.getEvidenceTelemetry, 'function');
+    // Pre-search evidence injection above left the manual context exactCache empty.
+    assert.equal(ctx.exactCache.size, 0);
+    // Manual/invented evidence must not be readable as exactCache hits without search.
+    const manualOnly = {
+        exactCache: ctx.exactCache,
+        descriptorClassStore: ctx.descriptorClassStore,
+        evidenceStore: ctx.evidenceStore,
+        evidenceScope: ctx.evidenceScope,
+        scopeKey: ctx.scopeKey
+    };
+    runtime.pcaEnsureEvidenceContext(manualOnly);
+    assert.equal(manualOnly.exactCache.size, 0);
+    assert.ok(manualOnly.evidenceStore.size >= 1);
+});
+
+test('FASE3 F: determinismo de scopeKey, clase y EvidenceRecord', () => {
+    const runtime = loadRuntime();
+    const descriptor = runtime.describeFEN(uniqueMateFen);
+    const scopePartial = {
+        horizonValue: 4,
+        semanticsVersion: 'pca-forced-mate-v1',
+        descriptorVersion: 'pca-descriptor-v1',
+        attackerColor: 'w'
+    };
+
+    function observeOnce() {
+        const ctx = pcaMakeEvidenceContext(runtime, scopePartial);
+        runtime.pcaRegisterDescriptorOutcome(descriptor, 2, true, uniqueMateFen, ctx);
+        runtime.pcaRegisterDescriptorOutcome(descriptor, 2, false, defendedFen, ctx);
+        return {
+            scopeKey: ctx.scopeKey,
+            classStates: Array.from(ctx.descriptorClassStore.values())
+                .map(entry => [entry.descriptorKey, entry.classState, entry.samples, entry.outcomes])
+                .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+            evidenceIds: Array.from(ctx.evidenceStore.keys()).sort(),
+            counterKeys: Array.from(ctx.counterexampleStore.keys()).sort(),
+            telemetry: runtime.pcaEvidencePublicTelemetry(ctx.evidenceTelemetry)
+        };
+    }
+
+    const a = observeOnce();
+    const b = observeOnce();
+    assert.equal(a.scopeKey, b.scopeKey);
+    assert.deepEqual(a.classStates, b.classStates);
+    assert.deepEqual(a.evidenceIds, b.evidenceIds);
+    assert.deepEqual(a.counterKeys, b.counterKeys);
+    assert.deepEqual(a.telemetry, b.telemetry);
+    assert.equal(a.classStates[0][1], runtime.PCA_CLASS_STATE.MIXED);
+});
+
+test('FASE3 SCORE V1 no mezcla classMateRate/counterexamples/EvidenceStore', () => {
+    const runtime = loadRuntime();
+    const sample = {
+        valid: true,
+        hypothesesBefore: 4,
+        hypothesesAfter: 1,
+        contractionRatio: 0.75,
+        informationGain: 2
+    };
+    const base = runtime.pcaComputeDiagnosticScore(sample);
+    const noisy = runtime.pcaComputeDiagnosticScore({
+        ...sample,
+        classMateRate: 0.99,
+        counterexamples: 42,
+        evidenceRecords: 99,
+        mixedClasses: 7,
+        empiricallyPureClasses: 3
+    });
+    assert.equal(base, noisy);
+});
+
+test('FASE3 ACTIVE puede leer stats contextuales sólo con scope coincidente (heurística)', () => {
+    const runtime = loadRuntime();
+    const descriptor = runtime.describeFEN(uniqueMateFen);
+    const ctx = pcaMakeEvidenceContext(runtime, { horizonValue: 2 });
+    // Strong empirical mate bias — ranking signal only.
+    for (let i = 0; i < 5; i += 1) {
+        runtime.pcaRegisterDescriptorOutcome(descriptor, 0, true, uniqueMateFen, ctx);
+    }
+    const stats = runtime.pcaLookupClassStats(descriptor, 0, ctx);
+    assert.equal(stats.classState, runtime.PCA_CLASS_STATE.EMPIRICALLY_PURE);
+    assert.ok(stats.outcomes.MATE >= 5);
+
+    const result = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, {
+        telescopicPolicy: runtime.pcaCreateActiveTelescopicPolicy(),
+        descriptorClassStore: ctx.descriptorClassStore,
+        evidenceScope: ctx.evidenceScope,
+        scopeKey: ctx.scopeKey
+    });
+    assert.equal(result.status, 'DECIDED_UNIQUE');
+    assert.equal(result.move, 'Qg7#');
+
+    // Foreign scope must not reuse the class memory.
+    const foreign = pcaMakeEvidenceContext(runtime, {
+        horizonValue: 2,
+        semanticsVersion: 'other-semantics'
+    });
+    foreign.descriptorClassStore = ctx.descriptorClassStore;
+    const reuse = runtime.pcaLookupScopedDescriptorClass(
+        foreign,
+        ctx.scopeKey,
+        Array.from(ctx.descriptorClassStore.values())[0].descriptorKey,
+        0
+    );
+    assert.equal(reuse.ok, false);
+    assert.equal(reuse.reason, 'SCOPE_MISMATCH');
+});

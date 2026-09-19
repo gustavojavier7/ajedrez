@@ -1946,6 +1946,232 @@
             return `${pcaDescriptorKey(descriptor)}|${depth}`;
         }
 
+        // ------------------------------------------------------------------
+        // Phase 3 — contextual evidence/memory (session-local, non-authoritative)
+        // observation ≠ certificate; EMPIRICALLY_PURE ≠ CERTIFIED_PURE
+        // exactCache remains the only operational exact authority.
+        // ------------------------------------------------------------------
+
+        const PCA_SEMANTICS_VERSION = 'pca-forced-mate-v1';
+        const PCA_DESCRIPTOR_VERSION = 'pca-descriptor-v1';
+
+        const PCA_CLASS_STATE = Object.freeze({
+            EMPIRICALLY_PURE: 'EMPIRICALLY_PURE',
+            MIXED: 'MIXED',
+            INSUFFICIENT_DATA: 'INSUFFICIENT_DATA'
+        });
+
+        const PCA_CLAIM_KIND = Object.freeze({
+            OUTCOME_OBSERVED: 'OUTCOME_OBSERVED',
+            DESCRIPTOR_CLASS_OBSERVED: 'DESCRIPTOR_CLASS_OBSERVED',
+            COLLISION_OBSERVED: 'COLLISION_OBSERVED'
+        });
+
+        const PCA_EVIDENCE_STATUS = Object.freeze({
+            OBSERVED: 'OBSERVED',
+            EXACT_CONFIRMED: 'EXACT_CONFIRMED',
+            CONFLICTED: 'CONFLICTED'
+        });
+
+        function pcaEmptyEvidenceTelemetry() {
+            return {
+                classesObserved: 0,
+                empiricallyPureClasses: 0,
+                mixedClasses: 0,
+                counterexamples: 0,
+                evidenceRecords: 0,
+                scopeMismatches: 0
+            };
+        }
+
+        function pcaEvidencePublicTelemetry(telemetry) {
+            const src = telemetry || pcaEmptyEvidenceTelemetry();
+            return {
+                classesObserved: src.classesObserved || 0,
+                empiricallyPureClasses: src.empiricallyPureClasses || 0,
+                mixedClasses: src.mixedClasses || 0,
+                counterexamples: src.counterexamples || 0,
+                evidenceRecords: src.evidenceRecords || 0,
+                scopeMismatches: src.scopeMismatches || 0
+            };
+        }
+
+        function pcaCreateEvidenceScope(partial = {}) {
+            const horizonValue = partial.horizon && partial.horizon.value != null
+                ? partial.horizon.value
+                : (partial.horizonValue != null ? partial.horizonValue : null);
+            return Object.freeze({
+                domainId: partial.domainId || 'CHESS',
+                rulesVersion: partial.rulesVersion || CHESS_RULES_VERSION,
+                semanticsVersion: partial.semanticsVersion || PCA_SEMANTICS_VERSION,
+                descriptorVersion: partial.descriptorVersion || PCA_DESCRIPTOR_VERSION,
+                goal: partial.goal || 'ALL_SHORTEST_FORCED_MATES',
+                horizon: Object.freeze({
+                    unit: (partial.horizon && partial.horizon.unit) || 'PLIES',
+                    value: horizonValue
+                }),
+                attackerColor: partial.attackerColor != null ? partial.attackerColor : null,
+                sideSemantics: partial.sideSemantics != null ? partial.sideSemantics : null
+            });
+        }
+
+        function pcaEvidenceScopeKey(scope) {
+            const src = scope || pcaCreateEvidenceScope();
+            return pcaStableStringify({
+                attackerColor: src.attackerColor != null ? src.attackerColor : null,
+                descriptorVersion: src.descriptorVersion || PCA_DESCRIPTOR_VERSION,
+                domainId: src.domainId || 'CHESS',
+                goal: src.goal || 'ALL_SHORTEST_FORCED_MATES',
+                horizon: src.horizon || { unit: 'PLIES', value: null },
+                rulesVersion: src.rulesVersion || CHESS_RULES_VERSION,
+                semanticsVersion: src.semanticsVersion || PCA_SEMANTICS_VERSION,
+                sideSemantics: src.sideSemantics != null ? src.sideSemantics : null
+            });
+        }
+
+        function pcaDescriptorClassStoreKey(scopeKey, descriptorKey, remainingPlies) {
+            return `${scopeKey}|${descriptorKey}|${remainingPlies}`;
+        }
+
+        function pcaClassifyDescriptorClassState(entry) {
+            if (!entry) return PCA_CLASS_STATE.INSUFFICIENT_DATA;
+            const mate = (entry.outcomes && entry.outcomes.MATE) || 0;
+            const noMate = (entry.outcomes && entry.outcomes.NO_MATE) || 0;
+            const unknown = (entry.outcomes && entry.outcomes.UNKNOWN) || 0;
+            const samples = entry.samples != null ? entry.samples : (mate + noMate + unknown);
+            if (samples <= 0) return PCA_CLASS_STATE.INSUFFICIENT_DATA;
+            const distinctStrategic = (mate > 0 ? 1 : 0) + (noMate > 0 ? 1 : 0);
+            if (distinctStrategic > 1) return PCA_CLASS_STATE.MIXED;
+            if (distinctStrategic === 1) return PCA_CLASS_STATE.EMPIRICALLY_PURE;
+            return PCA_CLASS_STATE.INSUFFICIENT_DATA;
+        }
+
+        function pcaRefreshEvidenceClassTelemetry(context) {
+            if (!context || !context.descriptorClassStore || !context.evidenceTelemetry) return;
+            let pure = 0;
+            let mixed = 0;
+            context.descriptorClassStore.forEach(entry => {
+                if (!entry) return;
+                if (entry.classState === PCA_CLASS_STATE.EMPIRICALLY_PURE) pure += 1;
+                if (entry.classState === PCA_CLASS_STATE.MIXED) mixed += 1;
+            });
+            context.evidenceTelemetry.classesObserved = context.descriptorClassStore.size;
+            context.evidenceTelemetry.empiricallyPureClasses = pure;
+            context.evidenceTelemetry.mixedClasses = mixed;
+            context.evidenceTelemetry.counterexamples = context.counterexampleStore
+                ? context.counterexampleStore.size
+                : 0;
+            context.evidenceTelemetry.evidenceRecords = context.evidenceStore
+                ? context.evidenceStore.size
+                : 0;
+        }
+
+        function pcaEnsureEvidenceContext(context) {
+            if (!context || typeof context !== 'object') return context;
+            if (!context.classCache) context.classCache = new Map();
+            if (!context.collisionMap) context.collisionMap = new Map();
+            // exactCache is operational authority — never populated from evidence stores.
+            if (!context.exactCache) context.exactCache = new Map();
+            if (!context.descriptorClassStore) context.descriptorClassStore = new Map();
+            if (!context.counterexampleStore) context.counterexampleStore = new Map();
+            if (!context.evidenceStore) context.evidenceStore = new Map();
+            if (!context.evidenceTelemetry) context.evidenceTelemetry = pcaEmptyEvidenceTelemetry();
+            if (!context.evidenceScope) {
+                const query = context.query || context.telescopicQuery || {};
+                context.evidenceScope = pcaCreateEvidenceScope({
+                    domainId: query.domainId,
+                    rulesVersion: query.rulesVersion,
+                    semanticsVersion: query.semanticsVersion,
+                    descriptorVersion: query.descriptorVersion,
+                    goal: query.goal,
+                    horizon: query.horizon,
+                    horizonValue: query.horizon ? query.horizon.value : query.horizonValue,
+                    attackerColor: context.attackerColor != null ? context.attackerColor : null,
+                    sideSemantics: context.sideSemantics != null ? context.sideSemantics : null
+                });
+            }
+            if (!context.scopeKey) {
+                context.scopeKey = pcaEvidenceScopeKey(context.evidenceScope);
+            }
+            if (context.classCacheHits == null) context.classCacheHits = 0;
+            return context;
+        }
+
+        function pcaCreateEvidenceRecord(partial = {}) {
+            const scopeKey = partial.scopeKey != null
+                ? String(partial.scopeKey)
+                : pcaEvidenceScopeKey(partial.scope || pcaCreateEvidenceScope());
+            const subjectKey = partial.subjectKey != null ? String(partial.subjectKey) : null;
+            const claimKind = partial.claimKind || PCA_CLAIM_KIND.OUTCOME_OBSERVED;
+            const source = partial.source || 'EXACT_SOLVER';
+            const status = partial.status || PCA_EVIDENCE_STATUS.OBSERVED;
+            const observations = Object.freeze(
+                (Array.isArray(partial.observations) ? partial.observations : []).map(item =>
+                    Object.freeze(Object.assign({}, item))
+                )
+            );
+            const exactReferences = Object.freeze(
+                (Array.isArray(partial.exactReferences) ? partial.exactReferences : []).slice()
+            );
+            const evidenceId = partial.evidenceId != null
+                ? String(partial.evidenceId)
+                : pcaStableStringify({
+                    claimKind,
+                    exactReferences,
+                    observations,
+                    scopeKey,
+                    source,
+                    status,
+                    subjectKey
+                });
+            return Object.freeze({
+                evidenceId,
+                scopeKey,
+                subjectKey,
+                claimKind,
+                source,
+                status,
+                observations,
+                exactReferences
+            });
+        }
+
+        function pcaAppendEvidenceRecord(context, partial) {
+            pcaEnsureEvidenceContext(context);
+            const record = pcaCreateEvidenceRecord(Object.assign({}, partial, {
+                scopeKey: partial && partial.scopeKey != null ? partial.scopeKey : context.scopeKey
+            }));
+            if (!context.evidenceStore.has(record.evidenceId)) {
+                context.evidenceStore.set(record.evidenceId, record);
+            }
+            pcaRefreshEvidenceClassTelemetry(context);
+            return record;
+        }
+
+        // Safe contextual reuse: foreign scopes never share observations.
+        function pcaLookupScopedDescriptorClass(context, scopeKey, descriptorKey, remainingPlies) {
+            pcaEnsureEvidenceContext(context);
+            const currentScopeKey = context.scopeKey;
+            if (scopeKey !== currentScopeKey) {
+                context.evidenceTelemetry.scopeMismatches += 1;
+                return {
+                    ok: false,
+                    reason: PCA_FAILURE_REASON.SCOPE_MISMATCH,
+                    entry: null
+                };
+            }
+            const key = pcaDescriptorClassStoreKey(scopeKey, descriptorKey, remainingPlies);
+            if (!context.descriptorClassStore.has(key)) {
+                return { ok: true, reason: null, entry: null };
+            }
+            context.classCacheHits += 1;
+            return {
+                ok: true,
+                reason: null,
+                entry: context.descriptorClassStore.get(key)
+            };
+        }
+
         function pcaHypothesisInformation(count) {
             return count > 0 ? Math.log2(count) : 0;
         }
@@ -2271,39 +2497,148 @@
         }
 
         function pcaLookupClassStats(descriptor, remainingPlies, context) {
+            pcaEnsureEvidenceContext(context);
+            const descriptorKey = pcaDescriptorKey(descriptor);
+            const scoped = pcaLookupScopedDescriptorClass(
+                context,
+                context.scopeKey,
+                descriptorKey,
+                remainingPlies
+            );
+            if (!scoped.ok) return null;
+            if (scoped.entry) {
+                return {
+                    descriptor,
+                    depth: remainingPlies,
+                    total: scoped.entry.samples,
+                    outcomes: {
+                        MATE: scoped.entry.outcomes.MATE,
+                        NO_MATE: scoped.entry.outcomes.NO_MATE,
+                        UNKNOWN: scoped.entry.outcomes.UNKNOWN
+                    },
+                    samples: {
+                        MATE: scoped.entry.exampleByOutcome.MATE,
+                        NO_MATE: scoped.entry.exampleByOutcome.NO_MATE,
+                        UNKNOWN: scoped.entry.exampleByOutcome.UNKNOWN
+                    },
+                    classState: scoped.entry.classState,
+                    scopeKey: scoped.entry.scopeKey,
+                    firstExample: scoped.entry.firstExample,
+                    lastExample: scoped.entry.lastExample
+                };
+            }
+            // Legacy same-session classCache (single analysis scope).
             const key = pcaClassCacheKey(descriptor, remainingPlies);
-            if (!context.classCache.has(key)) return null;
-            context.classCacheHits += 1;
-            return context.classCache.get(key);
+            if (context.classCache && context.classCache.has(key)) {
+                context.classCacheHits += 1;
+                return context.classCache.get(key);
+            }
+            return null;
         }
 
         function pcaCollisionKey(descriptorKey, depth, mateFen, noMateFen) {
             return `${descriptorKey}|${depth}|${mateFen}|${noMateFen}`;
         }
 
+        function pcaCounterexampleKey(scopeKey, descriptorKey, depth, fenA, fenB) {
+            return `${scopeKey}|${descriptorKey}|${depth}|${fenA}|${fenB}`;
+        }
+
         function pcaRegisterDescriptorOutcome(descriptor, depth, isMate, fen, context) {
+            pcaEnsureEvidenceContext(context);
             const descriptorKey = pcaDescriptorKey(descriptor);
             const key = pcaClassCacheKey(descriptor, depth);
-            const outcome = isMate ? 'MATE' : 'NO_MATE';
-            const opposite = isMate ? 'NO_MATE' : 'MATE';
+            const outcome = isMate === true ? 'MATE' : (isMate === false ? 'NO_MATE' : 'UNKNOWN');
+            const scopeKey = context.scopeKey;
+            const source = context.evidenceSource || 'EXACT_SOLVER';
+            const status = source === 'EXACT_SOLVER'
+                ? PCA_EVIDENCE_STATUS.EXACT_CONFIRMED
+                : PCA_EVIDENCE_STATUS.OBSERVED;
+
+            // Legacy classCache (ranking/telemetry compatibility within one scope).
             let entry = context.classCache.get(key);
             if (!entry) {
                 entry = {
                     descriptor,
                     depth,
                     total: 0,
-                    outcomes: { MATE: 0, NO_MATE: 0 },
-                    samples: { MATE: null, NO_MATE: null }
+                    outcomes: { MATE: 0, NO_MATE: 0, UNKNOWN: 0 },
+                    samples: { MATE: null, NO_MATE: null, UNKNOWN: null },
+                    classState: PCA_CLASS_STATE.INSUFFICIENT_DATA,
+                    scopeKey
                 };
             }
             entry.total += 1;
-            entry.outcomes[outcome] += 1;
+            entry.outcomes[outcome] = (entry.outcomes[outcome] || 0) + 1;
             if (!entry.samples[outcome]) entry.samples[outcome] = fen;
+            entry.classState = pcaClassifyDescriptorClassState({
+                samples: entry.total,
+                outcomes: entry.outcomes
+            });
+            entry.scopeKey = scopeKey;
             context.classCache.set(key, entry);
 
-            if (entry.outcomes[opposite] > 0 && entry.samples[opposite]) {
-                const mateFen = isMate ? fen : entry.samples.MATE;
-                const noMateFen = isMate ? entry.samples.NO_MATE : fen;
+            // DescriptorClassStore — scoped empirical memory (not a certificate).
+            const storeKey = pcaDescriptorClassStoreKey(scopeKey, descriptorKey, depth);
+            let classEntry = context.descriptorClassStore.get(storeKey);
+            const example = Object.freeze({ fen, outcome, depth });
+            if (!classEntry) {
+                classEntry = {
+                    scopeKey,
+                    descriptorKey,
+                    remainingPlies: depth,
+                    samples: 0,
+                    outcomes: { MATE: 0, NO_MATE: 0, UNKNOWN: 0 },
+                    exampleByOutcome: { MATE: null, NO_MATE: null, UNKNOWN: null },
+                    firstExample: null,
+                    lastExample: null,
+                    classState: PCA_CLASS_STATE.INSUFFICIENT_DATA
+                };
+            }
+            classEntry.samples += 1;
+            classEntry.outcomes[outcome] = (classEntry.outcomes[outcome] || 0) + 1;
+            if (!classEntry.exampleByOutcome[outcome]) {
+                classEntry.exampleByOutcome[outcome] = fen;
+            }
+            if (!classEntry.firstExample) classEntry.firstExample = example;
+            classEntry.lastExample = example;
+            classEntry.classState = pcaClassifyDescriptorClassState(classEntry);
+            context.descriptorClassStore.set(storeKey, classEntry);
+
+            pcaAppendEvidenceRecord(context, {
+                scopeKey,
+                subjectKey: descriptorKey,
+                claimKind: PCA_CLAIM_KIND.OUTCOME_OBSERVED,
+                source,
+                status,
+                observations: [{ fen, outcome, remainingPlies: depth }],
+                exactReferences: source === 'EXACT_SOLVER' ? [fen] : []
+            });
+            pcaAppendEvidenceRecord(context, {
+                scopeKey,
+                subjectKey: storeKey,
+                claimKind: PCA_CLAIM_KIND.DESCRIPTOR_CLASS_OBSERVED,
+                source,
+                status: classEntry.classState === PCA_CLASS_STATE.MIXED
+                    ? PCA_EVIDENCE_STATUS.CONFLICTED
+                    : status,
+                observations: [{
+                    classState: classEntry.classState,
+                    samples: classEntry.samples,
+                    outcomes: Object.assign({}, classEntry.outcomes),
+                    remainingPlies: depth
+                }],
+                exactReferences: source === 'EXACT_SOLVER' ? [fen] : []
+            });
+
+            // Strategic collision / counterexample — record only; never refine/prune.
+            const opposite = outcome === 'MATE' ? 'NO_MATE' : (outcome === 'NO_MATE' ? 'MATE' : null);
+            if (opposite &&
+                classEntry.outcomes[opposite] > 0 &&
+                classEntry.exampleByOutcome[opposite]
+            ) {
+                const mateFen = outcome === 'MATE' ? fen : classEntry.exampleByOutcome.MATE;
+                const noMateFen = outcome === 'NO_MATE' ? fen : classEntry.exampleByOutcome.NO_MATE;
                 const collisionKey = pcaCollisionKey(descriptorKey, depth, mateFen, noMateFen);
                 if (!context.collisionMap.has(collisionKey)) {
                     context.collisionMap.set(collisionKey, {
@@ -2312,10 +2647,50 @@
                         fenB: noMateFen,
                         outcomeA: 'MATE',
                         outcomeB: 'NO_MATE',
-                        depth
+                        depth,
+                        scopeKey,
+                        reason: PCA_FAILURE_REASON.STRATEGIC_COLLISION
+                    });
+                }
+                const counterKey = pcaCounterexampleKey(
+                    scopeKey,
+                    descriptorKey,
+                    depth,
+                    mateFen,
+                    noMateFen
+                );
+                if (!context.counterexampleStore.has(counterKey)) {
+                    context.counterexampleStore.set(counterKey, Object.freeze({
+                        scopeKey,
+                        descriptorKey,
+                        fenA: mateFen,
+                        fenB: noMateFen,
+                        outcomeA: 'MATE',
+                        outcomeB: 'NO_MATE',
+                        depth,
+                        reason: PCA_FAILURE_REASON.STRATEGIC_COLLISION
+                    }));
+                    pcaAppendEvidenceRecord(context, {
+                        scopeKey,
+                        subjectKey: descriptorKey,
+                        claimKind: PCA_CLAIM_KIND.COLLISION_OBSERVED,
+                        source,
+                        status: PCA_EVIDENCE_STATUS.CONFLICTED,
+                        observations: [{
+                            fenA: mateFen,
+                            fenB: noMateFen,
+                            outcomeA: 'MATE',
+                            outcomeB: 'NO_MATE',
+                            depth
+                        }],
+                        exactReferences: [mateFen, noMateFen]
                     });
                 }
             }
+
+            pcaRefreshEvidenceClassTelemetry(context);
+            // Authority invariant: evidence/memory never writes exactCache truth.
+            return classEntry;
         }
 
         function pcaBuildSemanticCandidates(game, moves, attackerColor, remainingPlies, context, descriptorBefore, targetsBefore) {
@@ -2657,7 +3032,8 @@
             DEPENDENCY_REQUIRES_RECURSION: 'DEPENDENCY_REQUIRES_RECURSION',
             DESCRIPTOR_COLLISION: 'DESCRIPTOR_COLLISION',
             STRATEGIC_COLLISION: 'STRATEGIC_COLLISION',
-            EXACT_FALLBACK_REQUIRED: 'EXACT_FALLBACK_REQUIRED'
+            EXACT_FALLBACK_REQUIRED: 'EXACT_FALLBACK_REQUIRED',
+            SCOPE_MISMATCH: 'SCOPE_MISMATCH'
         });
 
         const PCA_EVIDENCE_LEVEL = Object.freeze({
@@ -2681,6 +3057,8 @@
             return Object.freeze({
                 domainId: partial.domainId || 'CHESS',
                 rulesVersion: partial.rulesVersion || CHESS_RULES_VERSION,
+                semanticsVersion: partial.semanticsVersion || PCA_SEMANTICS_VERSION,
+                descriptorVersion: partial.descriptorVersion || PCA_DESCRIPTOR_VERSION,
                 goal: partial.goal || 'ALL_SHORTEST_FORCED_MATES',
                 horizon: Object.freeze({
                     unit: (partial.horizon && partial.horizon.unit) || 'PLIES',
@@ -3233,7 +3611,16 @@
             const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
             const telescopicMode = pcaResolveTelescopicMode(options);
             const telescopicTelemetry = pcaEmptyTelescopicTelemetry(telescopicMode);
-            const telescopicQuery = pcaCreateQuery({ horizonValue: guard });
+            const telescopicQuery = pcaCreateQuery({
+                horizonValue: guard,
+                domainId: options.domainId,
+                rulesVersion: options.rulesVersion,
+                semanticsVersion: options.semanticsVersion,
+                descriptorVersion: options.descriptorVersion,
+                goal: options.goal,
+                horizon: options.horizon,
+                outputKind: options.outputKind
+            });
 
             if (!pcaIsValidKGuard(guard)) {
                 return pcaResultMetrics({
@@ -3277,13 +3664,38 @@
             const rootMoves = root.moves({ verbose: true });
             const initialCandidates = rootMoves.length;
             const infinite = pcaIsInfiniteKGuard(guard);
+            const evidenceScope = options.evidenceScope || pcaCreateEvidenceScope({
+                domainId: telescopicQuery.domainId,
+                rulesVersion: telescopicQuery.rulesVersion,
+                semanticsVersion: telescopicQuery.semanticsVersion,
+                descriptorVersion: telescopicQuery.descriptorVersion,
+                goal: telescopicQuery.goal,
+                horizon: telescopicQuery.horizon,
+                attackerColor: options.attackerColor != null ? options.attackerColor : null,
+                sideSemantics: options.sideSemantics != null ? options.sideSemantics : null
+            });
             const context = {
                 nodes: 0,
                 nodeGuard: pcaResolveNodeGuard(guard, PCA_NODE_GUARD, options.nodeGuard),
-                exactCache: new Map(),
+                // exactCache = operational exact authority. Evidence stores never write it.
+                exactCache: options.exactCache instanceof Map ? options.exactCache : new Map(),
                 descriptorCache: new Map(),
-                classCache: new Map(),
-                collisionMap: new Map(),
+                classCache: options.classCache instanceof Map ? options.classCache : new Map(),
+                collisionMap: options.collisionMap instanceof Map ? options.collisionMap : new Map(),
+                descriptorClassStore: options.descriptorClassStore instanceof Map
+                    ? options.descriptorClassStore
+                    : new Map(),
+                counterexampleStore: options.counterexampleStore instanceof Map
+                    ? options.counterexampleStore
+                    : new Map(),
+                evidenceStore: options.evidenceStore instanceof Map
+                    ? options.evidenceStore
+                    : new Map(),
+                evidenceTelemetry: options.evidenceTelemetry || pcaEmptyEvidenceTelemetry(),
+                evidenceScope,
+                scopeKey: options.scopeKey || pcaEvidenceScopeKey(evidenceScope),
+                query: telescopicQuery,
+                evidenceSource: options.evidenceSource || 'EXACT_SOLVER',
                 descriptorHits: 0,
                 exactCacheHits: 0,
                 classCacheHits: 0,
@@ -3310,6 +3722,20 @@
                 telescopicQuery,
                 telescopicOptions: options
             };
+            pcaEnsureEvidenceContext(context);
+            if (context.debug && typeof context.debug === 'object') {
+                // Diagnostic handles only — never grant evidence authority over exactCache.
+                context.debug.evidenceScope = context.evidenceScope;
+                context.debug.scopeKey = context.scopeKey;
+                context.debug.descriptorClassStore = context.descriptorClassStore;
+                context.debug.counterexampleStore = context.counterexampleStore;
+                context.debug.evidenceStore = context.evidenceStore;
+                context.debug.exactCache = context.exactCache;
+                context.debug.getEvidenceTelemetry = function pcaDebugEvidenceTelemetry() {
+                    pcaRefreshEvidenceClassTelemetry(context);
+                    return pcaEvidencePublicTelemetry(context.evidenceTelemetry);
+                };
+            }
             const baseDescriptor = pcaGetDescriptor(fen, context);
 
             if (root.in_checkmate()) {
@@ -4196,6 +4622,17 @@
                 pcaStableStringify,
                 pcaDescriptorKey,
                 pcaClassCacheKey,
+                pcaEmptyEvidenceTelemetry,
+                pcaEvidencePublicTelemetry,
+                pcaCreateEvidenceScope,
+                pcaEvidenceScopeKey,
+                pcaDescriptorClassStoreKey,
+                pcaClassifyDescriptorClassState,
+                pcaRefreshEvidenceClassTelemetry,
+                pcaEnsureEvidenceContext,
+                pcaCreateEvidenceRecord,
+                pcaAppendEvidenceRecord,
+                pcaLookupScopedDescriptorClass,
                 pcaHypothesisInformation,
                 pcaInsideBoard,
                 pcaSquareToCoords,
@@ -4215,6 +4652,7 @@
                 pcaDescriptorMateScore,
                 pcaLookupClassStats,
                 pcaCollisionKey,
+                pcaCounterexampleKey,
                 pcaRegisterDescriptorOutcome,
                 pcaBuildSemanticCandidates,
                 pcaOrderSemanticCandidates,
@@ -4490,6 +4928,11 @@
                 'const PCA_EVIDENCE_LEVEL = ' + JSON.stringify(PCA_EVIDENCE_LEVEL) + ';',
                 'const PCA_TELESCOPIC_MODE = ' + JSON.stringify(PCA_TELESCOPIC_MODE) + ';',
                 'const CHESS_RULES_VERSION = ' + JSON.stringify(CHESS_RULES_VERSION) + ';',
+                'const PCA_SEMANTICS_VERSION = ' + JSON.stringify(PCA_SEMANTICS_VERSION) + ';',
+                'const PCA_DESCRIPTOR_VERSION = ' + JSON.stringify(PCA_DESCRIPTOR_VERSION) + ';',
+                'const PCA_CLASS_STATE = ' + JSON.stringify(PCA_CLASS_STATE) + ';',
+                'const PCA_CLAIM_KIND = ' + JSON.stringify(PCA_CLAIM_KIND) + ';',
+                'const PCA_EVIDENCE_STATUS = ' + JSON.stringify(PCA_EVIDENCE_STATUS) + ';',
                 pureFunctions,
                 'self.onmessage = ' + workerHandler.toString() + ';'
             ].join('\n');
@@ -4918,7 +5361,23 @@
         window.PCA_EVIDENCE_LEVEL = PCA_EVIDENCE_LEVEL;
         window.PCA_TELESCOPIC_MODE = PCA_TELESCOPIC_MODE;
         window.CHESS_RULES_VERSION = CHESS_RULES_VERSION;
+        window.PCA_SEMANTICS_VERSION = PCA_SEMANTICS_VERSION;
+        window.PCA_DESCRIPTOR_VERSION = PCA_DESCRIPTOR_VERSION;
+        window.PCA_CLASS_STATE = PCA_CLASS_STATE;
+        window.PCA_CLAIM_KIND = PCA_CLAIM_KIND;
+        window.PCA_EVIDENCE_STATUS = PCA_EVIDENCE_STATUS;
         window.pcaCreateQuery = pcaCreateQuery;
+        window.pcaCreateEvidenceScope = pcaCreateEvidenceScope;
+        window.pcaEvidenceScopeKey = pcaEvidenceScopeKey;
+        window.pcaDescriptorClassStoreKey = pcaDescriptorClassStoreKey;
+        window.pcaClassifyDescriptorClassState = pcaClassifyDescriptorClassState;
+        window.pcaEnsureEvidenceContext = pcaEnsureEvidenceContext;
+        window.pcaCreateEvidenceRecord = pcaCreateEvidenceRecord;
+        window.pcaAppendEvidenceRecord = pcaAppendEvidenceRecord;
+        window.pcaLookupScopedDescriptorClass = pcaLookupScopedDescriptorClass;
+        window.pcaLookupClassStats = pcaLookupClassStats;
+        window.pcaEmptyEvidenceTelemetry = pcaEmptyEvidenceTelemetry;
+        window.pcaEvidencePublicTelemetry = pcaEvidencePublicTelemetry;
         window.pcaCreateTelescopicProposal = pcaCreateTelescopicProposal;
         window.pcaCreateNoTelescopicPolicy = pcaCreateNoTelescopicPolicy;
         window.pcaCreateShadowTelescopicPolicy = pcaCreateShadowTelescopicPolicy;
