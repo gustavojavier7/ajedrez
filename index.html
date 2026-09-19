@@ -2090,9 +2090,9 @@
                     sideSemantics: context.sideSemantics != null ? context.sideSemantics : null
                 });
             }
-            if (!context.scopeKey) {
-                context.scopeKey = pcaEvidenceScopeKey(context.evidenceScope);
-            }
+            // Scope is derived identity, never a trusted caller assertion.
+            // Always recompute from evidenceScope to prevent scopeKey/evidenceScope mismatch.
+            context.scopeKey = pcaEvidenceScopeKey(context.evidenceScope);
             if (context.classCacheHits == null) context.classCacheHits = 0;
             return context;
         }
@@ -3705,7 +3705,8 @@
                     : new Map(),
                 evidenceTelemetry: options.evidenceTelemetry || pcaEmptyEvidenceTelemetry(),
                 evidenceScope,
-                scopeKey: options.scopeKey || pcaEvidenceScopeKey(evidenceScope),
+                // Derived identity only — ignore options.scopeKey even if provided.
+                scopeKey: pcaEvidenceScopeKey(evidenceScope),
                 query: telescopicQuery,
                 evidenceSource: options.evidenceSource || 'EXACT_SOLVER',
                 descriptorHits: 0,
