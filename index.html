@@ -1919,7 +1919,10 @@
         }
 
         function pcaPositionKey(game, remainingPlies, attackerColor) {
-            return `${game.fen()}|${remainingPlies}|${attackerColor}`;
+            // Exact truth identity belongs to the key: a certificate is only valid
+            // for the rules/semantics version that produced it, so a reused
+            // options.exactCache can never serve another scope's truth.
+            return `${CHESS_RULES_VERSION}|${PCA_SEMANTICS_VERSION}|${game.fen()}|${remainingPlies}|${attackerColor}`;
         }
 
         function pcaFenHash(fen) {
@@ -1942,8 +1945,11 @@
             return pcaStableStringify(descriptor);
         }
 
-        function pcaClassCacheKey(descriptor, depth) {
-            return `${pcaDescriptorKey(descriptor)}|${depth}`;
+        function pcaClassCacheKey(descriptor, depth, scopeKey) {
+            // Scope is part of the identity: two searches with different
+            // semantics/version/horizon must never merge nor relabel entries.
+            const base = `${pcaDescriptorKey(descriptor)}|${depth}`;
+            return `${scopeKey == null ? '' : scopeKey}|${base}`;
         }
 
         // ------------------------------------------------------------------
@@ -1994,6 +2000,36 @@
                 evidenceRecords: src.evidenceRecords || 0,
                 scopeMismatches: src.scopeMismatches || 0
             };
+        }
+
+        // Count/collect only entries owned by the current scope. Shared stores are
+        // allowed, foreign entries are never reported as part of this run.
+        function pcaScopedEntryCount(map, scopeKey) {
+            if (!map || typeof map.forEach !== 'function') return 0;
+            const own = scopeKey == null ? '' : scopeKey;
+            let count = 0;
+            map.forEach(entry => {
+                if (entry && entry.scopeKey === own) count += 1;
+            });
+            return count;
+        }
+
+        function pcaScopedEntryValues(map, scopeKey) {
+            const values = [];
+            if (!map || typeof map.forEach !== 'function') return values;
+            const own = scopeKey == null ? '' : scopeKey;
+            map.forEach(entry => {
+                if (entry && entry.scopeKey === own) values.push(entry);
+            });
+            return values;
+        }
+
+        function pcaScopedCollisionCount(context) {
+            return pcaScopedEntryCount(context && context.collisionMap, context && context.scopeKey);
+        }
+
+        function pcaScopedCollisionLog(context) {
+            return pcaScopedEntryValues(context && context.collisionMap, context && context.scopeKey);
         }
 
         function pcaCreateEvidenceScope(partial = {}) {
@@ -2048,22 +2084,31 @@
 
         function pcaRefreshEvidenceClassTelemetry(context) {
             if (!context || !context.descriptorClassStore || !context.evidenceTelemetry) return;
+            // Scope identity is derived, so telemetry reporting never depends on a
+            // caller-supplied scopeKey (see PR #52).
+            pcaEnsureEvidenceContext(context);
+            const scopeKey = context.scopeKey;
             let pure = 0;
             let mixed = 0;
+            let classes = 0;
             context.descriptorClassStore.forEach(entry => {
-                if (!entry) return;
+                if (!entry || entry.scopeKey !== scopeKey) return;
+                classes += 1;
                 if (entry.classState === PCA_CLASS_STATE.EMPIRICALLY_PURE) pure += 1;
                 if (entry.classState === PCA_CLASS_STATE.MIXED) mixed += 1;
             });
-            context.evidenceTelemetry.classesObserved = context.descriptorClassStore.size;
+            // A store shared with another scope must not inflate this run's numbers.
+            context.evidenceTelemetry.classesObserved = classes;
             context.evidenceTelemetry.empiricallyPureClasses = pure;
             context.evidenceTelemetry.mixedClasses = mixed;
-            context.evidenceTelemetry.counterexamples = context.counterexampleStore
-                ? context.counterexampleStore.size
-                : 0;
-            context.evidenceTelemetry.evidenceRecords = context.evidenceStore
-                ? context.evidenceStore.size
-                : 0;
+            context.evidenceTelemetry.counterexamples = pcaScopedEntryCount(
+                context.counterexampleStore,
+                scopeKey
+            );
+            context.evidenceTelemetry.evidenceRecords = pcaScopedEntryCount(
+                context.evidenceStore,
+                scopeKey
+            );
         }
 
         function pcaEnsureEvidenceContext(context) {
@@ -2138,8 +2183,18 @@
 
         function pcaAppendEvidenceRecord(context, partial) {
             pcaEnsureEvidenceContext(context);
+            const requestedScopeKey = partial && partial.scopeKey != null
+                ? String(partial.scopeKey)
+                : null;
+            // scopeKey is derived identity, never a trusted caller assertion (PR #52):
+            // writing a foreign label would misattribute observations to another scope.
+            if (requestedScopeKey != null && requestedScopeKey !== context.scopeKey) {
+                context.evidenceTelemetry.scopeMismatches =
+                    (context.evidenceTelemetry.scopeMismatches || 0) + 1;
+                return null;
+            }
             const record = pcaCreateEvidenceRecord(Object.assign({}, partial, {
-                scopeKey: partial && partial.scopeKey != null ? partial.scopeKey : context.scopeKey
+                scopeKey: context.scopeKey
             }));
             if (!context.evidenceStore.has(record.evidenceId)) {
                 context.evidenceStore.set(record.evidenceId, record);
@@ -2530,7 +2585,7 @@
             // Legacy same-session classCache (single analysis scope) — now scope-validated.
             // If options.classCache is reused across different semantics/versions,
             // we must not let foreign-scope stats influence ranking.
-            const key = pcaClassCacheKey(descriptor, remainingPlies);
+            const key = pcaClassCacheKey(descriptor, remainingPlies, context.scopeKey);
             if (context.classCache && context.classCache.has(key)) {
                 const cached = context.classCache.get(key);
                 if (!cached || cached.scopeKey !== context.scopeKey) {
@@ -2548,8 +2603,9 @@
             return null;
         }
 
-        function pcaCollisionKey(descriptorKey, depth, mateFen, noMateFen) {
-            return `${descriptorKey}|${depth}|${mateFen}|${noMateFen}`;
+        function pcaCollisionKey(scopeKey, descriptorKey, depth, mateFen, noMateFen) {
+            // Same rule as pcaCounterexampleKey: a collision belongs to one scope.
+            return `${scopeKey == null ? '' : scopeKey}|${descriptorKey}|${depth}|${mateFen}|${noMateFen}`;
         }
 
         function pcaCounterexampleKey(scopeKey, descriptorKey, depth, fenA, fenB) {
@@ -2559,16 +2615,24 @@
         function pcaRegisterDescriptorOutcome(descriptor, depth, isMate, fen, context) {
             pcaEnsureEvidenceContext(context);
             const descriptorKey = pcaDescriptorKey(descriptor);
-            const key = pcaClassCacheKey(descriptor, depth);
             const outcome = isMate === true ? 'MATE' : (isMate === false ? 'NO_MATE' : 'UNKNOWN');
             const scopeKey = context.scopeKey;
+            const key = pcaClassCacheKey(descriptor, depth, scopeKey);
             const source = context.evidenceSource || 'EXACT_SOLVER';
             const status = source === 'EXACT_SOLVER'
                 ? PCA_EVIDENCE_STATUS.EXACT_CONFIRMED
                 : PCA_EVIDENCE_STATUS.OBSERVED;
 
             // Legacy classCache (ranking/telemetry compatibility within one scope).
+            // Write path mirrors the read-path rule: an entry owned by a foreign
+            // scope is never mutated nor relabeled as ours, otherwise the read-time
+            // validation could be defeated by accumulating foreign outcomes.
             let entry = context.classCache.get(key);
+            if (entry && entry.scopeKey !== scopeKey) {
+                context.evidenceTelemetry.scopeMismatches =
+                    (context.evidenceTelemetry.scopeMismatches || 0) + 1;
+                entry = null;
+            }
             if (!entry) {
                 entry = {
                     descriptor,
@@ -2651,8 +2715,19 @@
             ) {
                 const mateFen = outcome === 'MATE' ? fen : classEntry.exampleByOutcome.MATE;
                 const noMateFen = outcome === 'NO_MATE' ? fen : classEntry.exampleByOutcome.NO_MATE;
-                const collisionKey = pcaCollisionKey(descriptorKey, depth, mateFen, noMateFen);
-                if (!context.collisionMap.has(collisionKey)) {
+                const collisionKey = pcaCollisionKey(
+                    scopeKey,
+                    descriptorKey,
+                    depth,
+                    mateFen,
+                    noMateFen
+                );
+                const existingCollision = context.collisionMap.get(collisionKey);
+                if (existingCollision && existingCollision.scopeKey !== scopeKey) {
+                    // A foreign collision record is never adopted nor overwritten.
+                    context.evidenceTelemetry.scopeMismatches =
+                        (context.evidenceTelemetry.scopeMismatches || 0) + 1;
+                } else if (!existingCollision) {
                     context.collisionMap.set(collisionKey, {
                         descriptor,
                         fenA: mateFen,
@@ -3764,8 +3839,8 @@
                     stopReason: 'POSITION_ALREADY_CHECKMATE',
                     cacheHits: 0,
                     descriptorHits: context.descriptorHits,
-                    collisions: context.collisionMap.size,
-                    collisionLog: Array.from(context.collisionMap.values()),
+                    collisions: pcaScopedCollisionCount(context),
+                    collisionLog: pcaScopedCollisionLog(context),
                     hypothesesBefore: 1,
                     hypothesesAfter: 1,
                     contractionRatio: 0,
@@ -3787,8 +3862,8 @@
                 return pcaResultMetrics({
                     status: 'UNRESOLVED', move: null, initialCandidates, survivors: 0,
                     depth: 0, nodes: 0, trace, stopReason: 'POSITION_ALREADY_TERMINAL',
-                    cacheHits: 0, descriptorHits: context.descriptorHits, collisions: context.collisionMap.size,
-                    collisionLog: Array.from(context.collisionMap.values()),
+                    cacheHits: 0, descriptorHits: context.descriptorHits, collisions: pcaScopedCollisionCount(context),
+                    collisionLog: pcaScopedCollisionLog(context),
                     hypothesesBefore: 0, hypothesesAfter: 0, contractionRatio: 0,
                     telescopicMode: telescopicTelemetry.telescopicMode,
                     proposalCount: telescopicTelemetry.proposalCount,
@@ -3825,7 +3900,7 @@
                     nodeGuard: context.nodeGuard,
                     cacheHits: context.exactCacheHits + context.classCacheHits,
                     descriptorHits: context.descriptorHits,
-                    collisions: context.collisionMap.size,
+                    collisions: pcaScopedCollisionCount(context),
                     semanticSampleValid: sampleValid,
                     hypothesesBefore: sampleValid ? sample.hypothesesBefore : null,
                     hypothesesAfter: sampleValid ? sample.hypothesesAfter : null,
@@ -3950,7 +4025,7 @@
                             ? primaryWinner.contractionRatio
                             : (orderedRootCandidates[0] ? orderedRootCandidates[0].contractionRatio : 0),
                         nodes: context.nodes,
-                        collisions: context.collisionMap.size
+                        collisions: pcaScopedCollisionCount(context)
                     });
 
                     if (winningCandidates.length === 1) {
@@ -3965,8 +4040,8 @@
                             stopReason: 'FORCED_MATE_CERTIFIED',
                             cacheHits: context.exactCacheHits + context.classCacheHits,
                             descriptorHits: context.descriptorHits,
-                            collisions: context.collisionMap.size,
-                            collisionLog: Array.from(context.collisionMap.values()),
+                            collisions: pcaScopedCollisionCount(context),
+                            collisionLog: pcaScopedCollisionLog(context),
                             hypothesesBefore: primaryWinner.hypothesesBefore,
                             hypothesesAfter: primaryWinner.hypothesesAfter,
                             contractionRatio: primaryWinner.contractionRatio,
@@ -3999,8 +4074,8 @@
                             stopReason: 'MULTIPLE_SHORTEST_FORCED_MATES',
                             cacheHits: context.exactCacheHits + context.classCacheHits,
                             descriptorHits: context.descriptorHits,
-                            collisions: context.collisionMap.size,
-                            collisionLog: Array.from(context.collisionMap.values()),
+                            collisions: pcaScopedCollisionCount(context),
+                            collisionLog: pcaScopedCollisionLog(context),
                             hypothesesBefore: primaryWinner.hypothesesBefore,
                             hypothesesAfter: primaryWinner.hypothesesAfter,
                             contractionRatio: primaryWinner.contractionRatio,
@@ -4026,8 +4101,8 @@
                     stopReason: 'NO_FORCED_MATE_WITHIN_K_GUARD',
                     cacheHits: context.exactCacheHits + context.classCacheHits,
                     descriptorHits: context.descriptorHits,
-                    collisions: context.collisionMap.size,
-                    collisionLog: Array.from(context.collisionMap.values()),
+                    collisions: pcaScopedCollisionCount(context),
+                    collisionLog: pcaScopedCollisionLog(context),
                     hypothesesBefore: trace.length > 0 ? trace[trace.length - 1].hypothesesBefore : 0,
                     hypothesesAfter: trace.length > 0 ? trace[trace.length - 1].hypothesesAfter : 0,
                     contractionRatio: trace.length > 0 ? trace[trace.length - 1].contractionRatio : 0,
@@ -4052,8 +4127,8 @@
                         nodes: context.nodes, trace, stopReason: 'NODE_GUARD_REACHED',
                         cacheHits: context.exactCacheHits + context.classCacheHits,
                         descriptorHits: context.descriptorHits,
-                        collisions: context.collisionMap.size,
-                        collisionLog: Array.from(context.collisionMap.values()),
+                        collisions: pcaScopedCollisionCount(context),
+                        collisionLog: pcaScopedCollisionLog(context),
                         hypothesesBefore: context.lastSemanticSample.hypothesesBefore,
                         hypothesesAfter: context.lastSemanticSample.hypothesesAfter,
                         contractionRatio: context.lastSemanticSample.contractionRatio,
@@ -4079,8 +4154,8 @@
                     stopReason: 'CONTRACT_VIOLATION',
                     cacheHits: context.exactCacheHits + context.classCacheHits,
                     descriptorHits: context.descriptorHits,
-                    collisions: context.collisionMap.size,
-                    collisionLog: Array.from(context.collisionMap.values()),
+                    collisions: pcaScopedCollisionCount(context),
+                    collisionLog: pcaScopedCollisionLog(context),
                     hypothesesBefore: context.lastSemanticSample.hypothesesBefore,
                     hypothesesAfter: context.lastSemanticSample.hypothesesAfter,
                     contractionRatio: context.lastSemanticSample.contractionRatio,
@@ -4637,6 +4712,10 @@
                 pcaClassCacheKey,
                 pcaEmptyEvidenceTelemetry,
                 pcaEvidencePublicTelemetry,
+                pcaScopedEntryCount,
+                pcaScopedEntryValues,
+                pcaScopedCollisionCount,
+                pcaScopedCollisionLog,
                 pcaCreateEvidenceScope,
                 pcaEvidenceScopeKey,
                 pcaDescriptorClassStoreKey,

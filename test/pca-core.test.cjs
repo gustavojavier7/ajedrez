@@ -1830,3 +1830,240 @@ test('FASE3 ACTIVE puede leer stats contextuales sólo con scope coincidente (he
     assert.equal(reuse.ok, false);
     assert.equal(reuse.reason, 'SCOPE_MISMATCH');
 });
+
+// ---------------------------------------------------------------------------
+// FASE 3 (continuación de PR #52) — aislamiento de scope en escritura,
+// colisiones, telemetría y autoridad exacta.
+// ---------------------------------------------------------------------------
+
+test('FASE3 G: la escritura en classCache no fusiona ni reetiqueta scopes ajenos', () => {
+    const runtime = loadRuntime();
+    const descriptor = runtime.describeFEN(uniqueMateFen);
+    const ctxA = pcaMakeEvidenceContext(runtime, { horizonValue: 3 });
+    const ctxB = pcaMakeEvidenceContext(runtime, {
+        horizonValue: 3,
+        semanticsVersion: 'pca-forced-mate-v2'
+    });
+    assert.notEqual(ctxA.scopeKey, ctxB.scopeKey);
+
+    // The scope belongs to the key: equal descriptor/depth, different identity.
+    assert.notEqual(
+        runtime.pcaClassCacheKey(descriptor, 2, ctxA.scopeKey),
+        runtime.pcaClassCacheKey(descriptor, 2, ctxB.scopeKey)
+    );
+
+    // Same physical stores handed to two searches with different identity.
+    ctxB.classCache = ctxA.classCache;
+    ctxB.descriptorClassStore = ctxA.descriptorClassStore;
+    ctxB.counterexampleStore = ctxA.counterexampleStore;
+    ctxB.evidenceStore = ctxA.evidenceStore;
+
+    runtime.pcaRegisterDescriptorOutcome(descriptor, 2, true, uniqueMateFen, ctxA);
+    assert.equal(ctxA.classCache.size, 1);
+
+    runtime.pcaRegisterDescriptorOutcome(descriptor, 2, false, defendedFen, ctxB);
+
+    // B never mutates nor relabels A's entry: it writes its own scoped one.
+    assert.equal(ctxA.classCache.size, 2);
+    const entryA = Array.from(ctxA.classCache.values())
+        .find(entry => entry.scopeKey === ctxA.scopeKey);
+    assert.ok(entryA);
+    assert.equal(entryA.total, 1);
+    assert.equal(entryA.outcomes.MATE, 1);
+    assert.equal(entryA.outcomes.NO_MATE, 0);
+    assert.equal(entryA.classState, runtime.PCA_CLASS_STATE.EMPIRICALLY_PURE);
+
+    const statsA = runtime.pcaLookupClassStats(descriptor, 2, ctxA);
+    assert.equal(statsA.total, 1);
+    assert.equal(statsA.outcomes.MATE, 1);
+    assert.equal(statsA.outcomes.NO_MATE, 0);
+
+    const statsB = runtime.pcaLookupClassStats(descriptor, 2, ctxB);
+    assert.ok(statsB);
+    assert.equal(statsB.scopeKey, ctxB.scopeKey);
+    assert.equal(statsB.total, 1);
+    assert.equal(statsB.outcomes.MATE, 0);
+    assert.equal(statsB.outcomes.NO_MATE, 1);
+});
+
+test('FASE3 H: una colisión de otro scope no suprime la evidencia local', () => {
+    const runtime = loadRuntime();
+    const descriptor = runtime.describeFEN(uniqueMateFen);
+    const ctxA = pcaMakeEvidenceContext(runtime, { horizonValue: 4 });
+    const ctxB = pcaMakeEvidenceContext(runtime, {
+        horizonValue: 4,
+        semanticsVersion: 'pca-forced-mate-v2'
+    });
+    ctxB.collisionMap = ctxA.collisionMap;
+    ctxB.counterexampleStore = ctxA.counterexampleStore;
+    ctxB.evidenceStore = ctxA.evidenceStore;
+    ctxB.descriptorClassStore = ctxA.descriptorClassStore;
+
+    assert.notEqual(
+        runtime.pcaCollisionKey(ctxA.scopeKey, 'descriptor', 2, uniqueMateFen, defendedFen),
+        runtime.pcaCollisionKey(ctxB.scopeKey, 'descriptor', 2, uniqueMateFen, defendedFen)
+    );
+
+    for (const ctx of [ctxA, ctxB]) {
+        runtime.pcaRegisterDescriptorOutcome(descriptor, 2, true, uniqueMateFen, ctx);
+        runtime.pcaRegisterDescriptorOutcome(descriptor, 2, false, defendedFen, ctx);
+    }
+
+    // The same strategic collision observed once per scope: both are recorded.
+    assert.equal(ctxA.collisionMap.size, 2);
+    assert.equal(ctxA.counterexampleStore.size, 2);
+    assert.equal(runtime.pcaScopedCollisionCount(ctxA), 1);
+    assert.equal(runtime.pcaScopedCollisionCount(ctxB), 1);
+
+    const logA = runtime.pcaScopedCollisionLog(ctxA);
+    const logB = runtime.pcaScopedCollisionLog(ctxB);
+    assert.equal(logA.length, 1);
+    assert.equal(logB.length, 1);
+    assert.equal(logA[0].scopeKey, ctxA.scopeKey);
+    assert.equal(logB[0].scopeKey, ctxB.scopeKey);
+    assert.equal(logA[0].reason, runtime.PCA_FAILURE_REASON.STRATEGIC_COLLISION);
+
+    const collisionEvidence = scope => Array.from(ctxA.evidenceStore.values())
+        .filter(record => record.claimKind === runtime.PCA_CLAIM_KIND.COLLISION_OBSERVED)
+        .filter(record => record.scopeKey === scope);
+    assert.equal(collisionEvidence(ctxA.scopeKey).length, 1);
+    assert.equal(collisionEvidence(ctxB.scopeKey).length, 1);
+});
+
+test('FASE3 I: metrics collisions/collisionLog cuentan sólo el scope propio', () => {
+    const runtime = loadRuntime();
+    const descriptor = runtime.describeFEN(uniqueMateFen);
+    // Foreign scope with engine-created stores, so options adopt them as maps.
+    const foreign = {
+        evidenceScope: runtime.pcaCreateEvidenceScope({
+            horizonValue: 2,
+            semanticsVersion: 'other-semantics'
+        })
+    };
+    runtime.pcaEnsureEvidenceContext(foreign);
+    runtime.pcaRegisterDescriptorOutcome(descriptor, 2, true, uniqueMateFen, foreign);
+    runtime.pcaRegisterDescriptorOutcome(descriptor, 2, false, defendedFen, foreign);
+    assert.equal(foreign.scopeKey, runtime.pcaEvidenceScopeKey(foreign.evidenceScope));
+    assert.equal(foreign.collisionMap.size, 1);
+
+    const baseline = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, {
+        semanticOrdering: true
+    });
+    const shared = runtime.pcaAnalyzePositionCore(uniqueMateFen, 2, {
+        semanticOrdering: true,
+        collisionMap: foreign.collisionMap
+    });
+
+    assert.equal(shared.status, baseline.status);
+    assert.equal(shared.collisions, baseline.collisions);
+    assert.deepEqual(shared.collisionLog, baseline.collisionLog);
+    // The foreign record survives untouched and stays out of this run's report.
+    assert.equal(foreign.collisionMap.size, 1 + baseline.collisions);
+    assert.equal(Array.from(foreign.collisionMap.values())[0].scopeKey, foreign.scopeKey);
+});
+
+test('FASE3 J: la telemetría de evidencia no cuenta entradas de otro scope', () => {
+    const runtime = loadRuntime();
+    const descriptor = runtime.describeFEN(uniqueMateFen);
+    const ctxA = pcaMakeEvidenceContext(runtime, { horizonValue: 3 });
+    const ctxB = pcaMakeEvidenceContext(runtime, {
+        horizonValue: 3,
+        semanticsVersion: 'pca-forced-mate-v2'
+    });
+    ctxB.descriptorClassStore = ctxA.descriptorClassStore;
+    ctxB.counterexampleStore = ctxA.counterexampleStore;
+    ctxB.evidenceStore = ctxA.evidenceStore;
+
+    runtime.pcaRegisterDescriptorOutcome(descriptor, 2, true, uniqueMateFen, ctxA);
+    runtime.pcaRegisterDescriptorOutcome(descriptor, 2, false, defendedFen, ctxA);
+
+    const telemetryA = runtime.pcaEvidencePublicTelemetry(ctxA.evidenceTelemetry);
+    assert.equal(telemetryA.classesObserved, 1);
+    assert.equal(telemetryA.mixedClasses, 1);
+    assert.equal(telemetryA.counterexamples, 1);
+    assert.ok(telemetryA.evidenceRecords >= 3);
+
+    runtime.pcaRefreshEvidenceClassTelemetry(ctxB);
+    const telemetryB = runtime.pcaEvidencePublicTelemetry(ctxB.evidenceTelemetry);
+    assert.equal(telemetryB.classesObserved, 0);
+    assert.equal(telemetryB.empiricallyPureClasses, 0);
+    assert.equal(telemetryB.mixedClasses, 0);
+    assert.equal(telemetryB.counterexamples, 0);
+    assert.equal(telemetryB.evidenceRecords, 0);
+});
+
+test('FASE3 K: pcaAppendEvidenceRecord rechaza un scopeKey foráneo', () => {
+    const runtime = loadRuntime();
+    const ctx = pcaMakeEvidenceContext(runtime, { horizonValue: 2 });
+    const other = pcaMakeEvidenceContext(runtime, { horizonValue: 5 });
+    const sizeBefore = ctx.evidenceStore.size;
+    const mismatchesBefore = ctx.evidenceTelemetry.scopeMismatches;
+
+    const rejected = runtime.pcaAppendEvidenceRecord(ctx, {
+        scopeKey: other.scopeKey,
+        subjectKey: 'foreign-subject',
+        claimKind: runtime.PCA_CLAIM_KIND.OUTCOME_OBSERVED,
+        observations: [{ fen: uniqueMateFen, outcome: 'MATE', remainingPlies: 1 }],
+        exactReferences: []
+    });
+
+    assert.equal(rejected, null);
+    assert.equal(ctx.evidenceStore.size, sizeBefore);
+    assert.equal(ctx.evidenceTelemetry.scopeMismatches, mismatchesBefore + 1);
+    assert.equal(
+        Array.from(ctx.evidenceStore.values()).some(record => record.scopeKey === other.scopeKey),
+        false
+    );
+
+    // Own scope keeps working and is always labeled with the derived identity.
+    const accepted = runtime.pcaAppendEvidenceRecord(ctx, {
+        subjectKey: 'local-subject',
+        claimKind: runtime.PCA_CLAIM_KIND.OUTCOME_OBSERVED,
+        observations: [{ fen: uniqueMateFen, outcome: 'MATE', remainingPlies: 1 }],
+        exactReferences: []
+    });
+    assert.ok(accepted);
+    assert.equal(accepted.scopeKey, ctx.scopeKey);
+    assert.equal(ctx.evidenceStore.has(accepted.evidenceId), true);
+});
+
+test('FASE3 L: exactCache no consume certificados de otra identidad de reglas', () => {
+    const runtime = loadRuntime();
+    // Real (VM-realm) Map obtained from the engine itself: cross-realm maps are
+    // deliberately not adopted as exactCache.
+    const debug = {};
+    runtime.pcaAnalyzePositionCore(defendedFen, 2, { semanticOrdering: true, debug });
+    const exactCache = debug.exactCache;
+    assert.equal(typeof exactCache.clear, 'function');
+    exactCache.clear();
+
+    const probed = [];
+    const originalKey = runtime.pcaPositionKey;
+    runtime.pcaPositionKey = function(gameState, plies, color) {
+        const key = originalKey(gameState, plies, color);
+        probed.push({ key, legacy: `${gameState.fen()}|${plies}|${color}` });
+        return key;
+    };
+
+    try {
+        const search = options => runtime.pcaAnalyzePositionCore(defendedFen, 2, options);
+        const cleanRun = search({ semanticOrdering: true, exactCache });
+
+        assert.ok(probed.length > 0, 'la búsqueda debe construir claves de posición');
+        assert.ok(probed.every(entry => entry.key !== entry.legacy));
+        assert.ok(probed.every(entry => entry.key.includes(runtime.CHESS_RULES_VERSION)));
+        assert.ok(probed.every(entry => entry.key.includes(runtime.PCA_SEMANTICS_VERSION)));
+        assert.equal(cleanRun.status, 'UNRESOLVED');
+
+        // Every position the search probes, claimed as mate under the pre-fix key
+        // shape: a foreign identity cannot inject exact truth through exactCache.
+        probed.forEach(entry => exactCache.set(entry.legacy, true));
+        const poisonedRun = search({ semanticOrdering: true, exactCache });
+
+        assert.equal(poisonedRun.status, cleanRun.status);
+        assert.equal(poisonedRun.status, 'UNRESOLVED');
+        assert.equal(poisonedRun.move, cleanRun.move);
+    } finally {
+        runtime.pcaPositionKey = originalKey;
+    }
+});
