@@ -282,8 +282,9 @@ test('NPS artificial no altera la clasificación exacta DECIDED_UNIQUE/DECIDED_M
 // ---------------------------------------------------------------------------
 // BASELINE PCA
 // Frozen pre-telescopic exact-solver contract. Later phases must keep:
-//   policy disabled == BASELINE PCA
-// Comparable fields: status, move, depth, stopReason, survivors, forcedMateTargets.
+//   policy disabled == BASELINE PCA == shadow (exact fields)
+// Result fields: status, move, depth, stopReason, survivors, forcedMateTargets.
+// Contractual telescopic equality ALSO includes nodes (ordering on/off may differ).
 // Fixtures: unique min-mate, multiple min-mate, defended/unresolved, descriptor collision.
 // ---------------------------------------------------------------------------
 
@@ -306,6 +307,19 @@ function pcaBaselineExactSliceCanonical(result) {
         forcedMateTargets: Array.isArray(slice.forcedMateTargets)
             ? [...slice.forcedMateTargets].sort()
             : slice.forcedMateTargets
+    });
+}
+
+// Contractual equality for baseline == disabled == shadow (includes nodes).
+function pcaContractualExactSlice(result) {
+    return Object.assign({}, pcaBaselineExactSlice(result), {
+        nodes: result.nodes
+    });
+}
+
+function pcaContractualExactSliceCanonical(result) {
+    return Object.assign({}, pcaBaselineExactSliceCanonical(result), {
+        nodes: result.nodes
     });
 }
 
@@ -395,6 +409,8 @@ test('contratos telescópicos mínimos existen y son inocuos', () => {
     assert.equal(query.horizon.unit, 'PLIES');
     assert.equal(query.horizon.value, 3);
     assert.equal(query.outputKind, 'EXPANDED');
+    assert.equal(runtime.CHESS_RULES_VERSION, 'chess.js@0.10.3');
+    assert.equal(query.rulesVersion, runtime.CHESS_RULES_VERSION);
 
     assert.equal(runtime.PCA_PROPOSAL_KIND.HEURISTIC, 'HEURISTIC');
     assert.equal(runtime.PCA_FAILURE_REASON.DESCRIPTOR_COLLISION, 'DESCRIPTOR_COLLISION');
@@ -416,12 +432,25 @@ test('contratos telescópicos mínimos existen y son inocuos', () => {
     assert.equal(noProposals.length, 0);
 });
 
+test('Query.rulesVersion identifica la versión efectiva de Chess.js', () => {
+    const runtime = loadRuntime();
+    assert.equal(runtime.CHESS_RULES_VERSION, 'chess.js@0.10.3');
+    const defaultQuery = runtime.pcaCreateQuery();
+    assert.equal(defaultQuery.rulesVersion, 'chess.js@0.10.3');
+    assert.equal(defaultQuery.rulesVersion, runtime.CHESS_RULES_VERSION);
+    const overridden = runtime.pcaCreateQuery({ rulesVersion: 'custom-rules' });
+    assert.equal(overridden.rulesVersion, 'custom-rules');
+    // Single source: constant is the default path for pcaCreateQuery.
+    assert.match(runtime.CHESS_RULES_VERSION, /^chess\.js@/);
+});
+
 test('A: telescopic disabled == BASELINE PCA', () => {
     const runtime = loadRuntime();
     const fixtures = [
-        { fen: uniqueMateFen, k: 2 },
-        { fen: multiMateInOneFen, k: 2 },
-        { fen: defendedFen, k: 2 }
+        { fen: uniqueMateFen, k: 2, label: 'mate único' },
+        { fen: multiMateFen, k: 6, label: 'mate múltiple', canonical: true },
+        { fen: multiMateInOneFen, k: 2, label: 'mate múltiple en 1' },
+        { fen: defendedFen, k: 2, label: 'posición defendida / UNRESOLVED' }
     ];
 
     for (const fixture of fixtures) {
@@ -435,9 +464,11 @@ test('A: telescopic disabled == BASELINE PCA', () => {
         const omitted = runtime.pcaAnalyzePositionCore(fixture.fen, fixture.k, {
             semanticOrdering: true
         });
+        const slice = fixture.canonical ? pcaContractualExactSliceCanonical : pcaContractualExactSlice;
 
-        assert.deepEqual(pcaBaselineExactSlice(disabled), pcaBaselineExactSlice(baseline));
-        assert.deepEqual(pcaBaselineExactSlice(omitted), pcaBaselineExactSlice(baseline));
+        assert.deepEqual(slice(disabled), slice(baseline), fixture.label);
+        assert.deepEqual(slice(omitted), slice(baseline), fixture.label);
+        assert.equal(disabled.nodes, baseline.nodes, fixture.label + ' nodes');
         assert.equal(disabled.telescopicMode, 'disabled');
         assert.equal(disabled.proposalCount, 0);
         assert.equal(disabled.shadowInvocations, 0);
@@ -449,12 +480,16 @@ test('A: telescopic disabled == BASELINE PCA', () => {
 test('B: telescopic shadow == disabled para resultado exacto', () => {
     const runtime = loadRuntime();
     const fixtures = [
-        { fen: uniqueMateFen, k: 2 },
-        { fen: multiMateInOneFen, k: 2 },
-        { fen: defendedFen, k: 2 }
+        { fen: uniqueMateFen, k: 2, label: 'mate único' },
+        { fen: multiMateFen, k: 6, label: 'mate múltiple', canonical: true },
+        { fen: multiMateInOneFen, k: 2, label: 'mate múltiple en 1' },
+        { fen: defendedFen, k: 2, label: 'posición defendida / UNRESOLVED' }
     ];
 
     for (const fixture of fixtures) {
+        const baseline = runtime.pcaAnalyzePositionCore(fixture.fen, fixture.k, {
+            semanticOrdering: true
+        });
         const disabled = runtime.pcaAnalyzePositionCore(fixture.fen, fixture.k, {
             semanticOrdering: true,
             telescopicPolicy: 'disabled'
@@ -463,9 +498,12 @@ test('B: telescopic shadow == disabled para resultado exacto', () => {
             semanticOrdering: true,
             telescopicPolicy: 'shadow'
         });
+        const slice = fixture.canonical ? pcaContractualExactSliceCanonical : pcaContractualExactSlice;
 
-        assert.deepEqual(pcaBaselineExactSlice(shadow), pcaBaselineExactSlice(disabled));
-        assert.equal(shadow.nodes, disabled.nodes);
+        assert.deepEqual(slice(disabled), slice(baseline), fixture.label + ' disabled==baseline');
+        assert.deepEqual(slice(shadow), slice(disabled), fixture.label + ' shadow==disabled');
+        assert.equal(disabled.nodes, baseline.nodes, fixture.label + ' disabled.nodes');
+        assert.equal(shadow.nodes, disabled.nodes, fixture.label + ' shadow.nodes');
         assert.equal(shadow.telescopicMode, 'shadow');
         assert.ok(shadow.shadowInvocations >= 1);
         assert.equal(shadow.proposalCount, 0);
@@ -676,15 +714,257 @@ test('BASELINE == disabled == shadow en mates múltiples canónicos', () => {
     });
 
     assert.deepEqual(
-        pcaBaselineExactSliceCanonical(baseline),
-        pcaBaselineExactSliceCanonical(disabled)
+        pcaContractualExactSliceCanonical(baseline),
+        pcaContractualExactSliceCanonical(disabled)
     );
     assert.deepEqual(
-        pcaBaselineExactSliceCanonical(disabled),
-        pcaBaselineExactSliceCanonical(shadow)
+        pcaContractualExactSliceCanonical(disabled),
+        pcaContractualExactSliceCanonical(shadow)
     );
     assert.equal(baseline.nodes, disabled.nodes);
     assert.equal(disabled.nodes, shadow.nodes);
     assert.equal(shadow.telescopicMode, 'shadow');
     assert.ok(shadow.proposalCount >= 1);
+});
+
+// ---------------------------------------------------------------------------
+// Recursive SHADOW seam inside pcaCanForceMate (still observation-only)
+// ---------------------------------------------------------------------------
+
+test('A-rec: shadow recursivo realmente observa nodos internos AND/OR', () => {
+    const runtime = loadRuntime();
+    // multiMateFen requires depth-5 search → root + internal pcaCanForceMate nodes.
+    let rootOnlyInvocations = 0;
+    const rootCounter = runtime.pcaCreateShadowTelescopicPolicy({
+        propose: (ctx) => {
+            // Root observations use horizon.value == remaining search k and no remainingPlies
+            // field set only on recursive seam. Count by remainingPlies presence.
+            if (ctx.remainingPlies == null) rootOnlyInvocations += 1;
+            return [];
+        }
+    });
+
+    const shadow = runtime.pcaAnalyzePositionCore(multiMateFen, 6, {
+        semanticOrdering: true,
+        telescopicPolicy: rootCounter
+    });
+
+    let internalInvocations = 0;
+    let totalSeen = 0;
+    const depths = [];
+    const probe = runtime.pcaCreateShadowTelescopicPolicy({
+        propose: (ctx) => {
+            totalSeen += 1;
+            depths.push({
+                depth: ctx.depth,
+                remainingPlies: ctx.remainingPlies,
+                attackerTurn: ctx.attackerTurn
+            });
+            if (ctx.remainingPlies != null) internalInvocations += 1;
+            return [];
+        }
+    });
+    const probed = runtime.pcaAnalyzePositionCore(multiMateFen, 6, {
+        semanticOrdering: true,
+        telescopicPolicy: probe
+    });
+
+    assert.equal(probed.telescopicMode, 'shadow');
+    assert.ok(probed.shadowInvocations >= 1);
+    assert.equal(probed.shadowInvocations, totalSeen);
+    // Must observe at least one internal AND/OR node beyond pure root observations.
+    assert.ok(
+        internalInvocations > 0,
+        'expected internal recursive shadow observations'
+    );
+    assert.ok(
+        probed.shadowInvocations > internalInvocations
+            ? probed.shadowInvocations > internalInvocations
+            : probed.shadowInvocations > rootOnlyInvocations || internalInvocations >= 1,
+        'shadowInvocations must exceed pure-root-only count or include internals'
+    );
+    assert.ok(
+        probed.shadowInvocations > rootOnlyInvocations || internalInvocations >= 1
+    );
+    // Stronger: total shadow invocations with recursion > root-loop k iterations alone.
+    // multiMate finds at depth 5 → root observes k=1..5 (5 times) plus internals.
+    assert.ok(
+        probed.shadowInvocations > 5,
+        'expected recursive observations beyond root k=1..5 loop'
+    );
+    assert.ok(depths.some(sample => sample.remainingPlies != null));
+    assert.ok(depths.some(sample => sample.attackerTurn === true || sample.attackerTurn === false));
+});
+
+test('B-rec: shadow recursivo sigue siendo inocuo (disabled == shadow)', () => {
+    const runtime = loadRuntime();
+    const fixture = { fen: multiMateFen, k: 6 };
+
+    const disabled = runtime.pcaAnalyzePositionCore(fixture.fen, fixture.k, {
+        semanticOrdering: true,
+        telescopicPolicy: 'disabled'
+    });
+    const shadow = runtime.pcaAnalyzePositionCore(fixture.fen, fixture.k, {
+        semanticOrdering: true,
+        telescopicPolicy: 'shadow'
+    });
+
+    assert.deepEqual(
+        pcaContractualExactSliceCanonical(shadow),
+        pcaContractualExactSliceCanonical(disabled)
+    );
+    assert.equal(shadow.nodes, disabled.nodes);
+    assert.equal(shadow.status, disabled.status);
+    assert.equal(shadow.move, disabled.move);
+    assert.equal(shadow.depth, disabled.depth);
+    assert.equal(shadow.stopReason, disabled.stopReason);
+    assert.equal(shadow.survivors, disabled.survivors);
+    assert.deepEqual(
+        [...(shadow.forcedMateTargets || [])].sort(),
+        [...(disabled.forcedMateTargets || [])].sort()
+    );
+    assert.ok(shadow.shadowInvocations > 5);
+    assert.equal(disabled.shadowInvocations, 0);
+});
+
+test('C-rec: política maliciosa en recursión no muta búsqueda ni resultado', () => {
+    const runtime = loadRuntime();
+    const baseline = runtime.pcaAnalyzePositionCore(multiMateFen, 6, {
+        semanticOrdering: true,
+        telescopicPolicy: 'disabled'
+    });
+
+    const originalCandidates = ['keep-a', 'keep-b'];
+    const candidatesForPolicy = originalCandidates.slice();
+    const fakeExactCache = new Map([['poison', true]]);
+    const fakeClassCache = new Map([['poison-class', { total: 1 }]]);
+    const fakeCollisionMap = new Map();
+    const fakeGame = { fen: () => 'hijacked' };
+
+    let internalHits = 0;
+    let sawFrozen = 0;
+    let sawMutableEngineKeys = 0;
+    const seenCandidateSnapshots = [];
+
+    const malicious = runtime.pcaCreateShadowTelescopicPolicy({
+        propose: (ctx) => {
+            if (ctx.remainingPlies != null) internalHits += 1;
+            if (Object.isFrozen(ctx) && Object.isFrozen(ctx.candidateIdentities)) {
+                sawFrozen += 1;
+            }
+            // Context must never expose mutable engine handles.
+            const forbidden = [
+                'orderedCandidates',
+                'exactCache',
+                'classCache',
+                'collisionMap',
+                'game',
+                'descriptorCache'
+            ];
+            for (const key of forbidden) {
+                if (Object.prototype.hasOwnProperty.call(ctx, key) && ctx[key] != null) {
+                    sawMutableEngineKeys += 1;
+                }
+            }
+            seenCandidateSnapshots.push([...(ctx.candidateIdentities || [])]);
+            try { ctx.candidateIdentities.push('EVIL'); } catch (_) { /* optional */ }
+            try { ctx.depth = -999; } catch (_) { /* optional */ }
+            try { ctx.remainingPlies = -1; } catch (_) { /* optional */ }
+            try { ctx.attackerTurn = !ctx.attackerTurn; } catch (_) { /* optional */ }
+            try {
+                candidatesForPolicy.length = 0;
+                candidatesForPolicy.push('MUTATED');
+                fakeExactCache.clear();
+                fakeExactCache.set('hijacked', false);
+                fakeClassCache.clear();
+                fakeCollisionMap.set('x', 1);
+                fakeGame.fen = () => 'mutated';
+            } catch (_) { /* ignore */ }
+            return [{
+                proposalId: 'evil-rec',
+                kind: runtime.PCA_PROPOSAL_KIND.HEURISTIC,
+                exactCache: fakeExactCache,
+                classCache: fakeClassCache,
+                collisionMap: fakeCollisionMap,
+                orderedCandidates: candidatesForPolicy,
+                game: fakeGame
+            }];
+        }
+    });
+
+    const shadow = runtime.pcaAnalyzePositionCore(multiMateFen, 6, {
+        semanticOrdering: true,
+        telescopicPolicy: malicious
+    });
+
+    assert.ok(internalHits >= 1, 'malicious policy must be invoked from internal nodes');
+    assert.equal(sawFrozen, shadow.shadowInvocations);
+    assert.equal(sawMutableEngineKeys, 0);
+    assert.deepEqual(
+        pcaContractualExactSliceCanonical(shadow),
+        pcaContractualExactSliceCanonical(baseline)
+    );
+    assert.equal(shadow.nodes, baseline.nodes);
+    assert.equal(shadow.status, baseline.status);
+    assert.equal(shadow.depth, baseline.depth);
+    // Normalized proposals never retain engine handles.
+    assert.ok(shadow.proposalCount >= 1);
+    assert.equal(shadow.proposals, undefined); // result telemetry does not expose raw proposals array by contract
+    // Closed-over mutation did not leak into solver: baseline equality already proves order/result.
+    assert.deepEqual(
+        [...(shadow.forcedMateTargets || [])].sort(),
+        [...(baseline.forcedMateTargets || [])].sort()
+    );
+    // Candidate identity views observed are plain SAN strings, not mutable move objects.
+    assert.ok(seenCandidateSnapshots.every(list => list.every(id => typeof id === 'string')));
+});
+
+test('D-rec: contexto telescópico recursivo no contiene NPS/tiempo/DOM/Stockfish', () => {
+    const runtime = loadRuntime();
+    const forbiddenKeys = [
+        'nps',
+        'elapsedMs',
+        'performance',
+        'DOM',
+        'dom',
+        'document',
+        'window',
+        'Stockfish',
+        'stockfish',
+        'worker'
+    ];
+    const samples = [];
+    const policy = runtime.pcaCreateShadowTelescopicPolicy({
+        propose: (ctx) => {
+            samples.push(ctx);
+            return [];
+        }
+    });
+
+    const result = runtime.pcaAnalyzePositionCore(multiMateFen, 6, {
+        semanticOrdering: true,
+        telescopicPolicy: policy,
+        onProgress: () => {}
+    });
+
+    assert.ok(result.shadowInvocations >= 1);
+    assert.ok(samples.some(ctx => ctx.remainingPlies != null), 'need recursive samples');
+    for (const ctx of samples) {
+        assert.equal(Object.isFrozen(ctx), true);
+        for (const key of forbiddenKeys) {
+            assert.equal(
+                Object.prototype.hasOwnProperty.call(ctx, key),
+                false,
+                'forbidden key present: ' + key
+            );
+            assert.equal(ctx[key], undefined, 'forbidden value present: ' + key);
+        }
+        // Required semantic fields remain available on recursive observations.
+        if (ctx.remainingPlies != null) {
+            assert.ok(ctx.stateIdentity != null);
+            assert.ok(ctx.depth != null);
+            assert.ok(Array.isArray(ctx.candidateIdentities));
+            assert.ok(ctx.query == null || ctx.query.rulesVersion === runtime.CHESS_RULES_VERSION);
+        }
+    }
 });
