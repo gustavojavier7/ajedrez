@@ -1394,3 +1394,113 @@ test('FASE2 active no usa NPS y shadow/disabled siguen intactos', () => {
     assert.ok(active.activeInvocations >= 1);
     assert.equal(active.shadowInvocations, 0);
 });
+
+// ---------------------------------------------------------------------------
+// PCA SCORE provisional / telemetría LIVE (diagnóstico; no autoridad de búsqueda)
+// ---------------------------------------------------------------------------
+
+test('PCA SCORE es determinista y pertenece a [0,100]', () => {
+    const runtime = loadRuntime();
+    const sample = {
+        valid: true,
+        hypothesesBefore: 8,
+        hypothesesAfter: 2,
+        contractionRatio: 0.75,
+        informationGain: 2
+    };
+    const scoreA = runtime.pcaComputeDiagnosticScore(sample);
+    const scoreB = runtime.pcaComputeDiagnosticScore({ ...sample });
+    assert.equal(scoreA, scoreB);
+    assert.equal(typeof scoreA, 'number');
+    assert.ok(Number.isInteger(scoreA));
+    assert.ok(scoreA >= 0 && scoreA <= 100);
+
+    // C=0.75, IGnorm=clamp(2/log2(8),0,1)=clamp(2/3,0,1)=2/3
+    // score = round(100 * (0.60*0.75 + 0.40*(2/3))) = round(100 * (0.45 + 0.2666...)) = 72
+    assert.equal(scoreA, 72);
+
+    const clamped = runtime.pcaComputeDiagnosticScore({
+        valid: true,
+        hypothesesBefore: 2,
+        hypothesesAfter: 0,
+        contractionRatio: 1.5,
+        informationGain: 99
+    });
+    assert.ok(clamped >= 0 && clamped <= 100);
+});
+
+test('PCA SCORE no depende de NPS/tiempo/nodos y sin muestra no está disponible', () => {
+    const runtime = loadRuntime();
+    const base = {
+        valid: true,
+        hypothesesBefore: 4,
+        hypothesesAfter: 1,
+        contractionRatio: 0.75,
+        informationGain: 2
+    };
+    const scoreBase = runtime.pcaComputeDiagnosticScore(base);
+    const scoreNoisy = runtime.pcaComputeDiagnosticScore({
+        ...base,
+        nps: 999999,
+        nodes: 123456,
+        elapsedMs: 987654
+    });
+    assert.equal(scoreBase, scoreNoisy);
+
+    assert.equal(runtime.pcaComputeDiagnosticScore(null), null);
+    assert.equal(runtime.pcaComputeDiagnosticScore(undefined), null);
+    assert.equal(runtime.pcaComputeDiagnosticScore({ valid: false }), null);
+    assert.equal(runtime.pcaComputeDiagnosticScore({
+        valid: false,
+        hypothesesBefore: 8,
+        contractionRatio: 0.9,
+        informationGain: 3,
+        nps: 5000,
+        nodes: 1000,
+        elapsedMs: 250
+    }), null);
+});
+
+test('PROGRESS transporta H/contracción/colisiones/score durante MATE_SEARCH', () => {
+    const runtime = loadRuntime();
+    const samples = [];
+    const result = runtime.pcaAnalyzePositionCore(multiMateFen, 5, {
+        onProgress: progress => {
+            samples.push(progress);
+        }
+    });
+
+    assert.ok(samples.length > 0, 'debe emitir PROGRESS');
+    const live = samples.find(sample => sample.semanticSampleValid === true);
+    assert.ok(live, 'debe existir al menos una muestra semántica LIVE');
+    assert.equal(typeof live.hypothesesBefore, 'number');
+    assert.equal(typeof live.hypothesesAfter, 'number');
+    assert.equal(typeof live.contractionRatio, 'number');
+    assert.equal(typeof live.collisions, 'number');
+    assert.ok(live.informationGain == null || typeof live.informationGain === 'number');
+    assert.ok(live.pcaScore === null || (
+        Number.isInteger(live.pcaScore) &&
+        live.pcaScore >= 0 &&
+        live.pcaScore <= 100
+    ));
+
+    if (live.pcaScore != null) {
+        const recomputed = runtime.pcaComputeDiagnosticScore({
+            valid: true,
+            hypothesesBefore: live.hypothesesBefore,
+            hypothesesAfter: live.hypothesesAfter,
+            contractionRatio: live.contractionRatio,
+            informationGain: live.informationGain
+        });
+        assert.equal(live.pcaScore, recomputed);
+    }
+
+    // Exact truth remains independent of diagnostic score transport.
+    assert.ok(
+        result.status === 'DECIDED_UNIQUE' ||
+        result.status === 'DECIDED_MULTIPLE' ||
+        result.status === 'DECIDED' ||
+        result.status === 'UNRESOLVED'
+    );
+    assert.equal(Object.prototype.hasOwnProperty.call(result, 'pcaScore'), true);
+});
