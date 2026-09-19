@@ -2490,18 +2490,256 @@
             };
         }
 
+        // ------------------------------------------------------------------
+        // Telescopic PCA contracts (Phase 1) — observation only.
+        // Authority: policy proposes → engine executes → exact solver decides.
+        // A proposal is NOT a proven move, NOT a certified mate, NOT a prune.
+        // ------------------------------------------------------------------
+
+        const PCA_PROPOSAL_KIND = Object.freeze({
+            EXACT_COMPOSITION: 'EXACT_COMPOSITION',
+            RECURSIVE_DESCRIPTOR: 'RECURSIVE_DESCRIPTOR',
+            REPEATED_MOTIF: 'REPEATED_MOTIF',
+            COMPRESSED_GRAMMAR: 'COMPRESSED_GRAMMAR',
+            PARTIAL_QUERY: 'PARTIAL_QUERY',
+            HEURISTIC: 'HEURISTIC'
+        });
+
+        const PCA_FAILURE_REASON = Object.freeze({
+            INSUFFICIENT_INFORMATION: 'INSUFFICIENT_INFORMATION',
+            NO_COMPRESSED_REPRESENTATION_FOUND: 'NO_COMPRESSED_REPRESENTATION_FOUND',
+            STRUCTURALLY_INVALID_REPRESENTATION: 'STRUCTURALLY_INVALID_REPRESENTATION',
+            CERTIFICATE_REJECTED: 'CERTIFICATE_REJECTED',
+            REPRESENTATION_NOT_IN_TRAJECTORY: 'REPRESENTATION_NOT_IN_TRAJECTORY',
+            DEPENDENCY_REQUIRES_RECURSION: 'DEPENDENCY_REQUIRES_RECURSION',
+            DESCRIPTOR_COLLISION: 'DESCRIPTOR_COLLISION',
+            STRATEGIC_COLLISION: 'STRATEGIC_COLLISION',
+            EXACT_FALLBACK_REQUIRED: 'EXACT_FALLBACK_REQUIRED'
+        });
+
+        const PCA_EVIDENCE_LEVEL = Object.freeze({
+            PROPOSED: 'PROPOSED'
+        });
+
+        const PCA_TELESCOPIC_MODE = Object.freeze({
+            DISABLED: 'disabled',
+            SHADOW: 'shadow'
+        });
+
+        function pcaCreateQuery(partial = {}) {
+            const horizonValue = partial.horizon && partial.horizon.value != null
+                ? partial.horizon.value
+                : (partial.horizonValue != null ? partial.horizonValue : null);
+            return Object.freeze({
+                domainId: partial.domainId || 'CHESS',
+                rulesVersion: partial.rulesVersion || 'chess.js',
+                goal: partial.goal || 'ALL_SHORTEST_FORCED_MATES',
+                horizon: Object.freeze({
+                    unit: (partial.horizon && partial.horizon.unit) || 'PLIES',
+                    value: horizonValue
+                }),
+                outputKind: partial.outputKind || 'EXPANDED'
+            });
+        }
+
+        function pcaCreateTelescopicProposal(partial = {}) {
+            // Pure factory: no cache/class/collision mutation, no candidate edits.
+            return Object.freeze({
+                proposalId: partial.proposalId != null ? String(partial.proposalId) : null,
+                kind: partial.kind || PCA_PROPOSAL_KIND.HEURISTIC,
+                queryRef: partial.queryRef != null ? partial.queryRef : null,
+                sourceStateIdentity: partial.sourceStateIdentity != null
+                    ? partial.sourceStateIdentity
+                    : null,
+                descriptorRef: partial.descriptorRef != null ? partial.descriptorRef : null,
+                horizon: partial.horizon != null ? partial.horizon : null,
+                target: partial.target != null ? partial.target : null,
+                preconditions: Object.freeze(Array.isArray(partial.preconditions)
+                    ? partial.preconditions.slice()
+                    : []),
+                dependencies: Object.freeze(Array.isArray(partial.dependencies)
+                    ? partial.dependencies.slice()
+                    : []),
+                verifierRef: partial.verifierRef != null ? partial.verifierRef : null,
+                evidenceLevel: partial.evidenceLevel || PCA_EVIDENCE_LEVEL.PROPOSED,
+                estimatedContraction: partial.estimatedContraction != null
+                    ? partial.estimatedContraction
+                    : null
+            });
+        }
+
+        function pcaCreateNoTelescopicPolicy() {
+            return Object.freeze({
+                name: 'NoTelescopicPolicy',
+                propose: function pcaNoTelescopicPropose(/* context */) {
+                    return [];
+                }
+            });
+        }
+
+        function pcaCreateShadowTelescopicPolicy(options = {}) {
+            const customPropose = typeof options.propose === 'function' ? options.propose : null;
+            return Object.freeze({
+                name: 'ShadowTelescopicPolicy',
+                propose: function pcaShadowTelescopicPropose(context) {
+                    if (customPropose) {
+                        const raw = customPropose(context);
+                        return Array.isArray(raw) ? raw : [];
+                    }
+                    return [];
+                }
+            });
+        }
+
+        function pcaResolveTelescopicMode(options = {}) {
+            const raw = options.telescopicPolicy;
+            if (raw == null || raw === false || raw === PCA_TELESCOPIC_MODE.DISABLED) {
+                return PCA_TELESCOPIC_MODE.DISABLED;
+            }
+            if (raw === true || raw === PCA_TELESCOPIC_MODE.SHADOW) {
+                return PCA_TELESCOPIC_MODE.SHADOW;
+            }
+            if (typeof raw === 'object') {
+                if (raw.mode === PCA_TELESCOPIC_MODE.DISABLED) {
+                    return PCA_TELESCOPIC_MODE.DISABLED;
+                }
+                // Policy instance or { mode: 'shadow', policy } → shadow observation only.
+                return PCA_TELESCOPIC_MODE.SHADOW;
+            }
+            return PCA_TELESCOPIC_MODE.DISABLED;
+        }
+
+        function pcaResolveTelescopicPolicy(options = {}) {
+            const raw = options.telescopicPolicy;
+            if (raw && typeof raw === 'object') {
+                if (typeof raw.propose === 'function') return raw;
+                if (raw.policy && typeof raw.policy.propose === 'function') return raw.policy;
+            }
+            if (options.telescopicPolicyInstance &&
+                typeof options.telescopicPolicyInstance.propose === 'function') {
+                return options.telescopicPolicyInstance;
+            }
+            return pcaCreateNoTelescopicPolicy();
+        }
+
+        function pcaEmptyTelescopicTelemetry(mode = PCA_TELESCOPIC_MODE.DISABLED) {
+            return {
+                telescopicMode: mode,
+                proposalCount: 0,
+                proposalKinds: [],
+                shadowInvocations: 0,
+                proposals: []
+            };
+        }
+
+        function pcaBuildTelescopicContext(view = {}) {
+            // Explicit semantic context for a future policy. No NPS/DOM/Stockfish/time.
+            const candidateIdentities = Array.isArray(view.candidateIdentities)
+                ? view.candidateIdentities.map(id => (id == null ? null : String(id)))
+                : [];
+            const descriptor = view.descriptor
+                ? Object.freeze(Object.assign({}, view.descriptor, {
+                    geometrySignature: view.descriptor.geometrySignature
+                        ? Object.freeze(Object.assign({}, view.descriptor.geometrySignature))
+                        : view.descriptor.geometrySignature,
+                    refinements: view.descriptor.refinements
+                        ? Object.freeze(Object.assign({}, view.descriptor.refinements))
+                        : view.descriptor.refinements
+                }))
+                : null;
+            return Object.freeze({
+                query: view.query || null,
+                stateIdentity: view.stateIdentity != null ? view.stateIdentity : null,
+                descriptor,
+                hypothesesBefore: view.hypothesesBefore != null ? view.hypothesesBefore : null,
+                hypothesesAfter: view.hypothesesAfter != null ? view.hypothesesAfter : null,
+                informationGain: view.informationGain != null ? view.informationGain : null,
+                contractionRatio: view.contractionRatio != null ? view.contractionRatio : null,
+                descriptorClass: view.descriptorClass != null ? view.descriptorClass : null,
+                depth: view.depth != null ? view.depth : null,
+                candidateIdentities: Object.freeze(candidateIdentities.slice())
+            });
+        }
+
+        function pcaNormalizeShadowProposals(rawProposals) {
+            if (!Array.isArray(rawProposals)) return [];
+            const out = [];
+            for (let i = 0; i < rawProposals.length; i += 1) {
+                const item = rawProposals[i];
+                if (!item || typeof item !== 'object') continue;
+                out.push(pcaCreateTelescopicProposal(item));
+            }
+            return out;
+        }
+
+        // Small pure seam usable later at root and inside AND/OR expansion.
+        // Returns diagnostics only. Never mutates solver state.
+        function pcaObserveTelescopicContext(contextView, options = {}) {
+            const mode = pcaResolveTelescopicMode(options);
+            const telemetry = pcaEmptyTelescopicTelemetry(mode);
+            if (mode !== PCA_TELESCOPIC_MODE.SHADOW) {
+                return telemetry;
+            }
+
+            const frozenContext = pcaBuildTelescopicContext(contextView);
+            const policy = pcaResolveTelescopicPolicy(options);
+            telemetry.shadowInvocations = 1;
+
+            let rawProposals = [];
+            try {
+                rawProposals = policy.propose(frozenContext);
+            } catch (error) {
+                telemetry.policyError = error && error.message ? error.message : String(error);
+                rawProposals = [];
+            }
+
+            const proposals = pcaNormalizeShadowProposals(rawProposals);
+            telemetry.proposals = proposals;
+            telemetry.proposalCount = proposals.length;
+            telemetry.proposalKinds = proposals.map(proposal => proposal.kind);
+            return telemetry;
+        }
+
+        function pcaMergeTelescopicTelemetry(target, observation) {
+            if (!observation) return target;
+            target.telescopicMode = observation.telescopicMode || target.telescopicMode;
+            target.shadowInvocations += Number(observation.shadowInvocations) || 0;
+            target.proposalCount += Number(observation.proposalCount) || 0;
+            if (Array.isArray(observation.proposalKinds)) {
+                for (let i = 0; i < observation.proposalKinds.length; i += 1) {
+                    target.proposalKinds.push(observation.proposalKinds[i]);
+                }
+            }
+            if (Array.isArray(observation.proposals)) {
+                for (let i = 0; i < observation.proposals.length; i += 1) {
+                    target.proposals.push(observation.proposals[i]);
+                }
+            }
+            if (observation.policyError && !target.policyError) {
+                target.policyError = observation.policyError;
+            }
+            return target;
+        }
+
         // Función pura respecto de la interfaz: no lee ni escribe DOM, no consulta Stockfish
         // y su resultado depende sólo de fen, kGuard y las reglas de Chess.js.
         function pcaAnalyzePositionCore(fen, kGuard, options = {}) {
             const guard = pcaIsInfiniteKGuard(kGuard) ? Infinity : Number(kGuard);
             const trace = [];
             const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+            const telescopicMode = pcaResolveTelescopicMode(options);
+            const telescopicTelemetry = pcaEmptyTelescopicTelemetry(telescopicMode);
+            const telescopicQuery = pcaCreateQuery({ horizonValue: guard });
 
             if (!pcaIsValidKGuard(guard)) {
                 return pcaResultMetrics({
                     status: 'UNDEFINED', move: null, initialCandidates: 0, survivors: 0,
                     depth: 0, nodes: 0, trace, stopReason: 'INVALID_K_GUARD',
-                    cacheHits: 0, descriptorHits: 0, collisions: 0
+                    cacheHits: 0, descriptorHits: 0, collisions: 0,
+                    telescopicMode: telescopicTelemetry.telescopicMode,
+                    proposalCount: telescopicTelemetry.proposalCount,
+                    proposalKinds: telescopicTelemetry.proposalKinds.slice(),
+                    shadowInvocations: telescopicTelemetry.shadowInvocations
                 });
             }
 
@@ -2511,7 +2749,11 @@
                 return pcaResultMetrics({
                     status: 'UNDEFINED', move: null, initialCandidates: 0, survivors: 0,
                     depth: 0, nodes: 0, trace, stopReason: 'INVALID_FEN',
-                    cacheHits: 0, descriptorHits: 0, collisions: 0
+                    cacheHits: 0, descriptorHits: 0, collisions: 0,
+                    telescopicMode: telescopicTelemetry.telescopicMode,
+                    proposalCount: telescopicTelemetry.proposalCount,
+                    proposalKinds: telescopicTelemetry.proposalKinds.slice(),
+                    shadowInvocations: telescopicTelemetry.shadowInvocations
                 });
             }
 
@@ -2560,7 +2802,11 @@
                     collisionLog: Array.from(context.collisionMap.values()),
                     hypothesesBefore: 1,
                     hypothesesAfter: 1,
-                    contractionRatio: 0
+                    contractionRatio: 0,
+                    telescopicMode: telescopicTelemetry.telescopicMode,
+                    proposalCount: telescopicTelemetry.proposalCount,
+                    proposalKinds: telescopicTelemetry.proposalKinds.slice(),
+                    shadowInvocations: telescopicTelemetry.shadowInvocations
                 });
             }
 
@@ -2571,7 +2817,11 @@
                     depth: 0, nodes: 0, trace, stopReason: 'POSITION_ALREADY_TERMINAL',
                     cacheHits: 0, descriptorHits: context.descriptorHits, collisions: context.collisionMap.size,
                     collisionLog: Array.from(context.collisionMap.values()),
-                    hypothesesBefore: 0, hypothesesAfter: 0, contractionRatio: 0
+                    hypothesesBefore: 0, hypothesesAfter: 0, contractionRatio: 0,
+                    telescopicMode: telescopicTelemetry.telescopicMode,
+                    proposalCount: telescopicTelemetry.proposalCount,
+                    proposalKinds: telescopicTelemetry.proposalKinds.slice(),
+                    shadowInvocations: telescopicTelemetry.shadowInvocations
                 });
             }
 
@@ -2636,6 +2886,24 @@
                             infoGain: 0,
                             contractionRatio: 0
                         }));
+                    // Shadow telescopic seam: observe only. Must not reorder/prune/decide.
+                    // Pass immutable identity views — never mutable candidate/cache refs.
+                    if (telescopicMode === PCA_TELESCOPIC_MODE.SHADOW) {
+                        const sample = orderedRootCandidates[0] || null;
+                        const observation = pcaObserveTelescopicContext({
+                            query: telescopicQuery,
+                            stateIdentity: fen,
+                            descriptor: baseDescriptor,
+                            hypothesesBefore: sample ? sample.hypothesesBefore : rootTargets.length,
+                            hypothesesAfter: sample ? sample.hypothesesAfter : rootTargets.length,
+                            informationGain: sample ? sample.infoGain : 0,
+                            contractionRatio: sample ? sample.contractionRatio : 0,
+                            descriptorClass: pcaDescriptorKey(baseDescriptor),
+                            depth: k,
+                            candidateIdentities: orderedRootCandidates.map(candidate => candidate.move.san)
+                        }, options);
+                        pcaMergeTelescopicTelemetry(telescopicTelemetry, observation);
+                    }
                     // W_k = { m : ExactANDOR(m, k) = MATE }. PCA only orders search;
                     // classification must inspect every remaining root move at depth k.
                     const winningCandidates = [];
@@ -2697,7 +2965,11 @@
                             hypothesesAfter: primaryWinner.hypothesesAfter,
                             contractionRatio: primaryWinner.contractionRatio,
                             semanticOrdering: context.semanticOrdering,
-                            forcedMateTargets
+                            forcedMateTargets,
+                            telescopicMode: telescopicTelemetry.telescopicMode,
+                            proposalCount: telescopicTelemetry.proposalCount,
+                            proposalKinds: telescopicTelemetry.proposalKinds.slice(),
+                            shadowInvocations: telescopicTelemetry.shadowInvocations
                         });
                     }
 
@@ -2721,7 +2993,11 @@
                             hypothesesAfter: primaryWinner.hypothesesAfter,
                             contractionRatio: primaryWinner.contractionRatio,
                             semanticOrdering: context.semanticOrdering,
-                            forcedMateTargets
+                            forcedMateTargets,
+                            telescopicMode: telescopicTelemetry.telescopicMode,
+                            proposalCount: telescopicTelemetry.proposalCount,
+                            proposalKinds: telescopicTelemetry.proposalKinds.slice(),
+                            shadowInvocations: telescopicTelemetry.shadowInvocations
                         });
                     }
                 }
@@ -2737,7 +3013,11 @@
                     hypothesesBefore: trace.length > 0 ? trace[trace.length - 1].hypothesesBefore : 0,
                     hypothesesAfter: trace.length > 0 ? trace[trace.length - 1].hypothesesAfter : 0,
                     contractionRatio: trace.length > 0 ? trace[trace.length - 1].contractionRatio : 0,
-                    semanticOrdering: context.semanticOrdering
+                    semanticOrdering: context.semanticOrdering,
+                    telescopicMode: telescopicTelemetry.telescopicMode,
+                    proposalCount: telescopicTelemetry.proposalCount,
+                    proposalKinds: telescopicTelemetry.proposalKinds.slice(),
+                    shadowInvocations: telescopicTelemetry.shadowInvocations
                 });
             } catch (error) {
                 if (error && error.code === 'PCA_NODE_GUARD') {
@@ -2753,7 +3033,11 @@
                         hypothesesBefore: context.lastSemanticSample.hypothesesBefore,
                         hypothesesAfter: context.lastSemanticSample.hypothesesAfter,
                         contractionRatio: context.lastSemanticSample.contractionRatio,
-                        semanticOrdering: context.semanticOrdering
+                        semanticOrdering: context.semanticOrdering,
+                        telescopicMode: telescopicTelemetry.telescopicMode,
+                        proposalCount: telescopicTelemetry.proposalCount,
+                        proposalKinds: telescopicTelemetry.proposalKinds.slice(),
+                        shadowInvocations: telescopicTelemetry.shadowInvocations
                     });
                 }
 
@@ -2769,6 +3053,10 @@
                     hypothesesAfter: context.lastSemanticSample.hypothesesAfter,
                     contractionRatio: context.lastSemanticSample.contractionRatio,
                     semanticOrdering: context.semanticOrdering,
+                    telescopicMode: telescopicTelemetry.telescopicMode,
+                    proposalCount: telescopicTelemetry.proposalCount,
+                    proposalKinds: telescopicTelemetry.proposalKinds.slice(),
+                    shadowInvocations: telescopicTelemetry.shadowInvocations,
                     error: error && error.message ? error.message : String(error)
                 });
             }
@@ -3334,6 +3622,17 @@
                 pcaRootMoveForcesMate,
                 pcaResultMetrics,
                 pcaRefineDescriptor,
+                pcaCreateQuery,
+                pcaCreateTelescopicProposal,
+                pcaCreateNoTelescopicPolicy,
+                pcaCreateShadowTelescopicPolicy,
+                pcaResolveTelescopicMode,
+                pcaResolveTelescopicPolicy,
+                pcaEmptyTelescopicTelemetry,
+                pcaBuildTelescopicContext,
+                pcaNormalizeShadowProposals,
+                pcaObserveTelescopicContext,
+                pcaMergeTelescopicTelemetry,
                 pcaAnalyzePositionCore,
                 pcaAnalyzePosition,
                 pcaEvaluationOutcome,
@@ -3576,6 +3875,10 @@
                 'const PCA_EVAL_NODE_GUARD = ' + PCA_EVAL_NODE_GUARD + ';',
                 'const PCA_PROGRESS_NODE_INTERVAL = ' + PCA_PROGRESS_NODE_INTERVAL + ';',
                 'const PCA_PROGRESS_TIME_INTERVAL = ' + PCA_PROGRESS_TIME_INTERVAL + ';',
+                'const PCA_PROPOSAL_KIND = ' + JSON.stringify(PCA_PROPOSAL_KIND) + ';',
+                'const PCA_FAILURE_REASON = ' + JSON.stringify(PCA_FAILURE_REASON) + ';',
+                'const PCA_EVIDENCE_LEVEL = ' + JSON.stringify(PCA_EVIDENCE_LEVEL) + ';',
+                'const PCA_TELESCOPIC_MODE = ' + JSON.stringify(PCA_TELESCOPIC_MODE) + ';',
                 pureFunctions,
                 'self.onmessage = ' + workerHandler.toString() + ';'
             ].join('\n');
@@ -3960,6 +4263,7 @@
         }
 
         window.pcaAnalyzePosition = pcaAnalyzePosition;
+        window.pcaAnalyzePositionCore = pcaAnalyzePositionCore;
         window.describeFEN = describeFEN;
         window.pcaRefineDescriptor = pcaRefineDescriptor;
         window.pcaOrderSemanticCandidates = pcaOrderSemanticCandidates;
@@ -3969,6 +4273,20 @@
         window.togglePCAAnalysis = togglePCAAnalysis;
         window.cancelPCAAnalysis = cancelPCAAnalysis;
         window.getPCATrace = function() { return pcaLastTrace.slice(); };
+        window.PCA_PROPOSAL_KIND = PCA_PROPOSAL_KIND;
+        window.PCA_FAILURE_REASON = PCA_FAILURE_REASON;
+        window.PCA_EVIDENCE_LEVEL = PCA_EVIDENCE_LEVEL;
+        window.PCA_TELESCOPIC_MODE = PCA_TELESCOPIC_MODE;
+        window.pcaCreateQuery = pcaCreateQuery;
+        window.pcaCreateTelescopicProposal = pcaCreateTelescopicProposal;
+        window.pcaCreateNoTelescopicPolicy = pcaCreateNoTelescopicPolicy;
+        window.pcaCreateShadowTelescopicPolicy = pcaCreateShadowTelescopicPolicy;
+        window.pcaBuildTelescopicContext = pcaBuildTelescopicContext;
+        window.pcaObserveTelescopicContext = pcaObserveTelescopicContext;
+        window.pcaRegisterDescriptorOutcome = pcaRegisterDescriptorOutcome;
+        window.pcaBuildSemanticCandidates = pcaBuildSemanticCandidates;
+        window.pcaCanForceMate = pcaCanForceMate;
+        window.pcaRootMoveForcesMate = pcaRootMoveForcesMate;
 
         // Función para actualizar estado de botones
         function updateButtonStates() {
