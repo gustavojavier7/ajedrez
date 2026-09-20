@@ -696,6 +696,57 @@
             overflow-wrap: anywhere;
         }
 
+        .pca-telescopic-panel {
+            margin-top: 8px;
+            padding: 7px 8px 8px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            background: #f8fafc;
+        }
+
+        .pca-telescopic-panel > .section-title {
+            margin-bottom: 5px;
+            font-size: 0.74rem;
+        }
+
+        .pca-telescopic-panel .section-subtitle {
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            color: #1d4ed8;
+        }
+
+        .pca-telescopic-panel.pca-telescopic-mode-shadow .section-subtitle {
+            color: #b45309;
+        }
+
+        .pca-telescopic-panel.pca-telescopic-mode-active .section-subtitle {
+            color: #047857;
+        }
+
+        .pca-telescopic-grid {
+            gap: 4px;
+        }
+
+        .pca-telescopic-grid .metric-item {
+            padding: 4px 6px;
+            background: #ffffff;
+        }
+
+        .pca-telescopic-grid .metric-label {
+            font-size: 0.62rem;
+        }
+
+        .pca-telescopic-grid .metric-value {
+            font-size: 0.78rem;
+        }
+
+        .pca-telescopic-note {
+            margin-top: 5px;
+            font-size: 0.62rem;
+            color: #64748b;
+            line-height: 1.25;
+        }
+
         .pca-line-telemetry {
             margin-top: 8px;
             padding: 7px 8px;
@@ -1032,6 +1083,13 @@
                                     <option value="Infinity">∞ infinito</option>
                                 </select>
                             </label>
+                            <label for="pcaTelescopicMode" title="disabled: sin telescopía · shadow: observa y propone sin reordenar · active: sólo reordena con permutación validada (π(C)); nunca poda ni certifica">PCA MODE
+                                <select id="pcaTelescopicMode" aria-label="Política telescópica PCA">
+                                    <option value="disabled" selected>DISABLED</option>
+                                    <option value="shadow">SHADOW</option>
+                                    <option value="active">ACTIVE</option>
+                                </select>
+                            </label>
                             <button type="button" onclick="togglePCAAnalysis()" id="pcaAnalyzeBtn" class="btn btn-primary">
                                 <i class="fas fa-project-diagram"></i>Analizar PCA
                             </button>
@@ -1126,6 +1184,42 @@
                             <div class="metric-item"><span class="metric-label">Colisiones</span><span id="pcaCollisions" class="metric-value">—</span></div>
                         </div>
                         <div id="pcaStopReason" class="stop-reason">STOP_REASON: —</div>
+                        <div id="pcaTelescopicPanel" class="pca-telescopic-panel" aria-label="Telemetría telescópica PCA">
+                            <div class="section-title">
+                                <i class="fas fa-layer-group"></i>
+                                PCA MODE
+                                <span class="section-subtitle" id="pcaTelescopicModeValue">—</span>
+                            </div>
+                            <div class="metric-grid pca-telescopic-grid">
+                                <div class="metric-item" title="activeInvocations: veces que la política ACTIVE fue invocada (root + AND/OR interno)">
+                                    <span class="metric-label">ACTIVE_INV</span>
+                                    <span id="pcaActiveInvocations" class="metric-value">—</span>
+                                </div>
+                                <div class="metric-item" title="reordersApplied: permutaciones π(C) válidas realmente aplicadas">
+                                    <span class="metric-label">REORDERS_APPL</span>
+                                    <span id="pcaReordersApplied" class="metric-value">—</span>
+                                </div>
+                                <div class="metric-item" title="reordersRejected: permutaciones rechazadas por pcaValidatePermutation o por excepción de política">
+                                    <span class="metric-label">REORDERS_REJ</span>
+                                    <span id="pcaReordersRejected" class="metric-value">—</span>
+                                </div>
+                                <div class="metric-item" title="orderFallbacks: veces que se conservó el orden semántico seguro">
+                                    <span class="metric-label">FALLBACKS</span>
+                                    <span id="pcaOrderFallbacks" class="metric-value">—</span>
+                                </div>
+                                <div class="metric-item" title="rootReorders: reorders aplicados en la raíz">
+                                    <span class="metric-label">ROOT_REORD</span>
+                                    <span id="pcaRootReorders" class="metric-value">—</span>
+                                </div>
+                                <div class="metric-item" title="internalReorders: reorders aplicados en nodos AND/OR internos">
+                                    <span class="metric-label">INT_REORD</span>
+                                    <span id="pcaInternalReorders" class="metric-value">—</span>
+                                </div>
+                            </div>
+                            <div id="pcaTelescopicNote" class="pca-telescopic-note">
+                                shadow=— · propuestas=— · el modo no altera la verdad exacta.
+                            </div>
+                        </div>
                         <div id="pcaLineTelemetryPanel" class="pca-line-telemetry" aria-label="Línea PCA NPS en vivo">
                             <div class="section-title">
                                 <i class="fas fa-stream"></i>
@@ -1279,6 +1373,14 @@
             const raw = document.getElementById('pcaKGuard')?.value;
             if (raw === 'Infinity' || raw === 'inf' || raw === '∞') return Infinity;
             return Number(raw);
+        }
+
+        // Selector compacto PCA MODE (disabled | shadow | active).
+        function pcaReadTelescopicMode() {
+            const element = typeof document !== 'undefined' && document
+                ? document.getElementById('pcaTelescopicMode')
+                : null;
+            return pcaNormalizeTelescopicMode(element ? element.value : null);
         }
 
         function pcaIsInfiniteKGuard(k) {
@@ -1869,8 +1971,44 @@
                 pcaFormatDiagnosticScore(m.pcaScore)
             );
             pcaSetMetricText('pcaStopReason', `STOP_REASON: ${formatMetricValue(m.stopReason)}`);
+            pcaUpdateTelescopicTelemetry(m);
             refreshPcaStockfishComparison();
         };
+
+        // Panel telescópico compacto. Sólo publica datos observados:
+        // si una métrica no llegó todavía (p.ej. durante PROGRESS) se muestra "—".
+        function pcaUpdateTelescopicTelemetry(m) {
+            const panel = document.getElementById('pcaTelescopicPanel');
+            const rawMode = m.telescopicMode;
+            const hasMode = rawMode !== null && rawMode !== undefined && rawMode !== '';
+            if (panel) {
+                panel.className = 'pca-telescopic-panel' + (
+                    !hasMode
+                        ? ''
+                        : rawMode === PCA_TELESCOPIC_MODE.ACTIVE
+                            ? ' pca-telescopic-mode-active'
+                            : rawMode === PCA_TELESCOPIC_MODE.SHADOW
+                                ? ' pca-telescopic-mode-shadow'
+                                : ' pca-telescopic-mode-disabled'
+                );
+            }
+            pcaSetMetricText(
+                'pcaTelescopicModeValue',
+                hasMode ? pcaNormalizeTelescopicMode(rawMode).toUpperCase() : '—'
+            );
+            pcaSetMetricText('pcaActiveInvocations', formatCountMetric(m.activeInvocations));
+            pcaSetMetricText('pcaReordersApplied', formatCountMetric(m.reordersApplied));
+            pcaSetMetricText('pcaReordersRejected', formatCountMetric(m.reordersRejected));
+            pcaSetMetricText('pcaOrderFallbacks', formatCountMetric(m.orderFallbacks));
+            pcaSetMetricText('pcaRootReorders', formatCountMetric(m.rootReorders));
+            pcaSetMetricText('pcaInternalReorders', formatCountMetric(m.internalReorders));
+            pcaSetMetricText(
+                'pcaTelescopicNote',
+                `shadow=${formatCountMetric(m.shadowInvocations)} · ` +
+                `propuestas=${formatCountMetric(m.proposalCount)} · ` +
+                'el modo no altera la verdad exacta.'
+            );
+        }
 
         window.resetPCAMetrics = function() {
             pcaMetricsState = {};
@@ -3347,6 +3485,30 @@
             return pcaCreateNoTelescopicPolicy();
         }
 
+        // Modo telescópico canónico de la interfaz. Fail-closed: cualquier valor
+        // desconocido o no textual cae a DISABLED, nunca a SHADOW/ACTIVE.
+        // No mira NPS, tiempo, nodos ni ninguna señal operacional.
+        function pcaNormalizeTelescopicMode(value) {
+            if (typeof value !== 'string') return PCA_TELESCOPIC_MODE.DISABLED;
+            const normalized = value.trim().toLowerCase();
+            if (normalized === PCA_TELESCOPIC_MODE.DISABLED) return PCA_TELESCOPIC_MODE.DISABLED;
+            if (normalized === PCA_TELESCOPIC_MODE.SHADOW) return PCA_TELESCOPIC_MODE.SHADOW;
+            if (normalized === PCA_TELESCOPIC_MODE.ACTIVE) return PCA_TELESCOPIC_MODE.ACTIVE;
+            return PCA_TELESCOPIC_MODE.DISABLED;
+        }
+
+        // Punto único de transporte UI → Worker → pcaAnalyzePositionCore.
+        // El modo viaja como campo explícito del mensaje START; nunca se infiere.
+        function pcaCreateWorkerStartMessage(partial = {}) {
+            return {
+                type: 'START',
+                runId: partial.runId,
+                fen: partial.fen,
+                kGuard: partial.kGuard,
+                telescopicPolicy: pcaNormalizeTelescopicMode(partial.telescopicPolicy)
+            };
+        }
+
         function pcaEmptyTelescopicTelemetry(mode = PCA_TELESCOPIC_MODE.DISABLED) {
             return {
                 telescopicMode: mode,
@@ -3912,6 +4074,18 @@
                     activeMove: context.activeMove,
                     activeMoveIndex: context.activeMoveIndex,
                     activeMoveNodes: context.nodes - context.activeMoveStartNodes,
+                    // Telemetría telescópica viva: sólo lectura de contadores.
+                    // No participa en orden, corte, cache ni certificación.
+                    telescopicMode: telescopicTelemetry.telescopicMode,
+                    proposalCount: telescopicTelemetry.proposalCount,
+                    proposalKinds: telescopicTelemetry.proposalKinds.slice(),
+                    shadowInvocations: telescopicTelemetry.shadowInvocations,
+                    activeInvocations: telescopicTelemetry.activeInvocations,
+                    reordersApplied: telescopicTelemetry.reordersApplied,
+                    reordersRejected: telescopicTelemetry.reordersRejected,
+                    orderFallbacks: telescopicTelemetry.orderFallbacks,
+                    rootReorders: telescopicTelemetry.rootReorders,
+                    internalReorders: telescopicTelemetry.internalReorders,
                     trace: trace.slice(),
                     stopReason: 'SEARCHING'
                 });
@@ -4762,6 +4936,8 @@
                 pcaCreateActiveTelescopicPolicy,
                 pcaResolveTelescopicMode,
                 pcaResolveTelescopicPolicy,
+                pcaNormalizeTelescopicMode,
+                pcaCreateWorkerStartMessage,
                 pcaEmptyTelescopicTelemetry,
                 pcaTelescopicPublicTelemetry,
                 pcaBuildTelescopicContext,
@@ -4792,6 +4968,8 @@
                 const runId = message.runId;
                 const startedAt = Date.now();
                 const kGuard = message.kGuard;
+                // Modo telescópico explícito transportado por la UI (fail-closed a disabled).
+                const telescopicPolicy = pcaNormalizeTelescopicMode(message.telescopicPolicy);
                 const mateNodeGuard = pcaEffectiveNodeGuard(kGuard, PCA_NODE_GUARD);
                 const evalNodeGuard = pcaEffectiveNodeGuard(kGuard, PCA_EVAL_NODE_GUARD);
                 const send = (type, payload) => self.postMessage(Object.assign({
@@ -4807,6 +4985,7 @@
                     nodeGuard: mateNodeGuard,
                     movesCompleted: 0,
                     totalMoves: 0,
+                    telescopicMode: telescopicPolicy,
                     moves: []
                 };
                 // Observational root-line timing lives in the worker telemetry layer,
@@ -4927,6 +5106,7 @@
                     lineStartBoundary = searchStartedAt;
                     lineBoundaryReady = true;
                     const pcaResult = pcaAnalyzePositionCore(message.fen, kGuard, {
+                        telescopicPolicy: telescopicPolicy,
                         onProgress: snapshot => {
                             const nowTs = performance.now();
                             const elapsedMs = nowTs - searchStartedAt;
@@ -5166,6 +5346,35 @@
                     } else if (message.semanticSampleValid === false) {
                         liveMetrics.pcaScore = null;
                     }
+                    // Telemetría telescópica viva (sólo se publica lo que llega;
+                    // lo ausente queda en "—", nunca se inventa).
+                    if (message.telescopicMode != null) {
+                        liveMetrics.telescopicMode = message.telescopicMode;
+                    }
+                    if (message.proposalCount != null) {
+                        liveMetrics.proposalCount = message.proposalCount;
+                    }
+                    if (message.shadowInvocations != null) {
+                        liveMetrics.shadowInvocations = message.shadowInvocations;
+                    }
+                    if (message.activeInvocations != null) {
+                        liveMetrics.activeInvocations = message.activeInvocations;
+                    }
+                    if (message.reordersApplied != null) {
+                        liveMetrics.reordersApplied = message.reordersApplied;
+                    }
+                    if (message.reordersRejected != null) {
+                        liveMetrics.reordersRejected = message.reordersRejected;
+                    }
+                    if (message.orderFallbacks != null) {
+                        liveMetrics.orderFallbacks = message.orderFallbacks;
+                    }
+                    if (message.rootReorders != null) {
+                        liveMetrics.rootReorders = message.rootReorders;
+                    }
+                    if (message.internalReorders != null) {
+                        liveMetrics.internalReorders = message.internalReorders;
+                    }
                     window.updatePCAMetrics(liveMetrics);
                     // Line NPS is measured from worker elapsedMs + activeMove* snapshots.
                     pcaObserveLineProgress(message);
@@ -5292,6 +5501,8 @@
             }
             const rootFen = chess.fen();
             const guard = pcaReadKGuard();
+            // Modo telescópico elegido en la UI; viaja explícito hasta el core.
+            const telescopicPolicy = pcaReadTelescopicMode();
             const validation = new Chess().validate_fen(rootFen);
             if (!validation.valid || !pcaIsValidKGuard(guard)) {
                 pcaSetEngineStatus('FEN o K_GUARD inválido');
@@ -5315,7 +5526,8 @@
                 nps: 0,
                 npsMode: 'rolling',
                 elapsedMs: 0,
-                stopReason: 'STARTING'
+                stopReason: 'STARTING',
+                telescopicMode: telescopicPolicy
             });
             pcaSetEngineStatus(
                 pcaIsInfiniteKGuard(guard)
@@ -5354,7 +5566,12 @@
                     error: event.message || 'WORKER_ERROR',
                     elapsedMs: 0
                 });
-                pcaWorker.postMessage({ type: 'START', runId, fen: rootFen, kGuard: guard });
+                pcaWorker.postMessage(pcaCreateWorkerStartMessage({
+                    runId,
+                    fen: rootFen,
+                    kGuard: guard,
+                    telescopicPolicy
+                }));
             } catch (error) {
                 pcaHandleWorkerMessage({
                     type: 'ERROR',
@@ -5475,6 +5692,9 @@
         window.pcaCreateShadowTelescopicPolicy = pcaCreateShadowTelescopicPolicy;
         window.pcaDefaultActiveRank = pcaDefaultActiveRank;
         window.pcaCreateActiveTelescopicPolicy = pcaCreateActiveTelescopicPolicy;
+        window.pcaNormalizeTelescopicMode = pcaNormalizeTelescopicMode;
+        window.pcaReadTelescopicMode = pcaReadTelescopicMode;
+        window.pcaCreateWorkerStartMessage = pcaCreateWorkerStartMessage;
         window.pcaValidatePermutation = pcaValidatePermutation;
         window.pcaReorderCandidatesByIdentities = pcaReorderCandidatesByIdentities;
         window.pcaApplyActiveTelescopicRanking = pcaApplyActiveTelescopicRanking;
