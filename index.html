@@ -782,6 +782,17 @@
             margin: 8px 0;
         }
 
+        .sf-nps-window-select {
+            margin-left: 4px;
+            font-size: 0.62rem;
+            padding: 0 2px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            background: #fff;
+            color: #374151;
+            vertical-align: baseline;
+        }
+
         .reference-label {
             font-size: 0.7rem;
             color: #6b7280;
@@ -1120,7 +1131,17 @@
                             <div class="metric-item"><span class="metric-label">Evaluación</span><span id="evaluation" class="evaluation metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label">Mejor movimiento</span><span id="bestMove" class="best-move metric-value">—</span></div>
                             <div class="metric-item"><span class="metric-label">Búsqueda</span><span id="engineStats" class="metric-value">—</span></div>
-                            <div class="metric-item"><span class="metric-label">Memoria</span><span id="memoryStats" class="metric-value">—</span></div>
+                            <div class="metric-item">
+                                <span class="metric-label">
+                                    NPS
+                                    <select id="sfNpsWindowSelect" class="sf-nps-window-select" onchange="setStockfishNpsWindow(this.value)" title="Ventana NPS móvil" aria-label="Ventana NPS móvil">
+                                        <option value="5">5s</option>
+                                        <option value="10" selected>10s</option>
+                                    </select>
+                                </span>
+                                <span id="npsStats" class="metric-value">—</span>
+                            </div>
+                            <div class="metric-item"><span class="metric-label">Hash ocupado</span><span id="memoryStats" class="metric-value">—</span></div>
                         </div>
                         <div class="pv-section">
                             <div class="pv-title"><i class="fas fa-route"></i> Línea principal de control</div>
@@ -1321,6 +1342,20 @@
         let blobURL = null;
         let isEngineConnected = false;
         let isAnalyzing = false;
+        let isEngineConnecting = false;
+
+        // Stockfish 19 single (local JS+WASM). Do not load via Blob: the companion .wasm
+        // is resolved relative to the worker script URL.
+        const STOCKFISH_ENGINE_JS_URL = 'vendor/stockfish/stockfish-19-single.js';
+        const SF_NPS_SAMPLE_MAX_MS = 12000;
+        const SF_HANDSHAKE_TIMEOUT_MS = 20000;
+
+        let sfEngineIdName = null;
+        let sfUciOk = false;
+        let sfReadyOk = false;
+        let sfEngineOptions = Object.create(null);
+        let sfNpsWindowMs = 10000;
+        let sfNpsSamples = [];
         
         // Variables para destacar casillas
         let previousHighlightedSquares = [];
@@ -1328,13 +1363,227 @@
         
         // Estadísticas del motor
         let lastStats = { 
-            nps: 0, 
+            nps: 0,
+            npsRolling: null,
+            npsCumulative: null,
+            nodes: 0,
+            timeMs: 0,
+            hashfull: null,
             pv: '', 
             evaluation: null,
             depth: 0,
             bestMove: '',
             bestMoveSan: ''
         };
+
+        function createEmptyStockfishStats() {
+            return {
+                nps: 0,
+                npsRolling: null,
+                npsCumulative: null,
+                nodes: 0,
+                timeMs: 0,
+                hashfull: null,
+                pv: '',
+                evaluation: null,
+                depth: 0,
+                bestMove: '',
+                bestMoveSan: ''
+            };
+        }
+
+        // --- Stockfish telemetry helpers (pure; unit-tested) ---
+
+        function sfParseUciOptionLine(line) {
+            if (typeof line !== 'string' || !line.startsWith('option name ')) return null;
+            const body = line.slice('option name '.length);
+            const typeIdx = body.indexOf(' type ');
+            if (typeIdx === -1) return null;
+            const name = body.slice(0, typeIdx).trim();
+            if (!name) return null;
+            const rest = body.slice(typeIdx + ' type '.length).trim();
+            const tokens = rest.split(/\s+/);
+            if (!tokens.length) return null;
+            const option = { name: name, type: tokens[0] };
+            for (let i = 1; i < tokens.length - 1; i++) {
+                const key = tokens[i];
+                const value = tokens[i + 1];
+                if (key === 'default') option.default = value;
+                else if (key === 'min') option.min = Number(value);
+                else if (key === 'max') option.max = Number(value);
+                else if (key === 'var') {
+                    if (!option.vars) option.vars = [];
+                    option.vars.push(value);
+                } else {
+                    continue;
+                }
+                i += 1;
+            }
+            return option;
+        }
+
+        function sfRegisterEngineOption(line, optionsMap) {
+            const option = sfParseUciOptionLine(line);
+            if (!option) return null;
+            const target = optionsMap || sfEngineOptions;
+            target[option.name] = option;
+            return option;
+        }
+
+        function sfResetNpsSamples(sampleStore) {
+            const store = sampleStore || sfNpsSamples;
+            if (store === sfNpsSamples) {
+                sfNpsSamples = [];
+                return sfNpsSamples;
+            }
+            store.length = 0;
+            return store;
+        }
+
+        function sfRecordNpsSample(timeMs, nodes, sampleStore, maxKeepMs) {
+            const t = Number(timeMs);
+            const n = Number(nodes);
+            const store = sampleStore || sfNpsSamples;
+            const keepMs = maxKeepMs == null ? SF_NPS_SAMPLE_MAX_MS : maxKeepMs;
+            if (!Number.isFinite(t) || !Number.isFinite(n) || t < 0 || n < 0) return store;
+            const last = store.length ? store[store.length - 1] : null;
+            if (last && last.timeMs === t && last.nodes === n) return store;
+            if (last && t < last.timeMs) return store;
+            store.push({ timeMs: t, nodes: n });
+            const cutoff = t - keepMs;
+            while (store.length > 2 && store[1].timeMs <= cutoff) {
+                store.shift();
+            }
+            return store;
+        }
+
+        function sfComputeRollingNps(samples, windowMs) {
+            if (!Array.isArray(samples) || samples.length === 0) return null;
+            const newest = samples[samples.length - 1];
+            const win = Number(windowMs);
+            if (!Number.isFinite(win) || win <= 0) return null;
+            if (samples.length === 1) {
+                if (!(newest.timeMs > 0)) return null;
+                return Math.round((newest.nodes * 1000) / newest.timeMs);
+            }
+            const target = newest.timeMs - win;
+            let oldest = samples[0];
+            for (let i = 0; i < samples.length - 1; i++) {
+                const cur = samples[i];
+                const next = samples[i + 1];
+                if (cur.timeMs <= target) oldest = cur;
+                if (next.timeMs >= target && cur.timeMs <= target) {
+                    oldest = cur;
+                    break;
+                }
+            }
+            const dt = newest.timeMs - oldest.timeMs;
+            if (!(dt > 0)) return null;
+            const dn = newest.nodes - oldest.nodes;
+            if (dn < 0) return null;
+            return Math.round((dn * 1000) / dt);
+        }
+
+        function sfComputeCumulativeNps(timeMs, nodes) {
+            const t = Number(timeMs);
+            const n = Number(nodes);
+            if (!Number.isFinite(t) || !Number.isFinite(n) || t <= 0 || n < 0) return null;
+            return Math.round((n * 1000) / t);
+        }
+
+        function sfHashfullToPercent(hashfull) {
+            if (hashfull === null || hashfull === undefined || hashfull === '') return null;
+            const h = Number(hashfull);
+            if (!Number.isFinite(h) || h < 0) return null;
+            return h / 10;
+        }
+
+        function sfFormatHashOccupancy(hashfull) {
+            const pct = sfHashfullToPercent(hashfull);
+            if (pct === null) return '—';
+            return pct.toFixed(1) + ' %';
+        }
+
+        function sfFormatNpsValue(nps) {
+            if (nps === null || nps === undefined || !Number.isFinite(Number(nps))) return '—';
+            return Math.round(Number(nps)).toLocaleString('es-ES');
+        }
+
+        function sfNormalizeNpsWindowSeconds(value) {
+            const n = Number(value);
+            if (n === 5 || n === 10) return n;
+            return 10;
+        }
+
+        function setStockfishNpsWindow(seconds) {
+            const sec = sfNormalizeNpsWindowSeconds(seconds);
+            sfNpsWindowMs = sec * 1000;
+            const select = document.getElementById('sfNpsWindowSelect');
+            if (select && String(select.value) !== String(sec)) {
+                select.value = String(sec);
+            }
+            if (sfNpsSamples.length) {
+                lastStats.npsRolling = sfComputeRollingNps(sfNpsSamples, sfNpsWindowMs);
+                lastStats.nps = lastStats.npsRolling || 0;
+            }
+            refreshStockfishTelemetryUI();
+        }
+
+        function resetStockfishSearchTelemetry() {
+            sfResetNpsSamples();
+            lastStats.nps = 0;
+            lastStats.npsRolling = null;
+            lastStats.npsCumulative = null;
+            lastStats.nodes = 0;
+            lastStats.timeMs = 0;
+            lastStats.hashfull = null;
+            lastStats.depth = 0;
+        }
+
+        function refreshStockfishTelemetryUI() {
+            const engineStats = document.getElementById('engineStats');
+            const npsStats = document.getElementById('npsStats');
+            const memoryStats = document.getElementById('memoryStats');
+            if (engineStats) {
+                const name = sfEngineIdName || (isEngineConnected ? 'Stockfish 19' : 'Stockfish');
+                const depth = Number(lastStats.depth) || 0;
+                engineStats.textContent = isEngineConnected || sfEngineIdName
+                    ? `${name} · depth ${depth}`
+                    : '—';
+            }
+            if (npsStats) {
+                const windowSec = Math.round(sfNpsWindowMs / 1000);
+                npsStats.textContent =
+                    `NPS ${windowSec}s: ${sfFormatNpsValue(lastStats.npsRolling)} · NPS acum.: ${sfFormatNpsValue(lastStats.npsCumulative)}`;
+            }
+            if (memoryStats) {
+                // Label already says "Hash ocupado"; value is percent or em-dash.
+                memoryStats.textContent = sfFormatHashOccupancy(lastStats.hashfull);
+            }
+        }
+
+        function sfWaitForPredicate(predicate, timeoutMs, errorMessage) {
+            return new Promise((resolve, reject) => {
+                const started = Date.now();
+                const tick = () => {
+                    try {
+                        if (predicate()) {
+                            resolve(true);
+                            return;
+                        }
+                    } catch (err) {
+                        reject(err);
+                        return;
+                    }
+                    if (Date.now() - started >= timeoutMs) {
+                        reject(new Error(errorMessage));
+                        return;
+                    }
+                    setTimeout(tick, 25);
+                };
+                tick();
+            });
+        }
 
         // PCA-Chess prototípico: búsqueda exacta de mate forzado por horizonte.
         // Stockfish permanece separado y se usa sólo como control de referencia.
@@ -5724,12 +5973,20 @@
             }
 
             // Botón de motor (alternar conectar/desconectar)
-            if (isEngineConnected) {
-                engineToggleBtn.innerHTML = '<i class="fas fa-power-off"></i>Desconectar Motor';
-                engineToggleBtn.className = 'btn btn-warning';
-            } else {
-                engineToggleBtn.innerHTML = '<i class="fas fa-plug"></i>Conectar Motor';
-                engineToggleBtn.className = 'btn btn-purple';
+            if (engineToggleBtn) {
+                if (isEngineConnecting) {
+                    engineToggleBtn.innerHTML = '<i class="fas fa-spinner"></i>Conectando...';
+                    engineToggleBtn.className = 'btn btn-purple';
+                    engineToggleBtn.disabled = true;
+                } else if (isEngineConnected) {
+                    engineToggleBtn.innerHTML = '<i class="fas fa-power-off"></i>Desconectar Motor';
+                    engineToggleBtn.className = 'btn btn-warning';
+                    engineToggleBtn.disabled = false;
+                } else {
+                    engineToggleBtn.innerHTML = '<i class="fas fa-plug"></i>Conectar Motor';
+                    engineToggleBtn.className = 'btn btn-purple';
+                    engineToggleBtn.disabled = false;
+                }
             }
 
             // Botón de análisis (alternar iniciar/detener)
@@ -6043,14 +6300,8 @@
             window.resetPCAMetrics();
             
             // Limpiar estadísticas
-            lastStats = { 
-                nps: 0, 
-                pv: '', 
-                evaluation: null,
-                depth: 0,
-                bestMove: '',
-                bestMoveSan: ''
-            };
+            lastStats = createEmptyStockfishStats();
+            sfResetNpsSamples();
             
             document.getElementById('chessboard').innerHTML = generateChessboardSVG();
             document.getElementById('legalMoves').style.display = 'none';
@@ -6059,15 +6310,12 @@
             updateButtonStates();
             
             // Limpiar información del motor
-            document.getElementById('evaluation').textContent = '';
-            document.getElementById('bestMove').textContent = '';
-            document.getElementById('engineStats').textContent = '';
-            document.getElementById('pvLine').textContent = 'Inicia Stockfish para obtener referencia';
             document.getElementById('evaluation').textContent = '—';
             document.getElementById('bestMove').textContent = '—';
-            document.getElementById('engineStats').textContent = '—';
+            document.getElementById('pvLine').textContent = 'Inicia Stockfish para obtener referencia';
             document.getElementById('stockfishCompareMove').textContent = '—';
             refreshPcaStockfishComparison();
+            refreshStockfishTelemetryUI();
             
             // Resetear destacados
             resetHighlights();
@@ -6075,8 +6323,6 @@
             if (isAnalyzing) {
                 stopAnalysis();
             }
-            
-            updateMemoryStats();
             
             // Configurar observador para la línea principal
             setTimeout(setupPVObserver, 100);
@@ -6158,87 +6404,132 @@
             }
             
             // Limpiar información del motor
-            document.getElementById('bestMove').textContent = '';
-            document.getElementById('evaluation').textContent = '';
-            document.getElementById('engineStats').textContent = '';
+            document.getElementById('bestMove').textContent = '—';
+            document.getElementById('evaluation').textContent = '—';
             document.getElementById('pvLine').textContent = 'Inicia Stockfish para obtener referencia';
             
             // Resetear destacados
             resetHighlights();
             
-            lastStats = { 
-                nps: 0, 
-                pv: '', 
-                evaluation: null,
-                depth: 0,
-                bestMove: '',
-                bestMoveSan: ''
-            };
+            lastStats = createEmptyStockfishStats();
+            sfResetNpsSamples();
+            refreshStockfishTelemetryUI();
             
             if (isEngineConnected && !chess.game_over()) {
                 setTimeout(() => startAnalysis(), 500);
             }
             
-            updateMemoryStats();
-            
             // Reconfigurar observador
             setTimeout(setupPVObserver, 100);
         }
 
+        function cleanupStockfishWorker() {
+            if (stockfish) {
+                try { stockfish.terminate(); } catch (e) { /* ignore */ }
+                stockfish = null;
+            }
+            if (blobURL) {
+                URL.revokeObjectURL(blobURL);
+                blobURL = null;
+            }
+        }
+
         // Funciones del motor
         async function connectEngine() {
-            if (isEngineConnected) return;
+            if (isEngineConnected || isEngineConnecting) return;
+
+            isEngineConnecting = true;
+            sfUciOk = false;
+            sfReadyOk = false;
+            sfEngineIdName = null;
+            sfEngineOptions = Object.create(null);
+            isEngineConnected = false;
 
             try {
-                document.getElementById('engineStatus').textContent = 'Conectando motor...';
-                const response = await fetch('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js');
-                if (!response.ok) {
-                    throw new Error('Error al descargar Stockfish');
+                document.getElementById('engineStatus').textContent = 'Conectando Stockfish 19 (JS+WASM)...';
+                updateButtonStates();
+
+                cleanupStockfishWorker();
+
+                let workerLoadError = null;
+                try {
+                    // URL de worker real (no Blob) para que el JS resuelva el .wasm compañero.
+                    stockfish = new Worker(STOCKFISH_ENGINE_JS_URL);
+                } catch (err) {
+                    throw new Error(
+                        'No se pudo cargar Stockfish 19 JS/WASM (' + STOCKFISH_ENGINE_JS_URL + '): ' +
+                        (err && err.message ? err.message : String(err))
+                    );
                 }
-                const workerScript = await response.text();
 
-                const blob = new Blob([workerScript], { type: 'application/javascript' });
-                blobURL = URL.createObjectURL(blob);
-
-                stockfish = new Worker(blobURL);
+                stockfish.onerror = function(event) {
+                    workerLoadError = new Error(
+                        'Error cargando Stockfish 19 JS/WASM: ' +
+                        ((event && (event.message || event.filename)) || 'worker onerror')
+                    );
+                };
                 stockfish.onmessage = function(event) {
                     handleEngineMessage(event.data);
                 };
-                
+
                 stockfish.postMessage('uci');
+
+                await sfWaitForPredicate(
+                    () => sfUciOk || workerLoadError,
+                    SF_HANDSHAKE_TIMEOUT_MS,
+                    'Stockfish 19 no respondió uciok (¿JS/WASM ausentes o rota la ruta del .wasm?)'
+                );
+                if (workerLoadError) throw workerLoadError;
+                if (!sfEngineIdName) {
+                    sfEngineIdName = 'Stockfish 19';
+                }
+
                 stockfish.postMessage('setoption name MultiPV value 1');
                 stockfish.postMessage('isready');
-                
+
+                await sfWaitForPredicate(
+                    () => sfReadyOk || workerLoadError,
+                    SF_HANDSHAKE_TIMEOUT_MS,
+                    'Stockfish 19 no respondió readyok'
+                );
+                if (workerLoadError) throw workerLoadError;
+
                 isEngineConnected = true;
-                document.getElementById('engineStatus').textContent = 'Control Stockfish conectado y listo';
+                const hashOpt = sfEngineOptions.Hash;
+                const hashInfo = hashOpt
+                    ? ` · Hash default ${hashOpt.default} (min ${hashOpt.min}, max ${hashOpt.max})`
+                    : '';
+                document.getElementById('engineStatus').textContent =
+                    `Control ${sfEngineIdName} conectado y listo${hashInfo}`;
+                refreshStockfishTelemetryUI();
                 updateButtonStates();
-                
+
                 if (!chess.game_over()) {
                     startAnalysis();
                 }
             } catch (error) {
-                document.getElementById('engineStatus').textContent = 'Error: ' + error.message;
+                cleanupStockfishWorker();
                 isEngineConnected = false;
+                sfUciOk = false;
+                sfReadyOk = false;
+                document.getElementById('engineStatus').textContent =
+                    'Error motor: ' + (error && error.message ? error.message : String(error));
+                refreshStockfishTelemetryUI();
+                updateButtonStates();
+            } finally {
+                isEngineConnecting = false;
                 updateButtonStates();
             }
         }
         
         function disconnectEngine() {
-            if (!isEngineConnected) return;
+            if (!isEngineConnected && !isEngineConnecting && !stockfish) return;
             
             if (isAnalyzing) {
                 stopAnalysis();
             }
             
-            if (stockfish) {
-                stockfish.terminate();
-                stockfish = null;
-            }
-            
-            if (blobURL) {
-                URL.revokeObjectURL(blobURL);
-                blobURL = null;
-            }
+            cleanupStockfishWorker();
             
             // Limpiar observador
             if (pvObserver) {
@@ -6247,45 +6538,51 @@
             }
             
             isEngineConnected = false;
+            isEngineConnecting = false;
+            sfUciOk = false;
+            sfReadyOk = false;
+            sfEngineIdName = null;
+            lastStats = createEmptyStockfishStats();
+            sfResetNpsSamples();
             document.getElementById('engineStatus').textContent = 'Control Stockfish desconectado';
-            document.getElementById('evaluation').textContent = '';
-            document.getElementById('bestMove').textContent = '';
-            document.getElementById('engineStats').textContent = '';
+            document.getElementById('evaluation').textContent = '—';
+            document.getElementById('bestMove').textContent = '—';
             document.getElementById('pvLine').textContent = 'Motor desconectado';
+            refreshStockfishTelemetryUI();
             
             // Resetear destacados
             resetHighlights();
             
             updateButtonStates();
-            updateMemoryStats();
         }
 
         function startAnalysis() {
-            if (!isEngineConnected || isAnalyzing || chess.game_over()) return;
+            if (!isEngineConnected || isAnalyzing || chess.game_over() || !stockfish) return;
+
+            // Nueva búsqueda/FEN: reinicia la ventana NPS móvil.
+            resetStockfishSearchTelemetry();
+            refreshStockfishTelemetryUI();
 
             const fen = chess.fen();
             stockfish.postMessage('position fen ' + fen);
             stockfish.postMessage('go infinite');
             
             isAnalyzing = true;
-            document.getElementById('engineStatus').textContent = 'Stockfish analizando como control...';
+            document.getElementById('engineStatus').textContent =
+                (sfEngineIdName || 'Stockfish 19') + ' analizando como control...';
             document.getElementById('pvLine').textContent = 'Analizando...';
             updateButtonStates();
 
             analysisInterval = setInterval(() => {
-                if (lastStats.nps > 0) {
-                    document.getElementById('engineStats').textContent = 
-                        `Profundidad: ${lastStats.depth} | ${lastStats.nps.toLocaleString()} nodos/s`;
-                }
+                refreshStockfishTelemetryUI();
                 if (lastStats.bestMove && lastStats.bestMove.length >= 4) {
                     document.getElementById('chessboard').innerHTML = generateChessboardSVG();
                 }
-                updateMemoryStats();
             }, 1000);
         }
 
         function stopAnalysis() {
-            if (!isEngineConnected || !isAnalyzing) return;
+            if (!isAnalyzing) return;
 
             if (stockfish) {
                 stockfish.postMessage('stop');
@@ -6296,43 +6593,91 @@
             }
             
             isAnalyzing = false;
-            document.getElementById('engineStatus').textContent = 'Control Stockfish conectado - análisis detenido';
+            document.getElementById('engineStatus').textContent = isEngineConnected
+                ? `Control ${sfEngineIdName || 'Stockfish 19'} conectado - análisis detenido`
+                : 'Control Stockfish desconectado';
+            refreshStockfishTelemetryUI();
             updateButtonStates();
         }
 
         // Manejar mensajes del motor
         function handleEngineMessage(message) {
+            if (message == null) return;
+            if (typeof message !== 'string') {
+                if (typeof message === 'object' && typeof message.data === 'string') {
+                    message = message.data;
+                } else {
+                    return;
+                }
+            }
+
+            if (message === 'uciok') {
+                sfUciOk = true;
+                return;
+            }
+            if (message === 'readyok') {
+                sfReadyOk = true;
+                return;
+            }
+            if (message.startsWith('id name ')) {
+                sfEngineIdName = message.slice('id name '.length).trim() || sfEngineIdName;
+                refreshStockfishTelemetryUI();
+                return;
+            }
+            if (message.startsWith('option name ')) {
+                sfRegisterEngineOption(message, sfEngineOptions);
+                return;
+            }
+
             if (message.startsWith('bestmove')) {
                 const parts = message.split(' ');
                 const bestMove = parts[1];
                 lastStats.bestMove = bestMove;
                 lastStats.bestMoveSan = uciToSan(bestMove);
                 
-                document.getElementById('bestMove').textContent = 
-                    `Mejor: ${lastStats.bestMoveSan}`;
+                const bestMoveEl = document.getElementById('bestMove');
+                if (bestMoveEl) {
+                    bestMoveEl.textContent = `Mejor: ${lastStats.bestMoveSan}`;
+                }
                 
-                document.getElementById('chessboard').innerHTML = generateChessboardSVG();
+                const boardEl = document.getElementById('chessboard');
+                if (boardEl) boardEl.innerHTML = generateChessboardSVG();
                 refreshPcaStockfishComparison();
             } 
             else if (message.startsWith('info')) {
                 const parts = message.split(' ');
                 
-                // Procesar nodos y tiempo
+                // NPS móvil: diferencias de nodes/time UCI acumulados (no nodes/time global).
                 const nodesIndex = parts.indexOf('nodes');
                 const timeIndex = parts.indexOf('time');
                 if (nodesIndex !== -1 && timeIndex !== -1) {
-                    const nodes = parseInt(parts[nodesIndex + 1]);
-                    const time = parseInt(parts[timeIndex + 1]) / 1000;
-                    if (time > 0) {
-                        lastStats.nps = Math.round(nodes / time);
+                    const nodes = parseInt(parts[nodesIndex + 1], 10);
+                    const timeMs = parseInt(parts[timeIndex + 1], 10);
+                    if (Number.isFinite(nodes) && Number.isFinite(timeMs)) {
+                        lastStats.nodes = nodes;
+                        lastStats.timeMs = timeMs;
+                        sfRecordNpsSample(timeMs, nodes, sfNpsSamples, SF_NPS_SAMPLE_MAX_MS);
+                        lastStats.npsRolling = sfComputeRollingNps(sfNpsSamples, sfNpsWindowMs);
+                        lastStats.npsCumulative = sfComputeCumulativeNps(timeMs, nodes);
+                        lastStats.nps = lastStats.npsRolling || lastStats.npsCumulative || 0;
+                    }
+                }
+
+                const hashfullIndex = parts.indexOf('hashfull');
+                if (hashfullIndex !== -1) {
+                    const hashfull = parseInt(parts[hashfullIndex + 1], 10);
+                    if (Number.isFinite(hashfull) && hashfull >= 0) {
+                        lastStats.hashfull = hashfull;
                     }
                 }
                 
                 // Procesar profundidad
                 const depthIndex = parts.indexOf('depth');
                 if (depthIndex !== -1) {
-                    lastStats.depth = parseInt(parts[depthIndex + 1]);
+                    lastStats.depth = parseInt(parts[depthIndex + 1], 10);
                 }
+
+                refreshStockfishTelemetryUI();
                 
                 // Procesar evaluación
                 const scoreIndex = parts.indexOf('score');
@@ -6346,17 +6691,19 @@
                         };
                         
                         const evalElement = document.getElementById('evaluation');
-                        const formattedEval = formatEvaluation(adjustedEval, false);
-                        evalElement.textContent = formattedEval;
-                        
-                        // Aplicar clases de color
-                        evalElement.className = 'evaluation';
-                        if (adjustedEval > 50) {
-                            evalElement.classList.add('eval-positive');
-                        } else if (adjustedEval < -50) {
-                            evalElement.classList.add('eval-negative');
-                        } else {
-                            evalElement.classList.add('eval-neutral');
+                        if (evalElement) {
+                            const formattedEval = formatEvaluation(adjustedEval, false);
+                            evalElement.textContent = formattedEval;
+                            
+                            // Aplicar clases de color
+                            evalElement.className = 'evaluation metric-value';
+                            if (adjustedEval > 50) {
+                                evalElement.classList.add('eval-positive');
+                            } else if (adjustedEval < -50) {
+                                evalElement.classList.add('eval-negative');
+                            } else {
+                                evalElement.classList.add('eval-neutral');
+                            }
                         }
                     } 
                     else if (parts[scoreIndex + 1] === 'mate') {
@@ -6368,15 +6715,17 @@
                         };
                         
                         const evalElement = document.getElementById('evaluation');
-                        const formattedEval = formatEvaluation(adjustedMate, true);
-                        evalElement.textContent = formattedEval;
-                        
-                        // Aplicar clases de color para mate
-                        evalElement.className = 'evaluation';
-                        if (adjustedMate > 0) {
-                            evalElement.classList.add('eval-positive');
-                        } else {
-                            evalElement.classList.add('eval-negative');
+                        if (evalElement) {
+                            const formattedEval = formatEvaluation(adjustedMate, true);
+                            evalElement.textContent = formattedEval;
+                            
+                            // Aplicar clases de color para mate
+                            evalElement.className = 'evaluation metric-value';
+                            if (adjustedMate > 0) {
+                                evalElement.classList.add('eval-positive');
+                            } else {
+                                evalElement.classList.add('eval-negative');
+                            }
                         }
                     }
                 }
@@ -6433,27 +6782,22 @@
                             }
                         }
                         
-                        document.getElementById('pvLine').textContent = pvText.trim();
+                        const pvLine = document.getElementById('pvLine');
+                        if (pvLine) pvLine.textContent = pvText.trim();
                     }
                 }
             }
         }
 
-        // Función para estimar el uso de memoria
+        // Compat: la tarjeta prioriza hashfull UCI (no heap JS del navegador).
         function updateMemoryStats() {
-            if (window.performance && window.performance.memory) {
-                const memory = window.performance.memory;
-                document.getElementById('memoryStats').textContent = 
-                    `Memoria: ${Math.round(memory.usedJSHeapSize / (1024 * 1024))}MB`;
-            } else {
-                document.getElementById('memoryStats').textContent = '';
-            }
+            refreshStockfishTelemetryUI();
         }
         
         // Inicializar al cargar la página
         window.onload = function() {
             drawBoard();
-            updateMemoryStats();
+            refreshStockfishTelemetryUI();
             updateButtonStates();
             setupPVObserver();
         };
