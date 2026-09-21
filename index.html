@@ -1587,19 +1587,26 @@
             });
         }
 
-        // Prefetch only the first chunk so we fail fast on LFS pointers / HTML 404s
+        // Read only a few header bytes so we fail fast on LFS pointers / HTML 404s
         // (magic "vers..." instead of "\0asm") without downloading the full ~99MB twice.
         async function sfAssertWasmMagic(wasmUrl) {
             let response;
             try {
-                response = await fetch(wasmUrl, { credentials: 'same-origin' });
+                // Prefer a ranged GET; fall back if the static server ignores Range.
+                response = await fetch(wasmUrl, {
+                    credentials: 'same-origin',
+                    headers: { Range: 'bytes=0-63' }
+                });
+                if (response.status === 416 || (response.status >= 400 && response.status !== 404)) {
+                    response = await fetch(wasmUrl, { credentials: 'same-origin' });
+                }
             } catch (err) {
                 throw new Error(
                     'No se pudo obtener el WASM de Stockfish (' + wasmUrl + '): ' +
                     (err && err.message ? err.message : String(err))
                 );
             }
-            if (!response.ok) {
+            if (!(response.ok || response.status === 206)) {
                 throw new Error(
                     'WASM de Stockfish no disponible (HTTP ' + response.status + '): ' + wasmUrl
                 );
@@ -1612,7 +1619,10 @@
             }
 
             let headBytes;
-            if (response.body && typeof response.body.getReader === 'function') {
+            if (response.status === 206) {
+                const buf = await response.arrayBuffer();
+                headBytes = new Uint8Array(buf, 0, Math.min(64, buf.byteLength));
+            } else if (response.body && typeof response.body.getReader === 'function') {
                 const reader = response.body.getReader();
                 try {
                     const first = await reader.read();
