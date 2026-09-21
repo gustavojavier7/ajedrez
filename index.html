@@ -1345,8 +1345,10 @@
         let isEngineConnecting = false;
 
         // Stockfish 19 single (local JS+WASM). Do not load via Blob: the companion .wasm
-        // is resolved relative to the worker script URL.
+        // is resolved relative to the worker script URL. The .wasm must be a real
+        // binary (magic \0asm), not a Git LFS pointer text file.
         const STOCKFISH_ENGINE_JS_URL = 'vendor/stockfish/stockfish-19-single.js';
+        const STOCKFISH_ENGINE_WASM_URL = 'vendor/stockfish/stockfish-19-single.wasm';
         const SF_NPS_SAMPLE_MAX_MS = 12000;
         const SF_HANDSHAKE_TIMEOUT_MS = 20000;
 
@@ -1583,6 +1585,82 @@
                 };
                 tick();
             });
+        }
+
+        // Read only a few header bytes so we fail fast on LFS pointers / HTML 404s
+        // (magic "vers..." instead of "\0asm") without downloading the full ~99MB twice.
+        async function sfAssertWasmMagic(wasmUrl) {
+            let response;
+            try {
+                // Prefer a ranged GET; fall back if the static server ignores Range.
+                response = await fetch(wasmUrl, {
+                    credentials: 'same-origin',
+                    headers: { Range: 'bytes=0-63' }
+                });
+                if (response.status === 416 || (response.status >= 400 && response.status !== 404)) {
+                    response = await fetch(wasmUrl, { credentials: 'same-origin' });
+                }
+            } catch (err) {
+                throw new Error(
+                    'No se pudo obtener el WASM de Stockfish (' + wasmUrl + '): ' +
+                    (err && err.message ? err.message : String(err))
+                );
+            }
+            if (!(response.ok || response.status === 206)) {
+                throw new Error(
+                    'WASM de Stockfish no disponible (HTTP ' + response.status + '): ' + wasmUrl
+                );
+            }
+            const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+            if (contentType && /text\/|json|html|xml/.test(contentType) && !/wasm|octet-stream|binary/.test(contentType)) {
+                throw new Error(
+                    'El servidor devolvió ' + contentType + ' en lugar de application/wasm para ' + wasmUrl
+                );
+            }
+
+            let headBytes;
+            if (response.status === 206) {
+                const buf = await response.arrayBuffer();
+                headBytes = new Uint8Array(buf, 0, Math.min(64, buf.byteLength));
+            } else if (response.body && typeof response.body.getReader === 'function') {
+                const reader = response.body.getReader();
+                try {
+                    const first = await reader.read();
+                    headBytes = first && first.value ? first.value : new Uint8Array();
+                } finally {
+                    try { await reader.cancel(); } catch (e) { /* ignore */ }
+                }
+            } else {
+                const buf = await response.arrayBuffer();
+                headBytes = new Uint8Array(buf, 0, Math.min(64, buf.byteLength));
+            }
+
+            if (!headBytes || headBytes.byteLength < 4) {
+                throw new Error('WASM de Stockfish vacío o truncado: ' + wasmUrl);
+            }
+
+            const b0 = headBytes[0];
+            const b1 = headBytes[1];
+            const b2 = headBytes[2];
+            const b3 = headBytes[3];
+            const isWasmMagic = b0 === 0x00 && b1 === 0x61 && b2 === 0x73 && b3 === 0x6d;
+            if (isWasmMagic) return true;
+
+            const headText = new TextDecoder('utf-8', { fatal: false })
+                .decode(headBytes.subarray(0, Math.min(80, headBytes.byteLength)))
+                .replace(/\s+/g, ' ')
+                .trim();
+            if (/^version\b/i.test(headText) || /git-lfs/i.test(headText)) {
+                throw new Error(
+                    'El archivo ' + wasmUrl + ' es un puntero Git LFS (empieza por "version…"), ' +
+                    'no el binario WebAssembly. Sirve el .wasm real junto al JS ' +
+                    '(sin filter LFS) o ejecuta git lfs pull antes de hospedar.'
+                );
+            }
+            throw new Error(
+                'WASM inválido en ' + wasmUrl + ': se esperaba magic 00 61 73 6d (\\0asm), ' +
+                'se obtuvo "' + headText.slice(0, 40) + (headText.length > 40 ? '…' : '') + '"'
+            );
         }
 
         // PCA-Chess prototípico: búsqueda exacta de mate forzado por horizonte.
@@ -6450,6 +6528,10 @@
                 updateButtonStates();
 
                 cleanupStockfishWorker();
+
+                // Fail fast if the sibling .wasm is missing, HTML, or a Git LFS pointer
+                // (bytes "vers…") before Worker streaming compile throws CompileError.
+                await sfAssertWasmMagic(STOCKFISH_ENGINE_WASM_URL);
 
                 let workerLoadError = null;
                 try {
