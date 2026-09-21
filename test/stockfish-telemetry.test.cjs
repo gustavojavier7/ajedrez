@@ -51,12 +51,37 @@ function loadRuntime() {
 
 test('index.html carga Stockfish 19 single local (no CDN 10.0.2 / no Blob worker path)', () => {
     assert.match(html, /vendor\/stockfish\/stockfish-19-single\.js/);
+    assert.match(html, /vendor\/stockfish\/stockfish-19-single\.wasm/);
     assert.doesNotMatch(html, /stockfish\.js\/10\.0\.2/);
     assert.match(html, /new Worker\(STOCKFISH_ENGINE_JS_URL\)/);
+    assert.match(html, /sfAssertWasmMagic\(STOCKFISH_ENGINE_WASM_URL\)/);
     assert.match(html, /Hash ocupado/);
     assert.match(html, /sfNpsWindowSelect/);
     assert.ok(fs.existsSync(path.join(repoRoot, 'vendor/stockfish/stockfish-19-single.js')));
     assert.ok(fs.existsSync(path.join(repoRoot, 'vendor/stockfish/stockfish-19-single.wasm')));
+});
+
+test('stockfish-19-single.wasm es binario WebAssembly real (no puntero Git LFS)', () => {
+    const wasmPath = path.join(repoRoot, 'vendor/stockfish/stockfish-19-single.wasm');
+    const fd = fs.openSync(wasmPath, 'r');
+    try {
+        const head = Buffer.alloc(24);
+        const n = fs.readSync(fd, head, 0, 24, 0);
+        assert.ok(n >= 4, 'wasm demasiado corto');
+        // \0asm
+        assert.equal(head[0], 0x00);
+        assert.equal(head[1], 0x61);
+        assert.equal(head[2], 0x73);
+        assert.equal(head[3], 0x6d);
+        const asText = head.slice(0, n).toString('utf8');
+        assert.doesNotMatch(asText, /^version\s/i);
+        assert.doesNotMatch(asText, /git-lfs/i);
+    } finally {
+        fs.closeSync(fd);
+    }
+    const st = fs.statSync(wasmPath);
+    // Full single build is ~99MB; LFS pointers are only a few hundred bytes.
+    assert.ok(st.size > 1000000, 'wasm inesperadamente pequeño (' + st.size + ' bytes)');
 });
 
 test('NPS móvil usa diferencias de nodes/time, no nodes/time global', () => {
