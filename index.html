@@ -1350,7 +1350,7 @@
         const STOCKFISH_ENGINE_JS_URL = 'vendor/stockfish/stockfish-19-single.js';
         const STOCKFISH_ENGINE_WASM_URL = 'vendor/stockfish/stockfish-19-single.wasm';
         const SF_NPS_SAMPLE_MAX_MS = 12000;
-        const SF_HANDSHAKE_TIMEOUT_MS = 20000;
+        const SF_HANDSHAKE_TIMEOUT_MS = 120000;
 
         let sfEngineIdName = null;
         let sfUciOk = false;
@@ -6545,15 +6545,18 @@
                 }
 
                 stockfish.onerror = function(event) {
+                    console.error('[STOCKFISH WORKER ERROR]', event);
                     workerLoadError = new Error(
                         'Error cargando Stockfish 19 JS/WASM: ' +
                         ((event && (event.message || event.filename)) || 'worker onerror')
                     );
                 };
                 stockfish.onmessage = function(event) {
+                    console.log('[STOCKFISH]', event.data);
                     handleEngineMessage(event.data);
                 };
 
+                console.log('[STOCKFISH] enviando UCI');
                 stockfish.postMessage('uci');
 
                 await sfWaitForPredicate(
