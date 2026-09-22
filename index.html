@@ -1350,7 +1350,7 @@
         const STOCKFISH_ENGINE_JS_URL = 'vendor/stockfish/stockfish-19-single.js';
         const STOCKFISH_ENGINE_WASM_URL = 'vendor/stockfish/stockfish-19-single.wasm';
         const SF_NPS_SAMPLE_MAX_MS = 12000;
-        const SF_HANDSHAKE_TIMEOUT_MS = 120000;
+        const SF_HANDSHAKE_TIMEOUT_MS = 300000;
 
         let sfEngineIdName = null;
         let sfUciOk = false;
@@ -6537,6 +6537,49 @@
                 try {
                     // URL de worker real (no Blob) para que el JS resuelva el .wasm compañero.
                     stockfish = new Worker(STOCKFISH_ENGINE_JS_URL);
+                    console.log('[STOCKFISH] Worker creado:', STOCKFISH_ENGINE_JS_URL);
+
+                    // Canal oficial de Stockfish.js para ver el progreso de descarga
+                    // del WASM full (~99 MB) antes de que el motor pueda responder UCI.
+                    const progressChannel = new MessageChannel();
+                    progressChannel.port1.onmessage = function(event) {
+                        const p = event && event.data;
+                        if (!p || typeof p.percent !== 'number') return;
+
+                        const pct = Math.max(0, Math.min(100, p.percent * 100));
+                        const loadedMiB = Number.isFinite(p.loaded)
+                            ? (p.loaded / 1048576).toFixed(1)
+                            : '?';
+                        const totalMiB = Number.isFinite(p.total)
+                            ? (p.total / 1048576).toFixed(1)
+                            : '?';
+                        const speed = p.speedText || '';
+                        const eta = p.etaText || '';
+
+                        console.log(
+                            '[STOCKFISH DOWNLOAD]',
+                            pct.toFixed(1) + '%',
+                            loadedMiB + '/' + totalMiB + ' MiB',
+                            speed,
+                            eta
+                        );
+
+                        if (!sfUciOk) {
+                            const details = [
+                                pct.toFixed(1) + '%',
+                                loadedMiB + '/' + totalMiB + ' MiB',
+                                speed,
+                                eta ? 'ETA ' + eta : ''
+                            ].filter(Boolean).join(' · ');
+
+                            document.getElementById('engineStatus').textContent =
+                                'Cargando Stockfish 19 full: ' + details;
+                        }
+                    };
+                    stockfish.postMessage(
+                        { progressPort: progressChannel.port2 },
+                        [progressChannel.port2]
+                    );
                 } catch (err) {
                     throw new Error(
                         'No se pudo cargar Stockfish 19 JS/WASM (' + STOCKFISH_ENGINE_JS_URL + '): ' +
