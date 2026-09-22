@@ -6532,8 +6532,7 @@
                 // Fail fast if the sibling .wasm is missing, HTML, or a Git LFS pointer
                 // (bytes "vers…") before Worker streaming compile throws CompileError.
                 // await sfAssertWasmMagic(STOCKFISH_ENGINE_WASM_URL);
-                stockfish = new Worker(STOCKFISH_ENGINE_JS_URL);
-
+               
                 let workerLoadError = null;
                 try {
                     // URL de worker real (no Blob) para que el JS resuelva el .wasm compañero.
