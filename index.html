@@ -923,6 +923,24 @@
             animation: blink-dark 0.2s ease-in-out 10;
         }
 
+        /* Flechas de la PV de Stockfish: sincronizadas con el blink de las casillas. */
+        .pv-blink-arrow {
+            stroke: #2563eb;
+            stroke-width: 5;
+            stroke-linecap: round;
+            opacity: 0.95;
+            animation: blink-arrow 0.2s ease-in-out 10;
+        }
+
+        @keyframes blink-arrow {
+            0%, 50% {
+                opacity: 0.95;
+            }
+            50.1%, 100% {
+                opacity: 0.12;
+            }
+        }
+
         /* Animación de parpadeo para casillas claras */
         @keyframes blink-light {
             0%, 50% {
@@ -6135,7 +6153,66 @@
             return pawns > 0 ? `+${pawns.toFixed(2)}` : pawns.toFixed(2);
         }
 
-        // Función para destacar casillas de la mejor línea
+        function squareCenter(square) {
+            const col = square.charCodeAt(0) - 97;
+            const row = 8 - parseInt(square[1], 10);
+
+            return {
+                x: col * squareSize + squareSize / 2 + 20,
+                y: row * squareSize + squareSize / 2 + 20
+            };
+        }
+
+        function shortenArrow(from, to, amount = 18) {
+            const dx = to.x - from.x;
+            const dy = to.y - from.y;
+            const distance = Math.hypot(dx, dy);
+
+            if (!distance) return { from, to };
+
+            return {
+                from: {
+                    x: from.x + (dx / distance) * amount,
+                    y: from.y + (dy / distance) * amount
+                },
+                to: {
+                    x: to.x - (dx / distance) * amount,
+                    y: to.y - (dy / distance) * amount
+                }
+            };
+        }
+
+        function drawBlinkingPVArrows(arrows) {
+            const svg = document.querySelector('#chessboard svg');
+            if (!svg || !Array.isArray(arrows)) return;
+
+            const previous = svg.querySelector('#pvBlinkArrows');
+            if (previous) previous.remove();
+
+            const ns = 'http://www.w3.org/2000/svg';
+            const group = document.createElementNS(ns, 'g');
+            group.setAttribute('id', 'pvBlinkArrows');
+            group.setAttribute('pointer-events', 'none');
+
+            arrows.forEach(arrow => {
+                const from = squareCenter(arrow.from);
+                const to = squareCenter(arrow.to);
+                const shortened = shortenArrow(from, to, 18);
+
+                const line = document.createElementNS(ns, 'line');
+                line.setAttribute('x1', shortened.from.x);
+                line.setAttribute('y1', shortened.from.y);
+                line.setAttribute('x2', shortened.to.x);
+                line.setAttribute('y2', shortened.to.y);
+                line.setAttribute('class', 'pv-blink-arrow');
+                line.setAttribute('marker-end', 'url(#pvArrowHead)');
+                group.appendChild(line);
+            });
+
+            svg.appendChild(group);
+        }
+
+        // Función para destacar casillas y flechas de la mejor línea
         function highlightBestLine() {
             // Limpiar destacados anteriores
             resetHighlights();
@@ -6164,6 +6241,7 @@
                 // Usar Chess.js para obtener las casillas involucradas
                 const tempChess = new Chess(chess.fen());
                 const squares = [];
+                const arrows = [];
 
                 // Solo procesar los primeros 2-3 movimientos para no saturar el tablero
                 const movesToProcess = moves.slice(0, 4);
@@ -6172,9 +6250,13 @@
                     try {
                         const moveObj = tempChess.move(move, { sloppy: true });
                         if (moveObj) {
-                            // Agregar casillas de origen y destino
+                            // Agregar casillas de origen/destino y la flecha del movimiento.
                             squares.push(moveObj.from);
                             squares.push(moveObj.to);
+                            arrows.push({
+                                from: moveObj.from,
+                                to: moveObj.to
+                            });
                         }
                     } catch (e) {
                         console.warn(`Movimiento inválido en línea principal: ${move}`);
@@ -6199,6 +6281,8 @@
                         }
                     });
                 });
+
+                drawBlinkingPVArrows(arrows);
             } catch (error) {
                 console.warn('Error al destacar la mejor línea:', error);
             }
@@ -6210,6 +6294,9 @@
                 square.classList.remove('square-highlight', 'dark');
             });
             previousHighlightedSquares = [];
+
+            const oldArrows = document.querySelector('#pvBlinkArrows');
+            if (oldArrows) oldArrows.remove();
         }
 
         // Función para configurar el observador de cambios en la línea principal
@@ -6236,6 +6323,17 @@
         // Función para generar SVG del tablero
         function generateChessboardSVG() {
             let svg = `<svg width="${boardSize + 40}" height="${boardSize + 40}" xmlns="http://www.w3.org/2000/svg">`;
+            svg += `<defs>
+                <marker id="pvArrowHead"
+                    markerWidth="10"
+                    markerHeight="10"
+                    refX="8"
+                    refY="3"
+                    orient="auto"
+                    markerUnits="strokeWidth">
+                    <path d="M0,0 L0,6 L9,3 z" fill="#2563eb" />
+                </marker>
+            </defs>`;
 
             // Dibujar casillas
             for (let row = 0; row < 8; row++) {
